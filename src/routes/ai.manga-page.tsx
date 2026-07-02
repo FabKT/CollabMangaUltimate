@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  checkMangaImageBackend,
   generateMangaImage,
+  type MangaBackendStatusResult,
   type MangaImageGenerationResult,
   type MangaImageGenerationInput,
 } from "@/server-functions/manga-image";
@@ -83,6 +85,7 @@ const initialItems: StoredItem[] = [
 
 export default function CollabMangaAIPage() {
   const generateMangaImageFn = useServerFn(generateMangaImage);
+  const checkMangaImageBackendFn = useServerFn(checkMangaImageBackend);
   const [mode, setMode] = useState<"prepare" | "result">("prepare");
   const [tab, setTab] = useState<"assets" | "references" | "prompt">("prompt");
   const [editScope, setEditScope] = useState<"single" | "full">("single");
@@ -101,6 +104,8 @@ export default function CollabMangaAIPage() {
   const [generationResult, setGenerationResult] = useState<MangaImageGenerationResult | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<MangaBackendStatusResult | null>(null);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
 
   const selectedItems = useMemo(() => items.filter((i) => selected[i.id]), [items, selected]);
 
@@ -113,12 +118,40 @@ export default function CollabMangaAIPage() {
     });
   };
 
+  const runBackendCheck = useCallback(async () => {
+    setIsCheckingBackend(true);
+    try {
+      const result = await checkMangaImageBackendFn();
+      setBackendStatus(result);
+    } catch (error) {
+      setBackendStatus({
+        ok: false,
+        backendUrl: "unknown",
+        appTokenConfigured: false,
+        checkedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "AI backend check failed.",
+      });
+    } finally {
+      setIsCheckingBackend(false);
+    }
+  }, [checkMangaImageBackendFn]);
+
+  useEffect(() => {
+    void runBackendCheck();
+  }, [runBackendCheck]);
+
   const requestImageGeneration = async (operation: GenerationOperation) => {
     setMode("result");
     setGenerationError(null);
     setIsGenerating(true);
 
     try {
+      const status = backendStatus?.ok ? backendStatus : await checkMangaImageBackendFn();
+      setBackendStatus(status);
+      if (!status.ok) {
+        throw new Error(status.error || "AI backend is not ready yet.");
+      }
+
       const result = await generateMangaImageFn({
         data: {
           operation,
@@ -162,6 +195,12 @@ export default function CollabMangaAIPage() {
           <ModeToggle mode={mode} setMode={setMode} />
         </div>
 
+        <AiBackendBanner
+          status={backendStatus}
+          isChecking={isCheckingBackend}
+          onRefresh={runBackendCheck}
+        />
+
         {/* 3-column workspace */}
         <div className="grid min-w-0 grid-cols-1 gap-4 xl:gap-5 xl:[grid-template-columns:minmax(220px,0.82fr)_minmax(390px,1.55fr)_minmax(230px,0.9fr)] 2xl:gap-6 2xl:[grid-template-columns:minmax(270px,1fr)_minmax(560px,2fr)_minmax(270px,1fr)]">
           <LeftPanel
@@ -181,6 +220,7 @@ export default function CollabMangaAIPage() {
             isGenerating={isGenerating}
             onDownload={downloadGeneratedImage}
             onRegenerate={() => requestImageGeneration("regenerate")}
+            onGenerate={() => requestImageGeneration("generate")}
           />
           <RightPanel
             mode={mode}
@@ -233,6 +273,66 @@ function ModeToggle({
         }`}
       >
         Result
+      </button>
+    </div>
+  );
+}
+
+function AiBackendBanner({
+  status,
+  isChecking,
+  onRefresh,
+}: {
+  status: MangaBackendStatusResult | null;
+  isChecking: boolean;
+  onRefresh: () => void;
+}) {
+  const ready = status?.ok;
+  const message = isChecking
+    ? "Checking PulseNote AI backend..."
+    : ready
+      ? `AI backend ready: ${status.manga?.imageModel ?? "image model"} / ${
+          status.manga?.imageSize ?? "default size"
+        }`
+      : status?.error || "AI backend status has not been checked yet.";
+
+  return (
+    <div
+      className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border px-4 py-3 ${
+        ready ? "border-accent-border bg-accent-soft/40" : "border-border bg-surface-2"
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border ${
+            ready
+              ? "border-accent-border bg-accent-soft text-accent"
+              : "border-border bg-surface-3 text-text-secondary"
+          }`}
+        >
+          {isChecking ? (
+            <RefreshCw className="h-4 w-4 animate-spin" />
+          ) : ready ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-text-primary">{message}</p>
+          <p className="mt-0.5 truncate text-[11px] text-text-muted">
+            Backend: {status?.backendUrl ?? "waiting for check"}{" "}
+            {status?.appTokenConfigured === false ? " / token missing" : ""}
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={onRefresh}
+        disabled={isChecking}
+        className="inline-flex h-9 items-center gap-2 rounded-[12px] border border-border bg-surface-3 px-3 text-[12px] font-bold text-text-secondary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <RefreshCw className={`h-3.5 w-3.5 ${isChecking ? "animate-spin" : ""}`} />
+        Check AI
       </button>
     </div>
   );
@@ -521,6 +621,7 @@ function CenterPanel({
   isGenerating,
   onDownload,
   onRegenerate,
+  onGenerate,
 }: {
   mode: "prepare" | "result";
   activePage: number;
@@ -531,18 +632,19 @@ function CenterPanel({
   isGenerating: boolean;
   onDownload: () => void;
   onRegenerate: () => void;
+  onGenerate: () => void;
 }) {
   return (
     <PanelCard className="xl:max-h-[calc(100vh-160px)]">
       <div className="flex h-full flex-col p-5">
         {mode === "prepare" ? (
-          <>
-            <TopToolbar />
-            <div className="my-4 flex flex-1 items-center justify-center rounded-[18px] bg-stage p-6">
-              <Artboard />
-            </div>
-            <BottomToolbar activePage={activePage} setActivePage={setActivePage} pages={pages} />
-          </>
+          <AiGenerationPreview
+            activePage={activePage}
+            setActivePage={setActivePage}
+            pages={pages}
+            isGenerating={isGenerating}
+            onGenerate={onGenerate}
+          />
         ) : (
           <ResultView
             result={generationResult}
@@ -554,6 +656,54 @@ function CenterPanel({
         )}
       </div>
     </PanelCard>
+  );
+}
+
+function AiGenerationPreview({
+  activePage,
+  setActivePage,
+  pages,
+  isGenerating,
+  onGenerate,
+}: {
+  activePage: number;
+  setActivePage: (n: number) => void;
+  pages: number[];
+  isGenerating: boolean;
+  onGenerate: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-border bg-surface-3 px-3.5 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-border bg-accent-soft px-2.5 py-1 text-[12px] font-bold text-accent">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI test mode
+          </span>
+          <span className="truncate text-[12px] font-semibold text-text-muted">
+            Prompt, backend, generation, result preview
+          </span>
+        </div>
+        <button
+          onClick={onGenerate}
+          disabled={isGenerating}
+          className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Sparkles className="h-4 w-4" />
+          {isGenerating ? "Generating..." : "Generate test page"}
+        </button>
+      </div>
+
+      <div className="my-4 flex flex-1 items-center justify-center rounded-[18px] bg-stage p-6">
+        <div className="relative flex h-full max-h-[680px] w-full max-w-[500px] items-center justify-center">
+          <div className="relative aspect-[210/297] w-full overflow-hidden rounded-[10px] bg-artboard shadow-[0_30px_60px_-20px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)]">
+            <MangaPagePreview />
+          </div>
+        </div>
+      </div>
+
+      <BottomToolbar activePage={activePage} setActivePage={setActivePage} pages={pages} />
+    </div>
   );
 }
 
