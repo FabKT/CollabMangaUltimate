@@ -1,0 +1,342 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-stage: var(--stage);
+  --color-artboard: var(--artboard);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-border-strong: var(--border-strong);
+
+  /* CollabManga AI tokens */
+  --color-bg-app: var(--bg-app);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-input: var(--bg-input);
+  --color-bg-stage: var(--bg-stage);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+  --color-neon: var(--neon);
+  --color-neon-hover: var(--neon-hover);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --radius: 0.875rem;
+
+  /* shadcn fallbacks mapped to CMA palette */
+  --background: oklch(0.16 0.04 265);
+  --foreground: oklch(0.98 0.01 250);
+  --card: oklch(0.22 0.05 265);
+  --card-foreground: oklch(0.98 0.01 250);
+  --popover: oklch(0.22 0.05 265);
+  --popover-foreground: oklch(0.98 0.01 250);
+  --primary: oklch(0.86 0.22 150);
+  --primary-foreground: oklch(0.16 0.04 265);
+  --secondary: oklch(0.25 0.05 265);
+  --secondary-foreground: oklch(0.98 0.01 250);
+  --muted: oklch(0.25 0.05 265);
+  --muted-foreground: oklch(0.75 0.04 260);
+  --accent: oklch(0.25 0.05 265);
+  --accent-foreground: oklch(0.98 0.01 250);
+  --destructive: oklch(0.7 0.2 15);
+  --destructive-foreground: oklch(0.98 0.01 250);
+  --border: rgba(133, 154, 206, 0.18);
+  --input: rgba(133, 154, 206, 0.2);
+  --ring: oklch(0.86 0.22 150);
+
+  /* CollabManga AI palette (hex literals as requested) */
+  --bg-app: #050b1d;
+  --bg-sidebar: #060d24;
+  --bg-panel: #0b1430;
+  --bg-elevated: #101b3f;
+  --bg-input: #0e193a;
+  --bg-stage: #0e1736;
+  --text-primary: #f7faff;
+  --text-secondary: #b8c4e5;
+  --text-muted: #7f8cb3;
+  --text-disabled: #5e6a90;
+  --neon: #39ff88;
+  --neon-hover: #25e575;
+  --neon-soft: rgba(57, 255, 136, 0.12);
+  --neon-soft-border: rgba(57, 255, 136, 0.45);
+  --border-default: rgba(133, 154, 206, 0.18);
+  --border-strong: rgba(133, 154, 206, 0.28);
+  --danger: #ff5f7e;
+  --warning: #ffb84d;
+  --info: #75a7ff;
+
+  --shadow-panel: 0 12px 30px rgba(0, 0, 0, 0.24);
+  --shadow-card: 0 8px 22px rgba(0, 0, 0, 0.18);
+  --shadow-elevated: 0 8px 22px rgba(0, 0, 0, 0.18);
+  --shadow-neon: 0 0 0 1px rgba(57, 255, 136, 0.65), 0 0 18px rgba(57, 255, 136, 0.18);
+}
+
+.manga-canvas-page {
+  --background: #050b1d;
+  --foreground: #f7faff;
+  --surface-1: var(--bg-app);
+  --surface-2: var(--bg-panel);
+  --surface-3: var(--bg-elevated);
+  --stage: var(--bg-stage);
+  --artboard: #ffffff;
+  --input: var(--bg-input);
+  --accent: var(--neon);
+  --accent-hover: var(--neon-hover);
+  --accent-soft: var(--neon-soft);
+  --accent-border: var(--neon-soft-border);
+  --accent-foreground: #04111e;
+}
+
+@layer base {
+  * {
+    border-color: var(--border-default);
+  }
+  html,
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    color: var(--text-primary);
+  }
+  ::selection {
+    background: var(--neon-soft);
+    color: var(--neon);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(133, 154, 206, 0.18);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(133, 154, 206, 0.3);
+  }
+}
+
+@utility cma-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+@utility cma-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 22px;
+  box-shadow: var(--shadow-panel);
+}
+
+@utility cma-input {
+  background: var(--bg-input);
+  border: 1px solid rgba(133, 154, 206, 0.2);
+  border-radius: 14px;
+  color: var(--text-primary);
+  padding: 14px 16px;
+  font: 500 14px/22px var(--font-sans);
+  width: 100%;
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+@utility cma-input-focus {
+  border-color: var(--neon);
+  box-shadow: 0 0 0 3px rgba(57, 255, 136, 0.1);
+}
+
+@utility cma-btn-primary {
+  background: var(--neon);
+  color: #04111e;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 14px;
+  font: 700 14px/20px var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+@utility cma-btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 14px;
+  font: 700 14px/20px var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+@utility cma-btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font: 700 14px/20px var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+@utility cma-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+@utility cma-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  font: 600 12px/18px var(--font-sans);
+}
+@utility cma-chip-active {
+  background: var(--neon-soft);
+  color: var(--neon);
+  border-color: var(--neon-soft-border);
+}
+
+@utility cma-tab {
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font: 700 13px/18px var(--font-sans);
+  border-radius: 999px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+@utility cma-tab-active {
+  background: var(--neon-soft);
+  color: var(--neon);
+}
+
+@utility cma-label {
+  font: 600 12px/18px var(--font-sans);
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+@utility cma-section-title {
+  font: 700 20px/28px var(--font-display);
+  color: var(--text-primary);
+}
+@utility cma-page-title {
+  font: 700 28px/36px var(--font-display);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+}
+
+@utility glow-accent {
+  box-shadow:
+    0 0 0 1px rgba(57, 255, 136, 0.65),
+    0 0 18px rgba(57, 255, 136, 0.18);
+}
+
+@utility shadow-panel {
+  box-shadow: var(--shadow-panel);
+}
+
+@utility shadow-elevated {
+  box-shadow: var(--shadow-elevated);
+}
+
+@utility scroll-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(133, 154, 206, 0.25) transparent;
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(133, 154, 206, 0.25);
+    border-radius: 999px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
