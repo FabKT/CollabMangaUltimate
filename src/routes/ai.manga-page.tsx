@@ -153,7 +153,7 @@ async function readImageAsDataUrl(file: File) {
   });
 }
 
-export default function CollabMangaAIPage() {
+function CollabMangaAIPage() {
   const generateMangaImageFn = useServerFn(generateMangaImage);
   const checkMangaImageBackendFn = useServerFn(checkMangaImageBackend);
   const [tab, setTab] = useState<WorkspaceTab>("prompt");

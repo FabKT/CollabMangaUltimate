@@ -4,7 +4,6 @@ import tailwindcss from "@tailwindcss/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   css: {
@@ -19,9 +18,9 @@ export default defineConfig({
     nitro({ preset: "node_server" }),
     viteReact(),
     tailwindcss(),
-    tsconfigPaths(),
   ],
   resolve: {
+    tsconfigPaths: true,
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
