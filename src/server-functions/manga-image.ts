@@ -3,13 +3,37 @@ import { z } from "zod";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 
-const roleSchema = z.enum(["Character", "Background", "Object", "Reference", "Generated Page"]);
+const roleSchema = z.enum([
+  "Character",
+  "Background",
+  "Object",
+  "Storyboard",
+  "Pose",
+  "Style",
+  "Inspiration",
+  "Target",
+  "Generated Page",
+]);
+
+const characterSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  storyRole: z.string().optional(),
+  identityLock: z.string().optional(),
+  defaultExpression: z.string().optional(),
+});
 
 const assetSchema = z.object({
   id: z.string(),
   name: z.string(),
   role: roleSchema,
   thumbHue: z.number().optional(),
+  imageDataUrl: z.string().optional(),
+  mimeType: z.string().optional(),
+  characterId: z.string().optional(),
+  characterName: z.string().optional(),
+  characterProfile: z.string().optional(),
+  description: z.string().optional(),
 });
 
 const generationInputSchema = z.object({
@@ -20,7 +44,12 @@ const generationInputSchema = z.object({
   activePage: z.number().int().positive(),
   pages: z.array(z.number().int().positive()).min(1),
   panelCount: z.number().int().positive().default(6),
+  panelInstructions: z.array(z.string()).default([]),
   selectedAssets: z.array(assetSchema).default([]),
+  characters: z.array(characterSchema).default([]),
+  styleMode: z.enum(["auto", "black-white", "color"]).default("auto"),
+  backgroundLevel: z.enum(["auto", "empty", "minimal", "detailed"]).default("auto"),
+  readingDirection: z.enum(["right-to-left", "left-to-right"]).default("right-to-left"),
   existingImageDataUrl: z.string().optional(),
 });
 
@@ -61,6 +90,8 @@ export type MangaBackendStatusResult = {
     imageQuality?: string;
     imageFormat?: string;
     creditCost?: number;
+    referenceImagesEnabled?: boolean;
+    maxReferenceImages?: number;
     generationEndpoint?: string;
   };
   error?: string;
