@@ -9,6 +9,13 @@ import {
   type MangaImageGenerationResult,
 } from "@/server-functions/manga-image";
 import {
+  createBlankCharacter,
+  createId,
+  loadCharacterProfiles,
+  saveCharacterProfiles,
+  type MangaCharacterProfile,
+} from "@/lib/manga-workspace";
+import {
   BookImage,
   Check,
   ChevronDown,
@@ -54,13 +61,7 @@ type Role =
   | "Target"
   | "Generated Page";
 
-type CharacterProfile = {
-  id: string;
-  name: string;
-  storyRole: string;
-  identityLock: string;
-  defaultExpression: string;
-};
+type CharacterProfile = MangaCharacterProfile;
 
 type StoredItem = {
   id: string;
@@ -87,39 +88,6 @@ const roleOptions: Array<{ value: Role; label: string }> = [
   { value: "Target", label: "Image to modify" },
 ];
 
-const initialCharacters: CharacterProfile[] = [
-  {
-    id: "akira",
-    name: "Akira",
-    storyRole: "Protagonist",
-    identityLock: "Sharp eyes, black messy hair, slim athletic silhouette, dark jacket.",
-    defaultExpression: "Focused and determined.",
-  },
-  {
-    id: "yuki",
-    name: "Yuki",
-    storyRole: "Rival",
-    identityLock: "Long pale hair, calm face, elegant coat, colder silhouette.",
-    defaultExpression: "Calm, unreadable, slightly threatening.",
-  },
-];
-
-const initialPanelInstructions = [
-  "Establish the place and mood with both characters positioned in the scene.",
-  "Close-up on Akira noticing the threat.",
-  "Main action beat with strong motion and clear body orientation.",
-  "Reaction from Yuki, expression controlled but intense.",
-  "Object/detail shot that reinforces the tension.",
-  "Dominant final panel with impact, readable silhouettes, and clean gutters.",
-];
-
-function createId(prefix: string) {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 function hueFromName(name: string) {
   return Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
 }
@@ -130,6 +98,21 @@ function fileBaseName(fileName: string) {
       .replace(/\.[^.]+$/, "")
       .replace(/[_-]+/g, " ")
       .trim() || "Imported image"
+  );
+}
+
+function characterImagesToLibraryItems(characters: CharacterProfile[]): StoredItem[] {
+  return characters.flatMap((character) =>
+    (character.images ?? []).map((image) => ({
+      id: `profile-${character.id}-${image.id}`,
+      name: `${character.name || "Character"} - ${image.view || image.name}`,
+      role: "Character" as const,
+      thumbHue: hueFromName(character.name || image.name),
+      imageDataUrl: image.imageDataUrl,
+      mimeType: image.mimeType,
+      characterId: character.id,
+      description: image.notes || image.view || "",
+    })),
   );
 }
 
@@ -176,19 +159,20 @@ export default function CollabMangaAIPage() {
   const [tab, setTab] = useState<WorkspaceTab>("prompt");
   const [items, setItems] = useState<StoredItem[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [characters, setCharacters] = useState<CharacterProfile[]>(initialCharacters);
-  const [activeCharacterId, setActiveCharacterId] = useState(initialCharacters[0]?.id ?? "");
+  const [characters, setCharacters] = useState<CharacterProfile[]>([]);
+  const [charactersLoaded, setCharactersLoaded] = useState(false);
+  const [activeCharacterId, setActiveCharacterId] = useState("");
   const [uploadRole, setUploadRole] = useState<Role>("Character");
-  const [prompt, setPrompt] = useState(
-    "Create a vertical manga page where Akira confronts Yuki on a rooftop at dusk. Keep the panel layout readable, with dramatic manga ink, clear silhouettes, and strong emotional beats.",
-  );
+  const [prompt, setPrompt] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
   const [editScope, setEditScope] = useState<"single" | "full">("single");
   const [panelCount, setPanelCount] = useState(6);
-  const [panelInstructions, setPanelInstructions] = useState(initialPanelInstructions);
-  const [styleMode, setStyleMode] = useState<"auto" | "black-white" | "color">("black-white");
+  const [panelInstructions, setPanelInstructions] = useState<string[]>(
+    Array.from({ length: 6 }, () => ""),
+  );
+  const [styleMode, setStyleMode] = useState<"auto" | "black-white" | "color">("auto");
   const [backgroundLevel, setBackgroundLevel] = useState<"auto" | "empty" | "minimal" | "detailed">(
-    "minimal",
+    "auto",
   );
   const [readingDirection, setReadingDirection] = useState<"right-to-left" | "left-to-right">(
     "right-to-left",
@@ -225,6 +209,21 @@ export default function CollabMangaAIPage() {
     void runBackendCheck();
   }, [runBackendCheck]);
 
+  useEffect(() => {
+    const savedCharacters = loadCharacterProfiles();
+    setCharacters(savedCharacters);
+    setActiveCharacterId(savedCharacters[0]?.id ?? "");
+    setItems(characterImagesToLibraryItems(savedCharacters));
+    setSelected({});
+    setCharactersLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (charactersLoaded) {
+      saveCharacterProfiles(characters);
+    }
+  }, [characters, charactersLoaded]);
+
   const importFiles = async (files: FileList | File[], forcedRole?: Role) => {
     const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
@@ -248,24 +247,13 @@ export default function CollabMangaAIPage() {
         }),
       );
       setItems((current) => [...imported, ...current]);
-      setSelected((current) => ({
-        ...current,
-        ...Object.fromEntries(imported.map((item) => [item.id, true])),
-      }));
     } finally {
       setIsImporting(false);
     }
   };
 
   const addCharacter = () => {
-    const nextIndex = characters.length + 1;
-    const character = {
-      id: createId("character"),
-      name: `Character ${nextIndex}`,
-      storyRole: "Story role",
-      identityLock: "Distinctive face, hairstyle, outfit, silhouette, and key traits.",
-      defaultExpression: "Neutral expression.",
-    };
+    const character = createBlankCharacter(characters.length + 1);
     setCharacters((current) => [...current, character]);
     setActiveCharacterId(character.id);
     setTab("characters");
@@ -305,7 +293,7 @@ export default function CollabMangaAIPage() {
     const nextCount = Math.min(12, Math.max(1, count));
     setPanelCount(nextCount);
     setPanelInstructions((current) =>
-      Array.from({ length: nextCount }, (_, index) => current[index] ?? `Panel ${index + 1}:`),
+      Array.from({ length: nextCount }, (_, index) => current[index] ?? ""),
     );
   };
 
@@ -689,8 +677,12 @@ function ImageImporter({
           <select
             value={activeCharacterId}
             onChange={(event) => setActiveCharacterId(event.target.value)}
+            disabled={characters.length === 0}
             className="h-9 rounded-[10px] border border-border bg-input px-2 text-[12px] font-semibold text-text-primary outline-none focus:border-accent"
           >
+            <option value="">
+              {characters.length === 0 ? "Create a profile first" : "No profile"}
+            </option>
             {characters.map((character) => (
               <option key={character.id} value={character.id}>
                 {character.name}
