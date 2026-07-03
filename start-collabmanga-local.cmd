@@ -8,10 +8,25 @@ set NITRO_PORT=8092
 set NODE_ENV=production
 set APP_URL=http://127.0.0.1:8092/ai
 
+if exist ".env.local" (
+  echo Loading local environment from .env.local
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env.local") do (
+    if not "%%A"=="" set "%%A=%%B"
+  )
+) else (
+  echo No .env.local file found. AI generation needs PULSENOTE_APP_TOKEN locally.
+)
+
 echo.
 echo CollabManga local
 echo URL: %APP_URL%
 echo.
+
+if not defined PULSENOTE_APP_TOKEN (
+  echo Warning: PULSENOTE_APP_TOKEN is not set. Image generation will fail locally.
+  echo Create .env.local and copy PULSENOTE_APP_TOKEN from Render before testing AI.
+  echo.
+)
 
 netstat -ano | findstr /R /C:":%NITRO_PORT% .*LISTENING" >nul
 if %ERRORLEVEL% EQU 0 (
