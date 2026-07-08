@@ -22,6 +22,8 @@ import { Route as AiHistoryRouteImport } from './routes/ai.history'
 import { Route as AiCharactersRouteImport } from './routes/ai.characters'
 import { Route as AiChapterRouteImport } from './routes/ai.chapter'
 import { Route as AiAssetsRouteImport } from './routes/ai.assets'
+import { Route as ApiMangaStatusRouteImport } from './routes/api.manga.status'
+import { Route as ApiMangaGeneratePageRouteImport } from './routes/api.manga.generate-page'
 
 const AiRoute = AiRouteImport.update({
   id: '/ai',
@@ -88,6 +90,16 @@ const AiAssetsRoute = AiAssetsRouteImport.update({
   path: '/assets',
   getParentRoute: () => AiRoute,
 } as any)
+const ApiMangaStatusRoute = ApiMangaStatusRouteImport.update({
+  id: '/api/manga/status',
+  path: '/api/manga/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMangaGeneratePageRoute = ApiMangaGeneratePageRouteImport.update({
+  id: '/api/manga/generate-page',
+  path: '/api/manga/generate-page',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -103,6 +115,8 @@ export interface FileRoutesByFullPath {
   '/ai/settings': typeof AiSettingsRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/': typeof AiIndexRoute
+  '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
+  '/api/manga/status': typeof ApiMangaStatusRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -117,6 +131,8 @@ export interface FileRoutesByTo {
   '/ai/settings': typeof AiSettingsRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai': typeof AiIndexRoute
+  '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
+  '/api/manga/status': typeof ApiMangaStatusRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -133,6 +149,8 @@ export interface FileRoutesById {
   '/ai/settings': typeof AiSettingsRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/': typeof AiIndexRoute
+  '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
+  '/api/manga/status': typeof ApiMangaStatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -150,6 +168,8 @@ export interface FileRouteTypes {
     | '/ai/settings'
     | '/ai/style-transfer'
     | '/ai/'
+    | '/api/manga/generate-page'
+    | '/api/manga/status'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -164,6 +184,8 @@ export interface FileRouteTypes {
     | '/ai/settings'
     | '/ai/style-transfer'
     | '/ai'
+    | '/api/manga/generate-page'
+    | '/api/manga/status'
   id:
     | '__root__'
     | '/'
@@ -179,11 +201,15 @@ export interface FileRouteTypes {
     | '/ai/settings'
     | '/ai/style-transfer'
     | '/ai/'
+    | '/api/manga/generate-page'
+    | '/api/manga/status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiRoute: typeof AiRouteWithChildren
+  ApiMangaGeneratePageRoute: typeof ApiMangaGeneratePageRoute
+  ApiMangaStatusRoute: typeof ApiMangaStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -279,6 +305,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiAssetsRouteImport
       parentRoute: typeof AiRoute
     }
+    '/api/manga/status': {
+      id: '/api/manga/status'
+      path: '/api/manga/status'
+      fullPath: '/api/manga/status'
+      preLoaderRoute: typeof ApiMangaStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/manga/generate-page': {
+      id: '/api/manga/generate-page'
+      path: '/api/manga/generate-page'
+      fullPath: '/api/manga/generate-page'
+      preLoaderRoute: typeof ApiMangaGeneratePageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -315,6 +355,8 @@ const AiRouteWithChildren = AiRoute._addFileChildren(AiRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiRoute: AiRouteWithChildren,
+  ApiMangaGeneratePageRoute: ApiMangaGeneratePageRoute,
+  ApiMangaStatusRoute: ApiMangaStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,9 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  checkMangaImageBackend,
-  generateMangaImage,
   type MangaBackendStatusResult,
   type MangaImageGenerationInput,
   type MangaImageGenerationResult,
@@ -74,7 +71,7 @@ type StoredItem = {
   description?: string;
 };
 
-type WorkspaceTab = "prompt" | "characters" | "references" | "panels";
+type WorkspaceTab = "structure" | "characters" | "references" | "prompt";
 type GenerationOperation = MangaImageGenerationInput["operation"];
 
 const roleOptions: Array<{ value: Role; label: string }> = [
@@ -87,6 +84,76 @@ const roleOptions: Array<{ value: Role; label: string }> = [
   { value: "Object", label: "Object" },
   { value: "Target", label: "Image to modify" },
 ];
+
+const mangaStatusApiPath = "/api/manga/status";
+const mangaGenerateApiPath = "/api/manga/generate-page";
+const mangaGenerationTimeoutMs = 16 * 60 * 1000;
+
+type MangaApiErrorPayload = {
+  error?: string;
+};
+
+async function requestMangaApiJson<T>(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(path, {
+      ...init,
+      signal: controller.signal,
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+    const payload = (contentType.includes("application/json")
+      ? await response.json().catch(() => ({}))
+      : { error: await response.text().catch(() => "") }) as T & MangaApiErrorPayload;
+
+    if (!response.ok) {
+      throw new Error(payload.error || `Manga API request failed with status ${response.status}.`);
+    }
+
+    return payload;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(
+        "The image service is still taking too long after several minutes. Try again with fewer reference images.",
+      );
+    }
+
+    if (error instanceof TypeError) {
+      throw new Error(
+        "The local CollabManga API could not be reached. Refresh the page and make sure the local server is still running.",
+      );
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function checkMangaBackendViaApi() {
+  return requestMangaApiJson<MangaBackendStatusResult>(
+    mangaStatusApiPath,
+    { method: "GET" },
+    30_000,
+  );
+}
+
+function generateMangaImageViaApi(data: MangaImageGenerationInput) {
+  return requestMangaApiJson<MangaImageGenerationResult>(
+    mangaGenerateApiPath,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    },
+    mangaGenerationTimeoutMs,
+  );
+}
 
 function hueFromName(name: string) {
   return Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
@@ -154,9 +221,7 @@ async function readImageAsDataUrl(file: File) {
 }
 
 function CollabMangaAIPage() {
-  const generateMangaImageFn = useServerFn(generateMangaImage);
-  const checkMangaImageBackendFn = useServerFn(checkMangaImageBackend);
-  const [tab, setTab] = useState<WorkspaceTab>("prompt");
+  const [tab, setTab] = useState<WorkspaceTab>("structure");
   const [items, setItems] = useState<StoredItem[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [characters, setCharacters] = useState<CharacterProfile[]>([]);
@@ -190,7 +255,7 @@ function CollabMangaAIPage() {
   const runBackendCheck = useCallback(async () => {
     setIsCheckingBackend(true);
     try {
-      const result = await checkMangaImageBackendFn();
+      const result = await checkMangaBackendViaApi();
       setBackendStatus(result);
     } catch (error) {
       setBackendStatus({
@@ -203,7 +268,7 @@ function CollabMangaAIPage() {
     } finally {
       setIsCheckingBackend(false);
     }
-  }, [checkMangaImageBackendFn]);
+  }, []);
 
   useEffect(() => {
     void runBackendCheck();
@@ -224,7 +289,11 @@ function CollabMangaAIPage() {
     }
   }, [characters, charactersLoaded]);
 
-  const importFiles = async (files: FileList | File[], forcedRole?: Role) => {
+  const importFiles = async (
+    files: FileList | File[],
+    forcedRole?: Role,
+    forcedCharacterId?: string,
+  ) => {
     const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
 
@@ -241,7 +310,8 @@ function CollabMangaAIPage() {
             thumbHue: hueFromName(file.name),
             imageDataUrl: image.dataUrl,
             mimeType: image.mimeType,
-            characterId: role === "Character" ? activeCharacterId : undefined,
+            characterId:
+              role === "Character" ? (forcedCharacterId ?? activeCharacterId) : undefined,
             description: "",
           } satisfies StoredItem;
         }),
@@ -302,40 +372,38 @@ function CollabMangaAIPage() {
     setIsGenerating(true);
 
     try {
-      const status = backendStatus?.ok ? backendStatus : await checkMangaImageBackendFn();
+      const status = backendStatus?.ok ? backendStatus : await checkMangaBackendViaApi();
       setBackendStatus(status);
       if (!status.ok) {
         throw new Error(status.error || "AI backend is not ready yet.");
       }
 
-      const result = await generateMangaImageFn({
-        data: {
-          operation,
-          prompt,
-          editPrompt,
-          editScope,
-          activePage: 1,
-          pages: [1],
-          panelCount,
-          panelInstructions,
-          selectedAssets: selectedItems.map((item) => {
-            const character = characters.find((profile) => profile.id === item.characterId);
-            return {
-              ...item,
-              characterName: character?.name,
-              characterProfile: character
-                ? [character.storyRole, character.identityLock, character.defaultExpression]
-                    .filter(Boolean)
-                    .join(" | ")
-                : undefined,
-            };
-          }),
-          characters,
-          styleMode,
-          backgroundLevel,
-          readingDirection,
-          existingImageDataUrl: generationResult?.imageUrl,
-        },
+      const result = await generateMangaImageViaApi({
+        operation,
+        prompt,
+        editPrompt,
+        editScope,
+        activePage: 1,
+        pages: [1],
+        panelCount,
+        panelInstructions,
+        selectedAssets: selectedItems.map((item) => {
+          const character = characters.find((profile) => profile.id === item.characterId);
+          return {
+            ...item,
+            characterName: character?.name,
+            characterProfile: character
+              ? [character.storyRole, character.identityLock, character.defaultExpression]
+                  .filter(Boolean)
+                  .join(" | ")
+              : undefined,
+          };
+        }),
+        characters,
+        styleMode,
+        backgroundLevel,
+        readingDirection,
+        existingImageDataUrl: generationResult?.imageUrl,
       });
       setGenerationResult(result);
       setTab("references");
@@ -432,6 +500,13 @@ function CollabMangaAIPage() {
           characters={characters}
           updateCharacter={updateCharacter}
           addCharacter={addCharacter}
+          items={items}
+          selected={selected}
+          toggleSelect={toggleSelect}
+          updateItem={updateItem}
+          removeItem={removeItem}
+          importFiles={importFiles}
+          isImporting={isImporting}
           selectedItems={selectedItems}
           styleMode={styleMode}
           setStyleMode={setStyleMode}
@@ -960,6 +1035,13 @@ function WorkspacePanel(props: {
   characters: CharacterProfile[];
   updateCharacter: (id: string, patch: Partial<CharacterProfile>) => void;
   addCharacter: () => void;
+  items: StoredItem[];
+  selected: Record<string, boolean>;
+  toggleSelect: (id: string) => void;
+  updateItem: (id: string, patch: Partial<StoredItem>) => void;
+  removeItem: (id: string) => void;
+  importFiles: (files: FileList | File[], forcedRole?: Role, forcedCharacterId?: string) => void;
+  isImporting: boolean;
   selectedItems: StoredItem[];
   styleMode: "auto" | "black-white" | "color";
   setStyleMode: (style: "auto" | "black-white" | "color") => void;
@@ -977,16 +1059,16 @@ function WorkspacePanel(props: {
       <div className="flex items-center gap-1 border-b border-border p-3">
         {(
           [
+            { id: "structure", label: "Structure de la planche" },
+            { id: "characters", label: "Personnages" },
+            { id: "references", label: "Références" },
             { id: "prompt", label: "Prompt" },
-            { id: "characters", label: "Characters" },
-            { id: "references", label: "Refs" },
-            { id: "panels", label: "Panels" },
           ] as const
         ).map((tab) => (
           <button
             key={tab.id}
             onClick={() => props.setTab(tab.id)}
-            className={`h-[38px] flex-1 rounded-[12px] px-2 text-[12px] font-bold transition ${
+            className={`min-h-[38px] flex-1 rounded-[12px] px-2 py-1 text-[12px] font-bold leading-tight transition ${
               props.tab === tab.id
                 ? "bg-accent-soft text-accent"
                 : "text-text-secondary hover:text-text-primary"
@@ -998,10 +1080,10 @@ function WorkspacePanel(props: {
       </div>
 
       <div className="scroll-dark flex-1 overflow-y-auto p-4">
-        {props.tab === "prompt" && <PromptTab {...props} />}
+        {props.tab === "structure" && <StructureTab {...props} />}
         {props.tab === "characters" && <CharactersTab {...props} />}
-        {props.tab === "references" && <ReferencesSummary selectedItems={props.selectedItems} />}
-        {props.tab === "panels" && <PanelsTab {...props} />}
+        {props.tab === "references" && <ReferencesTab {...props} />}
+        {props.tab === "prompt" && <PromptTab {...props} />}
       </div>
 
       <div className="space-y-2 border-t border-border p-4">
@@ -1150,6 +1232,12 @@ function CharactersTab({
   characters,
   updateCharacter,
   addCharacter,
+  items,
+  selected,
+  toggleSelect,
+  removeItem,
+  importFiles,
+  isImporting,
 }: Parameters<typeof WorkspacePanel>[0]) {
   return (
     <div className="flex flex-col gap-3">
@@ -1160,39 +1248,282 @@ function CharactersTab({
         <Plus className="h-4 w-4" />
         Add character profile
       </button>
-      {characters.map((character) => (
-        <div key={character.id} className="rounded-[14px] border border-border bg-surface-3 p-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-accent-border bg-accent-soft text-accent">
-              <User className="h-4 w-4" />
-            </span>
-            <input
-              value={character.name}
-              onChange={(event) => updateCharacter(character.id, { name: event.target.value })}
-              className="h-9 min-w-0 flex-1 rounded-[10px] border border-border bg-input px-3 text-[13px] font-bold text-text-primary outline-none focus:border-accent"
-            />
+      {characters.map((character) => {
+        const characterImages = items.filter((item) => item.characterId === character.id);
+        return (
+          <div key={character.id} className="rounded-[14px] border border-border bg-surface-3 p-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-accent-border bg-accent-soft text-accent">
+                <User className="h-4 w-4" />
+              </span>
+              <input
+                value={character.name}
+                onChange={(event) => updateCharacter(character.id, { name: event.target.value })}
+                className="h-9 min-w-0 flex-1 rounded-[10px] border border-border bg-input px-3 text-[13px] font-bold text-text-primary outline-none focus:border-accent"
+              />
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-3">
+              <TextField
+                label="Narrative role"
+                value={character.storyRole}
+                onChange={(value) => updateCharacter(character.id, { storyRole: value })}
+              />
+              <TextAreaField
+                label="Identity lock"
+                value={character.identityLock}
+                onChange={(value) => updateCharacter(character.id, { identityLock: value })}
+                rows={3}
+              />
+              <TextAreaField
+                label="Default expression"
+                value={character.defaultExpression}
+                onChange={(value) => updateCharacter(character.id, { defaultExpression: value })}
+                rows={2}
+              />
+            </div>
+            <div className="mt-3">
+              <FieldLabel label="Character images" />
+              {characterImages.length === 0 ? (
+                <p className="text-[12px] text-text-muted">No image yet for this character.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {characterImages.map((item) => (
+                    <div key={item.id} className="relative min-w-0">
+                      <AssetThumb item={item} sizeClass="aspect-square h-auto w-full" />
+                      <button
+                        onClick={() => toggleSelect(item.id)}
+                        aria-pressed={!!selected[item.id]}
+                        aria-label={`Select ${item.name}`}
+                        className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md border ${
+                          selected[item.id]
+                            ? "border-accent bg-accent text-accent-foreground"
+                            : "border-border-strong bg-surface-2/80 text-transparent hover:border-accent"
+                        }`}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        aria-label={`Remove ${item.name}`}
+                        className="absolute left-1 top-1 rounded-md bg-surface-2/80 p-1 text-text-muted hover:text-danger"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-2">
+                <TabImportButton
+                  label="Import character image"
+                  role="Character"
+                  characterId={character.id}
+                  importFiles={importFiles}
+                  isImporting={isImporting}
+                />
+              </div>
+            </div>
           </div>
-          <div className="mt-3 grid grid-cols-1 gap-3">
-            <TextField
-              label="Narrative role"
-              value={character.storyRole}
-              onChange={(value) => updateCharacter(character.id, { storyRole: value })}
-            />
-            <TextAreaField
-              label="Identity lock"
-              value={character.identityLock}
-              onChange={(value) => updateCharacter(character.id, { identityLock: value })}
-              rows={3}
-            />
-            <TextAreaField
-              label="Default expression"
-              value={character.defaultExpression}
-              onChange={(value) => updateCharacter(character.id, { defaultExpression: value })}
+        );
+      })}
+    </div>
+  );
+}
+
+const referenceRoles: Role[] = ["Background", "Object", "Pose", "Style", "Inspiration", "Target"];
+
+function StructureTab({
+  items,
+  selected,
+  toggleSelect,
+  removeItem,
+  importFiles,
+  isImporting,
+}: Parameters<typeof WorkspacePanel>[0]) {
+  const structureItems = items.filter((item) => item.role === "Storyboard");
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[12px] leading-5 text-text-secondary">
+        Import an image that defines the panel layout and structure of the page.
+      </p>
+      <TabImportButton
+        label="Import page structure"
+        role="Storyboard"
+        importFiles={importFiles}
+        isImporting={isImporting}
+      />
+      {structureItems.length === 0 ? (
+        <EmptyState icon={FileImage} title="No structure image imported" />
+      ) : (
+        structureItems.map((item) => (
+          <WorkspaceAssetTile
+            key={item.id}
+            item={item}
+            selected={!!selected[item.id]}
+            onToggle={() => toggleSelect(item.id)}
+            onRemove={() => removeItem(item.id)}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function ReferencesTab({
+  items,
+  selected,
+  toggleSelect,
+  updateItem,
+  removeItem,
+  importFiles,
+  isImporting,
+}: Parameters<typeof WorkspacePanel>[0]) {
+  const refItems = items.filter((item) => referenceRoles.includes(item.role));
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[12px] leading-5 text-text-secondary">
+        Import reference images and add details describing what each reference is used for.
+      </p>
+      <TabImportButton
+        label="Import a reference"
+        role="Inspiration"
+        importFiles={importFiles}
+        isImporting={isImporting}
+      />
+      {refItems.length === 0 ? (
+        <EmptyState icon={BookImage} title="No reference imported" />
+      ) : (
+        refItems.map((item) => (
+          <div
+            key={item.id}
+            className={`rounded-[14px] border p-3 ${
+              selected[item.id]
+                ? "border-accent-border bg-accent-soft/30"
+                : "border-border bg-surface-3"
+            }`}
+          >
+            <div className="flex gap-3">
+              <AssetThumb item={item} sizeClass="h-[86px] w-[68px]" />
+              <div className="flex min-w-0 flex-1 flex-col justify-between">
+                <p className="truncate text-[13px] font-bold text-text-primary">{item.name}</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleSelect(item.id)}
+                    aria-pressed={!!selected[item.id]}
+                    aria-label={`Select ${item.name}`}
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border ${
+                      selected[item.id]
+                        ? "border-accent bg-accent text-accent-foreground"
+                        : "border-border-strong text-transparent hover:border-accent"
+                    }`}
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    aria-label={`Remove ${item.name}`}
+                    className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-danger"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <textarea
+              value={item.description ?? ""}
+              onChange={(event) => updateItem(item.id, { description: event.target.value })}
               rows={2}
+              placeholder="What is this reference for?"
+              className="mt-3 w-full resize-none rounded-[10px] border border-border bg-input px-3 py-2 text-[12px] leading-5 text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
             />
           </div>
-        </div>
-      ))}
+        ))
+      )}
+    </div>
+  );
+}
+
+function TabImportButton({
+  label,
+  role,
+  characterId,
+  importFiles,
+  isImporting,
+}: {
+  label: string;
+  role: Role;
+  characterId?: string;
+  importFiles: (files: FileList | File[], forcedRole?: Role, forcedCharacterId?: string) => void;
+  isImporting: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          if (event.currentTarget.files)
+            void importFiles(event.currentTarget.files, role, characterId);
+          event.currentTarget.value = "";
+        }}
+      />
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={isImporting}
+        className="flex min-h-[64px] w-full flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-2 px-3 text-text-primary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <Upload className="h-5 w-5" />
+        <span className="text-[13px] font-bold">{isImporting ? "Importing..." : label}</span>
+      </button>
+    </div>
+  );
+}
+
+function WorkspaceAssetTile({
+  item,
+  selected,
+  onToggle,
+  onRemove,
+}: {
+  item: StoredItem;
+  selected: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-[12px] border p-2 ${
+        selected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3"
+      }`}
+    >
+      <AssetThumb item={item} sizeClass="h-14 w-14" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-bold text-text-primary">{item.name}</p>
+        <p className="truncate text-[11px] text-text-muted">{item.role}</p>
+      </div>
+      <button
+        onClick={onToggle}
+        aria-pressed={selected}
+        aria-label={`Select ${item.name}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-md border ${
+          selected
+            ? "border-accent bg-accent text-accent-foreground"
+            : "border-border-strong text-transparent hover:border-accent"
+        }`}
+      >
+        <Check className="h-4 w-4" />
+      </button>
+      <button
+        onClick={onRemove}
+        aria-label={`Remove ${item.name}`}
+        className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-danger"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
     </div>
   );
 }

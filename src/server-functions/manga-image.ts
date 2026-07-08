@@ -2,6 +2,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
+const PULSENOTE_GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
+const PULSENOTE_GENERATION_ATTEMPTS = 2;
+const PULSENOTE_RETRYABLE_STATUSES = new Set([
+  408,
+  409,
+  425,
+  429,
+  500,
+  502,
+  503,
+  504,
+  520,
+  522,
+  524,
+]);
 
 const roleSchema = z.enum([
   "Character",
@@ -146,6 +161,43 @@ function responseErrorMessage(status: number, payload: PulseNoteMangaResponse) {
   return detail ? `${base} ${detail}` : base;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function errorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function shouldRetryPulseNoteNetworkError(error: unknown) {
+  const message = errorText(error).toLowerCase();
+  const name = error instanceof Error ? error.name.toLowerCase() : "";
+  return (
+    name.includes("typeerror") ||
+    message.includes("fetch failed") ||
+    message.includes("terminated") ||
+    message.includes("socket") ||
+    message.includes("econnreset") ||
+    message.includes("etimedout") ||
+    message.includes("und_err")
+  );
+}
+
+function shouldRetryPulseNoteResponse(status: number, payload: PulseNoteMangaResponse) {
+  const detail = `${payload.error ?? ""} ${payload.details?.message ?? ""} ${
+    payload.details?.code ?? ""
+  }`.toLowerCase();
+
+  return (
+    PULSENOTE_RETRYABLE_STATUSES.has(status) ||
+    detail.includes("fetch failed") ||
+    detail.includes("temporarily unavailable") ||
+    detail.includes("timeout")
+  );
+}
+
 async function parsePulseNoteResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
@@ -168,7 +220,11 @@ async function parseResponseJson<T>(response: Response): Promise<T> {
   return { error: text || "Backend returned a non-JSON response." } as T;
 }
 
-async function checkPulseNoteMangaBackend() {
+export function parseMangaImageGenerationInput(data: unknown) {
+  return generationInputSchema.parse(data);
+}
+
+export async function checkPulseNoteMangaBackend() {
   const backendUrl = getPulseNoteBackendUrl();
   const appToken = getPulseNoteAppToken();
   const checkedAt = new Date().toISOString();
@@ -231,7 +287,7 @@ async function checkPulseNoteMangaBackend() {
   }
 }
 
-async function requestPulseNoteMangaImage(data: MangaImageGenerationInput) {
+export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput) {
   const backendUrl = getPulseNoteBackendUrl();
   const appToken = getPulseNoteAppToken();
 
@@ -241,41 +297,69 @@ async function requestPulseNoteMangaImage(data: MangaImageGenerationInput) {
     );
   }
 
-  const response = await fetch(`${backendUrl}/api/manga/generate-page`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-app-id": "manga-forge",
-      "x-app-token": appToken,
-    },
-    body: JSON.stringify({
+  const body = JSON.stringify({
       project: "manga-forge",
       task: "manga_page_generation",
       ...data,
-    }),
-    signal: AbortSignal.timeout(140000),
   });
+  let lastError: unknown;
 
-  const payload = await parsePulseNoteResponse(response);
-  if (!response.ok) {
-    throw new Error(responseErrorMessage(response.status, payload));
+  for (let attempt = 1; attempt <= PULSENOTE_GENERATION_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(`${backendUrl}/api/manga/generate-page`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-app-id": "manga-forge",
+          "x-app-token": appToken,
+        },
+        body,
+        signal: AbortSignal.timeout(PULSENOTE_GENERATION_TIMEOUT_MS),
+      });
+
+      const payload = await parsePulseNoteResponse(response);
+      if (!response.ok) {
+        const message = responseErrorMessage(response.status, payload);
+        if (
+          attempt < PULSENOTE_GENERATION_ATTEMPTS &&
+          shouldRetryPulseNoteResponse(response.status, payload)
+        ) {
+          await wait(1200 * attempt);
+          continue;
+        }
+
+        throw new Error(message);
+      }
+
+      const imageUrl = payload.imageDataUrl || payload.imageUrl;
+      if (!imageUrl) {
+        throw new Error("PulseNote returned no generated image.");
+      }
+
+      return {
+        imageUrl,
+        finalPrompt: payload.finalPrompt ?? data.prompt,
+        taskType: payload.taskType ?? "storyboard_page_creation",
+        model: payload.model ?? "gpt-image-2",
+        size: payload.size ?? "1024x1536",
+        quality: payload.quality ?? "high",
+        createdAt: payload.createdAt ?? new Date().toISOString(),
+        creditsUsed: payload.creditsUsed,
+      } satisfies MangaImageGenerationResult;
+    } catch (error) {
+      lastError = error;
+      if (
+        attempt < PULSENOTE_GENERATION_ATTEMPTS &&
+        shouldRetryPulseNoteNetworkError(error)
+      ) {
+        await wait(1200 * attempt);
+        continue;
+      }
+      throw error;
+    }
   }
 
-  const imageUrl = payload.imageDataUrl || payload.imageUrl;
-  if (!imageUrl) {
-    throw new Error("PulseNote returned no generated image.");
-  }
-
-  return {
-    imageUrl,
-    finalPrompt: payload.finalPrompt ?? data.prompt,
-    taskType: payload.taskType ?? "storyboard_page_creation",
-    model: payload.model ?? "gpt-image-2",
-    size: payload.size ?? "1024x1536",
-    quality: payload.quality ?? "high",
-    createdAt: payload.createdAt ?? new Date().toISOString(),
-    creditsUsed: payload.creditsUsed,
-  } satisfies MangaImageGenerationResult;
+  throw new Error(errorText(lastError) || "PulseNote manga generation failed.");
 }
 
 export const generateMangaImage = createServerFn({ method: "POST" })
