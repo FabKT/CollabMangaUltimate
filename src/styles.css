@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "./routes";
-@source "./components/cma";
+@source "./components";
+@source "./features";
 @source "./lib";
 
 @custom-variant dark (&:is(.dark *));
@@ -58,6 +59,30 @@
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-info: var(--info);
+
+  /* Short surface/text utilities used by injected pages (notifications, announcements) */
+  --color-bg: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-elevated: var(--bg-elevated);
+  --color-details: #08112b;
+  --color-text: var(--text-primary);
+
+  /* CollabManga classic palette (sponsorship, illustration, profile, connect…) */
+  --color-cm-bg: #050b1d;
+  --color-cm-panel: #0b1430;
+  --color-cm-card: #101b3f;
+  --color-cm-input: #0e193a;
+  --color-cm-details: #08112b;
+  --color-cm-text: #f7faff;
+  --color-cm-text2: #b8c4e5;
+  --color-cm-muted: #7f8cb3;
+  --color-cm-disabled: #5e6a90;
+  --color-cm-neon: #39ff88;
+  --color-cm-neon-hover: #25e575;
+  --color-cm-danger: #ff5f7e;
+  --color-cm-warning: #ffb84d;
+  --color-cm-info: #75a7ff;
+  --color-cm-success: #39ff88;
 
   --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
@@ -127,7 +152,7 @@
   --accent-hover: var(--neon-hover);
   --accent-soft: var(--neon-soft);
   --accent-border: var(--neon-soft-border);
-  --accent-foreground: #04111e;
+  --accent-foreground: #ffffff;
 }
 
 @layer base {
@@ -340,4 +365,139 @@
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+/* ---- manga-haven (CollabManga classic: home + catalog) ---- */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-deep: var(--surface-deep);
+  --color-star: var(--star);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+}
+
+:root {
+  --surface: var(--bg-panel);
+  --surface-deep: #08112b;
+  --star: #ffb84d;
+  --primary-hover: var(--neon-hover);
+  --primary-soft: rgba(57, 255, 136, 0.12);
+  --gradient-hero: linear-gradient(180deg, rgba(5, 11, 29, 0) 0%, rgba(5, 11, 29, 0.55) 55%, rgba(5, 11, 29, 0.95) 100%);
+  --gradient-hero-side: linear-gradient(90deg, rgba(5, 11, 29, 0.95) 0%, rgba(5, 11, 29, 0.6) 45%, rgba(5, 11, 29, 0.1) 100%);
+  --gradient-card: linear-gradient(180deg, rgba(16, 27, 63, 0.6) 0%, rgba(8, 17, 43, 0.85) 100%);
+  --shadow-glow: 0 20px 60px -20px rgba(57, 255, 136, 0.4);
+  --shadow-card: 0 20px 40px -20px rgba(0, 0, 0, 0.6);
+}
+
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(133, 154, 206, 0.08);
+  color: var(--color-secondary-foreground);
+  border: 1px solid var(--color-border);
+}
+
+@utility chip-primary {
+  background: var(--primary-soft);
+  color: var(--color-primary);
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
+}
+
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.875rem;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  box-shadow: var(--shadow-glow);
+  min-height: 44px;
+  &:hover {
+    background: var(--color-primary-hover);
+    transform: translateY(-1px);
+  }
+}
+
+@utility btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  background: rgba(133, 154, 206, 0.06);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
+  transition: background 160ms ease, border-color 160ms ease;
+  min-height: 44px;
+  &:hover {
+    background: rgba(133, 154, 206, 0.12);
+    border-color: color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+}
+
+@utility card-manga {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  &:hover {
+    transform: translateY(-4px);
+    border-color: color-mix(in oklab, var(--primary) 45%, transparent);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+/* ---- CollabManga classic surfaces & dividers (messages, ideas, studio…) ---- */
+:root {
+  --page: #050b1d;
+  --container: #08112b;
+  --rail: #060d24;
+  --menu: #0a1028;
+  --chat: #08112b;
+  --topbar: #0b1430;
+  --input-bg: #0e193a;
+  --elevated: #101b3f;
+  --cm-active: rgba(57, 255, 136, 0.12);
+  --cm-neon-border: rgba(57, 255, 136, 0.45);
+  --cm-divider: rgba(133, 154, 206, 0.14);
+  --cm-border: rgba(133, 154, 206, 0.18);
+  --cm-border-strong: rgba(133, 154, 206, 0.28);
+}
+
+/* ---- Palette aliases for injected pages (studio, ideas, notifications, mangaverse) ----
+   These pages reference short/legacy token names; map them to the canonical AI palette so
+   borders no longer fall back to currentColor (white) and surfaces render correctly. */
+:root {
+  --bg: var(--bg-app);
+  --panel: var(--bg-panel);
+  --details: #08112b;
+  --text: var(--text-primary);
+  --neon-border: var(--neon-soft-border);
+
+  --color-bg: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-elevated: var(--bg-elevated);
+  --color-input-bg: var(--bg-input);
+  --color-border-default: var(--border-default);
+  --color-neon-border: var(--neon-soft-border);
+  --color-neon-soft: var(--neon-soft);
+  --color-neon-fill: var(--neon);
+  --color-reader-bg: #050b1d;
 }

@@ -3,26 +3,25 @@ import { Sidebar } from "./Sidebar";
 import { Menu, X } from "lucide-react";
 
 export function CmaLayout({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen w-full" style={{ background: "var(--bg-app)" }}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      <Sidebar />
 
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-[280px]" style={{ background: "var(--bg-sidebar)" }}>
+          <div className="absolute left-0 top-0 bottom-0">
             <button
               onClick={() => setMobileOpen(false)}
-              className="absolute right-3 top-3 cma-icon-btn"
+              className="absolute right-3 top-3 z-10 cma-icon-btn"
               aria-label="Close menu"
             >
               <X size={16} />
             </button>
-            <Sidebar collapsed={false} onToggle={() => {}} />
+            <Sidebar forceVisible />
           </div>
         </div>
       )}

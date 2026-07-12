@@ -13,18 +13,27 @@ import {
   type MangaCharacterProfile,
 } from "@/lib/manga-workspace";
 import {
+  addHistoryEntry,
+  loadHistory,
+  removeHistoryEntry,
+  type MangaHistoryEntry,
+} from "@/lib/manga-history";
+import { PlancheCanvas } from "@/components/canvas/PlancheCanvas";
+import { loadSession, saveSession } from "@/lib/manga-session";
+import {
   BookImage,
   Check,
   ChevronDown,
   Download,
   FileImage,
+  History,
   ImageIcon,
   Layers,
   Lightbulb,
   Mountain,
   Package,
   PencilRuler,
-  Plus,
+  PenTool,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -67,12 +76,41 @@ type StoredItem = {
   thumbHue: number;
   imageDataUrl?: string;
   mimeType?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  omitFromImageGeneration?: boolean;
   characterId?: string;
   description?: string;
 };
 
 type WorkspaceTab = "structure" | "characters" | "references" | "prompt";
 type GenerationOperation = MangaImageGenerationInput["operation"];
+type AspectRatio = "2:3" | "3:2";
+
+const generatedImageDimensions: Record<AspectRatio, { width: number; height: number; size: string }> = {
+  "2:3": { width: 1024, height: 1536, size: "1024x1536" },
+  "3:2": { width: 1536, height: 1024, size: "1536x1024" },
+};
+
+type MangaSessionSnapshot = {
+  items?: StoredItem[];
+  selected?: Record<string, boolean>;
+  selectedCharacterIds?: Record<string, boolean>;
+  activeCharacterId?: string;
+  uploadRole?: Role;
+  prompt?: string;
+  editPrompt?: string;
+  editScope?: "single" | "full";
+  panelCount?: number;
+  panelInstructions?: string[];
+  styleMode?: "auto" | "black-white" | "color";
+  backgroundLevel?: "auto" | "empty" | "minimal" | "detailed";
+  readingDirection?: "right-to-left" | "left-to-right";
+  aspectRatio?: AspectRatio;
+  tab?: WorkspaceTab;
+  showCanvas?: boolean;
+  generationResult?: MangaImageGenerationResult | null;
+};
 
 const roleOptions: Array<{ value: Role; label: string }> = [
   { value: "Character", label: "Character identity" },
@@ -84,6 +122,11 @@ const roleOptions: Array<{ value: Role; label: string }> = [
   { value: "Object", label: "Object" },
   { value: "Target", label: "Image to modify" },
 ];
+
+function normalizeAspectRatio(value: unknown): AspectRatio {
+  if (value === "3:2" || value === "4:3") return "3:2";
+  return "2:3";
+}
 
 const mangaStatusApiPath = "/api/manga/status";
 const mangaGenerateApiPath = "/api/manga/generate-page";
@@ -139,7 +182,7 @@ function checkMangaBackendViaApi() {
   return requestMangaApiJson<MangaBackendStatusResult>(
     mangaStatusApiPath,
     { method: "GET" },
-    30_000,
+    60_000,
   );
 }
 
@@ -191,13 +234,19 @@ async function readImageAsDataUrl(file: File) {
     reader.readAsDataURL(file);
   });
 
-  return new Promise<{ dataUrl: string; mimeType: string }>((resolve) => {
+  return new Promise<{ dataUrl: string; mimeType: string; width?: number; height?: number }>(
+    (resolve) => {
     const image = new Image();
     image.onload = () => {
       const maxSide = 1600;
       const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
       if (scale >= 1 && file.size < 1_800_000) {
-        resolve({ dataUrl: rawDataUrl, mimeType: file.type || "image/png" });
+        resolve({
+          dataUrl: rawDataUrl,
+          mimeType: file.type || "image/png",
+          width: image.width,
+          height: image.height,
+        });
         return;
       }
 
@@ -206,24 +255,168 @@ async function readImageAsDataUrl(file: File) {
       canvas.height = Math.max(1, Math.round(image.height * scale));
       const context = canvas.getContext("2d");
       if (!context) {
-        resolve({ dataUrl: rawDataUrl, mimeType: file.type || "image/png" });
+        resolve({
+          dataUrl: rawDataUrl,
+          mimeType: file.type || "image/png",
+          width: image.width,
+          height: image.height,
+        });
         return;
       }
 
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve({ dataUrl: canvas.toDataURL("image/jpeg", 0.88), mimeType: "image/jpeg" });
+      resolve({
+        dataUrl: canvas.toDataURL("image/jpeg", 0.88),
+        mimeType: "image/jpeg",
+        width: canvas.width,
+        height: canvas.height,
+      });
     };
     image.onerror = () => resolve({ dataUrl: rawDataUrl, mimeType: file.type || "image/png" });
     image.src = rawDataUrl;
   });
 }
 
+async function normalizeGeneratedImageAspectRatio(imageUrl: string, aspectRatio: AspectRatio) {
+  const target = generatedImageDimensions[aspectRatio];
+
+  return new Promise<string>((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      if (!sourceWidth || !sourceHeight) {
+        resolve(imageUrl);
+        return;
+      }
+
+      const targetRatio = target.width / target.height;
+      const sourceRatio = sourceWidth / sourceHeight;
+      let sx = 0;
+      let sy = 0;
+      let sw = sourceWidth;
+      let sh = sourceHeight;
+
+      if (sourceRatio > targetRatio) {
+        sw = sourceHeight * targetRatio;
+        sx = (sourceWidth - sw) / 2;
+      } else if (sourceRatio < targetRatio) {
+        sh = sourceWidth / targetRatio;
+        sy = (sourceHeight - sh) / 2;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = target.width;
+      canvas.height = target.height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(imageUrl);
+        return;
+      }
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, target.width, target.height);
+      context.drawImage(image, sx, sy, sw, sh, 0, 0, target.width, target.height);
+
+      try {
+        resolve(canvas.toDataURL("image/png"));
+      } catch {
+        resolve(imageUrl);
+      }
+    };
+    image.onerror = () => resolve(imageUrl);
+    image.src = imageUrl;
+  });
+}
+
+function imageDimensionsFromDataUrl(dataUrl: string) {
+  return new Promise<{ width: number; height: number } | null>((resolve) => {
+    const image = new Image();
+    image.onload = () =>
+      resolve({
+        width: image.naturalWidth || image.width,
+        height: image.naturalHeight || image.height,
+      });
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
+  });
+}
+
+function aspectRatioLabelFromDimensions(width: number, height: number) {
+  return width >= height ? "landscape" : "portrait";
+}
+
+function backendSupportsGeneratedImageSize(
+  status: MangaBackendStatusResult,
+  aspectRatio: AspectRatio,
+) {
+  const expectedSize = generatedImageDimensions[aspectRatio].size;
+  const supportedSizes = status.manga?.supportedImageSizes ?? [];
+  return status.manga?.imageSize === expectedSize || supportedSizes.includes(expectedSize);
+}
+
+async function prepareSelectedAssetsForGeneration(
+  selectedItems: StoredItem[],
+  aspectRatio: AspectRatio,
+  supportsBackendAspectGuard: boolean,
+) {
+  const targetRatio = aspectRatio === "3:2" ? 3 / 2 : 2 / 3;
+  const ratioTolerance = 0.18;
+  const layoutDominantRoles = new Set<Role>(["Storyboard", "Target", "Inspiration", "Style"]);
+
+  return Promise.all(
+    selectedItems.map(async (item) => {
+      if (!item.imageDataUrl) return item;
+
+      const dimensions =
+        item.imageWidth && item.imageHeight
+          ? { width: item.imageWidth, height: item.imageHeight }
+          : await imageDimensionsFromDataUrl(item.imageDataUrl);
+      if (!dimensions?.width || !dimensions.height) return item;
+
+      const sourceRatio = dimensions.width / dimensions.height;
+      const mismatch = Math.abs(sourceRatio - targetRatio) / targetRatio > ratioTolerance;
+      if (!mismatch || item.role === "Character" || !layoutDominantRoles.has(item.role)) {
+        return { ...item, imageWidth: dimensions.width, imageHeight: dimensions.height };
+      }
+
+      const sourceLabel = aspectRatioLabelFromDimensions(dimensions.width, dimensions.height);
+      const description = [
+        item.description,
+        `This reference image is ${sourceLabel} (${dimensions.width}x${dimensions.height}) while final generation format is ${aspectRatio}; extract useful visual facts from it, but do not preserve its canvas shape, page silhouette, outer white margins, or portrait/landscape layout.`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      if (supportsBackendAspectGuard) {
+        return {
+          ...item,
+          imageWidth: dimensions.width,
+          imageHeight: dimensions.height,
+          omitFromImageGeneration: false,
+          description,
+        };
+      }
+
+      return {
+        ...item,
+        imageWidth: dimensions.width,
+        imageHeight: dimensions.height,
+        omitFromImageGeneration: false,
+        description,
+      };
+    }),
+  );
+}
+
 function CollabMangaAIPage() {
   const [tab, setTab] = useState<WorkspaceTab>("structure");
   const [items, setItems] = useState<StoredItem[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<Record<string, boolean>>({});
   const [characters, setCharacters] = useState<CharacterProfile[]>([]);
   const [charactersLoaded, setCharactersLoaded] = useState(false);
   const [activeCharacterId, setActiveCharacterId] = useState("");
@@ -247,13 +440,24 @@ function CollabMangaAIPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [backendStatus, setBackendStatus] = useState<MangaBackendStatusResult | null>(null);
-  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
+  const [history, setHistory] = useState<MangaHistoryEntry[]>([]);
+  const [showCanvas, setShowCanvas] = useState(true);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("2:3");
 
-  const selectedItems = useMemo(() => items.filter((item) => selected[item.id]), [items, selected]);
+  const selectedItems = useMemo(
+    () =>
+      items.filter((item) =>
+        item.role === "Character"
+          ? item.characterId
+            ? !!selectedCharacterIds[item.characterId]
+            : false
+          : !!selected[item.id],
+      ),
+    [items, selected, selectedCharacterIds],
+  );
   const selectedImageCount = selectedItems.filter((item) => item.imageDataUrl).length;
 
   const runBackendCheck = useCallback(async () => {
-    setIsCheckingBackend(true);
     try {
       const result = await checkMangaBackendViaApi();
       setBackendStatus(result);
@@ -265,8 +469,6 @@ function CollabMangaAIPage() {
         checkedAt: new Date().toISOString(),
         error: error instanceof Error ? error.message : "AI backend check failed.",
       });
-    } finally {
-      setIsCheckingBackend(false);
     }
   }, []);
 
@@ -275,11 +477,38 @@ function CollabMangaAIPage() {
   }, [runBackendCheck]);
 
   useEffect(() => {
+    void loadHistory().then(setHistory);
+  }, []);
+
+  useEffect(() => {
     const savedCharacters = loadCharacterProfiles();
     setCharacters(savedCharacters);
-    setActiveCharacterId(savedCharacters[0]?.id ?? "");
-    setItems(characterImagesToLibraryItems(savedCharacters));
-    setSelected({});
+
+    const snap = loadSession<MangaSessionSnapshot>("manga-page");
+    if (snap) {
+      setItems(snap.items ?? characterImagesToLibraryItems(savedCharacters));
+      setSelected(snap.selected ?? {});
+      setSelectedCharacterIds(snap.selectedCharacterIds ?? {});
+      setActiveCharacterId(snap.activeCharacterId ?? savedCharacters[0]?.id ?? "");
+      setUploadRole(snap.uploadRole ?? "Character");
+      setPrompt(snap.prompt ?? "");
+      setEditPrompt(snap.editPrompt ?? "");
+      setEditScope(snap.editScope ?? "single");
+      setPanelCount(snap.panelCount ?? 6);
+      setPanelInstructions(snap.panelInstructions ?? Array.from({ length: 6 }, () => ""));
+      setStyleMode(snap.styleMode ?? "auto");
+      setBackgroundLevel(snap.backgroundLevel ?? "auto");
+      setReadingDirection(snap.readingDirection ?? "right-to-left");
+      setAspectRatio(normalizeAspectRatio(snap.aspectRatio));
+      setTab(snap.tab ?? "structure");
+      setShowCanvas(snap.showCanvas ?? true);
+      if (snap.generationResult) setGenerationResult(snap.generationResult);
+    } else {
+      setActiveCharacterId(savedCharacters[0]?.id ?? "");
+      setItems(characterImagesToLibraryItems(savedCharacters));
+      setSelected({});
+      setSelectedCharacterIds({});
+    }
     setCharactersLoaded(true);
   }, []);
 
@@ -288,6 +517,48 @@ function CollabMangaAIPage() {
       saveCharacterProfiles(characters);
     }
   }, [characters, charactersLoaded]);
+
+  useEffect(() => {
+    if (!charactersLoaded) return;
+    saveSession<MangaSessionSnapshot>("manga-page", {
+      items,
+      selected,
+      selectedCharacterIds,
+      activeCharacterId,
+      uploadRole,
+      prompt,
+      editPrompt,
+      editScope,
+      panelCount,
+      panelInstructions,
+      styleMode,
+      backgroundLevel,
+      readingDirection,
+      aspectRatio,
+      tab,
+      showCanvas,
+      generationResult,
+    });
+  }, [
+    charactersLoaded,
+    items,
+    selected,
+    selectedCharacterIds,
+    activeCharacterId,
+    uploadRole,
+    prompt,
+    editPrompt,
+    editScope,
+    panelCount,
+    panelInstructions,
+    styleMode,
+    backgroundLevel,
+    readingDirection,
+    aspectRatio,
+    tab,
+    showCanvas,
+    generationResult,
+  ]);
 
   const importFiles = async (
     files: FileList | File[],
@@ -310,6 +581,8 @@ function CollabMangaAIPage() {
             thumbHue: hueFromName(file.name),
             imageDataUrl: image.dataUrl,
             mimeType: image.mimeType,
+            imageWidth: image.width,
+            imageHeight: image.height,
             characterId:
               role === "Character" ? (forcedCharacterId ?? activeCharacterId) : undefined,
             description: "",
@@ -351,6 +624,10 @@ function CollabMangaAIPage() {
     setSelected((current) => ({ ...current, [id]: !current[id] }));
   };
 
+  const toggleCharacter = (id: string) => {
+    setSelectedCharacterIds((current) => ({ ...current, [id]: !current[id] }));
+  };
+
   const updatePanelInstruction = (index: number, value: string) => {
     setPanelInstructions((current) => {
       const next = [...current];
@@ -370,14 +647,27 @@ function CollabMangaAIPage() {
   const requestImageGeneration = async (operation: GenerationOperation) => {
     setGenerationError(null);
     setIsGenerating(true);
+    setShowCanvas(false);
 
     try {
-      const status = backendStatus?.ok ? backendStatus : await checkMangaBackendViaApi();
+      const status = await checkMangaBackendViaApi();
       setBackendStatus(status);
       if (!status.ok) {
         throw new Error(status.error || "AI backend is not ready yet.");
       }
+      if (!backendSupportsGeneratedImageSize(status, aspectRatio)) {
+        const expectedSize = generatedImageDimensions[aspectRatio].size;
+        const currentSize = status.manga?.imageSize || "unknown";
+        throw new Error(
+          `The PulseNote backend deployed on Render is still configured for ${currentSize}, but this request needs ${expectedSize}. Redeploy the PulseNote manga backend before testing this format.`,
+        );
+      }
 
+      const preparedSelectedItems = await prepareSelectedAssetsForGeneration(
+        selectedItems,
+        aspectRatio,
+        status.manga?.referenceImageAspectGuard === true,
+      );
       const result = await generateMangaImageViaApi({
         operation,
         prompt,
@@ -387,7 +677,7 @@ function CollabMangaAIPage() {
         pages: [1],
         panelCount,
         panelInstructions,
-        selectedAssets: selectedItems.map((item) => {
+        selectedAssets: preparedSelectedItems.map((item) => {
           const character = characters.find((profile) => profile.id === item.characterId);
           return {
             ...item,
@@ -403,9 +693,29 @@ function CollabMangaAIPage() {
         styleMode,
         backgroundLevel,
         readingDirection,
+        aspectRatio,
         existingImageDataUrl: generationResult?.imageUrl,
       });
-      setGenerationResult(result);
+      const normalizedImageUrl = await normalizeGeneratedImageAspectRatio(
+        result.imageUrl,
+        aspectRatio,
+      );
+      const normalizedResult = {
+        ...result,
+        imageUrl: normalizedImageUrl,
+        size: generatedImageDimensions[aspectRatio].size,
+      };
+      setGenerationResult(normalizedResult);
+      void addHistoryEntry({
+        imageUrl: normalizedResult.imageUrl,
+        prompt,
+        finalPrompt: normalizedResult.finalPrompt,
+        taskType: normalizedResult.taskType,
+        model: normalizedResult.model,
+        size: normalizedResult.size,
+        quality: normalizedResult.quality,
+      }).then((entry) => setHistory((current) => [entry, ...current]));
+      setShowCanvas(false);
       setTab("references");
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : "Image generation failed.");
@@ -422,6 +732,40 @@ function CollabMangaAIPage() {
     link.click();
   };
 
+  const selectHistoryEntry = (entry: MangaHistoryEntry) => {
+    setGenerationError(null);
+    setGenerationResult({
+      imageUrl: entry.imageUrl,
+      finalPrompt: entry.finalPrompt,
+      taskType: entry.taskType as MangaImageGenerationResult["taskType"],
+      model: entry.model,
+      size: entry.size,
+      quality: entry.quality,
+      createdAt: entry.createdAt,
+    });
+    setShowCanvas(false);
+  };
+
+  const deleteHistoryEntry = (id: string) => {
+    void removeHistoryEntry(id);
+    setHistory((current) => current.filter((entry) => entry.id !== id));
+  };
+
+  const addCanvasAsItem = (dataUrl: string, role: Role) => {
+    const item: StoredItem = {
+      id: createId("asset"),
+      name: role === "Storyboard" ? "Canvas structure" : "Canvas reference",
+      role,
+      thumbHue: hueFromName("canvas"),
+      imageDataUrl: dataUrl,
+      mimeType: "image/png",
+      description: "",
+    };
+    setItems((current) => [item, ...current]);
+    setSelected((current) => ({ ...current, [item.id]: true }));
+    setTab(role === "Storyboard" ? "structure" : "references");
+  };
+
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -433,13 +777,6 @@ function CollabMangaAIPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={addCharacter}
-            className="inline-flex h-10 items-center gap-2 rounded-[12px] border border-border bg-surface-2 px-3 text-[13px] font-bold text-text-primary hover:border-accent hover:text-accent"
-          >
-            <Plus className="h-4 w-4" />
-            Add character
-          </button>
-          <button
             onClick={() => requestImageGeneration("generate")}
             disabled={isGenerating || !prompt.trim()}
             className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
@@ -450,39 +787,35 @@ function CollabMangaAIPage() {
         </div>
       </div>
 
-      <AiBackendBanner
-        status={backendStatus}
-        isChecking={isCheckingBackend}
-        onRefresh={runBackendCheck}
-      />
-
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:gap-5 xl:[grid-template-columns:minmax(250px,0.92fr)_minmax(420px,1.45fr)_minmax(280px,1fr)] 2xl:[grid-template-columns:minmax(300px,1fr)_minmax(600px,1.7fr)_minmax(320px,1fr)]">
-        <LibraryPanel
-          items={items}
-          characters={characters}
-          selected={selected}
-          uploadRole={uploadRole}
-          setUploadRole={setUploadRole}
-          activeCharacterId={activeCharacterId}
-          setActiveCharacterId={setActiveCharacterId}
-          isImporting={isImporting}
-          importFiles={importFiles}
-          toggleSelect={toggleSelect}
-          updateItem={updateItem}
-          removeItem={removeItem}
-        />
-
-        <GenerationPanel
-          result={generationResult}
-          error={generationError}
-          isGenerating={isGenerating}
-          selectedItems={selectedItems}
-          selectedImageCount={selectedImageCount}
-          prompt={prompt}
-          onGenerate={() => requestImageGeneration("generate")}
-          onRegenerate={() => requestImageGeneration("regenerate")}
-          onDownload={downloadGeneratedImage}
-        />
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:gap-5 xl:[grid-template-columns:minmax(0,3fr)_minmax(0,2fr)]">
+        {showCanvas ? (
+          <PanelCard className="xl:max-h-[calc(100vh-105px)]">
+            <PlancheCanvas
+              title="Planche canvas"
+              onUseAsStructure={(dataUrl) => addCanvasAsItem(dataUrl, "Storyboard")}
+              onUseAsReference={(dataUrl) => addCanvasAsItem(dataUrl, "Inspiration")}
+              hasResult={Boolean(generationResult)}
+              onShowResult={() => setShowCanvas(false)}
+            />
+          </PanelCard>
+        ) : (
+          <GenerationPanel
+            result={generationResult}
+            error={generationError}
+            isGenerating={isGenerating}
+            selectedItems={selectedItems}
+            selectedImageCount={selectedImageCount}
+            prompt={prompt}
+            aspectRatio={aspectRatio}
+            history={history}
+            onSelectHistory={selectHistoryEntry}
+            onDeleteHistory={deleteHistoryEntry}
+            onReturnToCanvas={() => setShowCanvas(true)}
+            onGenerate={() => requestImageGeneration("generate")}
+            onRegenerate={() => requestImageGeneration("regenerate")}
+            onDownload={downloadGeneratedImage}
+          />
+        )}
 
         <WorkspacePanel
           tab={tab}
@@ -507,6 +840,8 @@ function CollabMangaAIPage() {
           removeItem={removeItem}
           importFiles={importFiles}
           isImporting={isImporting}
+          selectedCharacterIds={selectedCharacterIds}
+          toggleCharacter={toggleCharacter}
           selectedItems={selectedItems}
           styleMode={styleMode}
           setStyleMode={setStyleMode}
@@ -514,72 +849,15 @@ function CollabMangaAIPage() {
           setBackgroundLevel={setBackgroundLevel}
           readingDirection={readingDirection}
           setReadingDirection={setReadingDirection}
+          aspectRatio={aspectRatio}
+          setAspectRatio={setAspectRatio}
           hasResult={Boolean(generationResult)}
+          generationError={generationError}
           isGenerating={isGenerating}
           onGenerate={() => requestImageGeneration("generate")}
           onApplyEdit={() => requestImageGeneration("edit")}
         />
       </div>
-    </div>
-  );
-}
-
-function AiBackendBanner({
-  status,
-  isChecking,
-  onRefresh,
-}: {
-  status: MangaBackendStatusResult | null;
-  isChecking: boolean;
-  onRefresh: () => void;
-}) {
-  const ready = status?.ok;
-  const message = isChecking
-    ? "Checking PulseNote AI backend..."
-    : ready
-      ? `AI backend ready: ${status.manga?.imageModel ?? "image model"} / ${
-          status.manga?.imageSize ?? "default size"
-        }`
-      : status?.error || "AI backend status has not been checked yet.";
-
-  return (
-    <div
-      className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border px-4 py-3 ${
-        ready ? "border-accent-border bg-accent-soft/40" : "border-border bg-surface-2"
-      }`}
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border ${
-            ready
-              ? "border-accent-border bg-accent-soft text-accent"
-              : "border-border bg-surface-3 text-text-secondary"
-          }`}
-        >
-          {isChecking ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
-          ) : ready ? (
-            <Check className="h-4 w-4" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-        </span>
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold text-text-primary">{message}</p>
-          <p className="mt-0.5 truncate text-[11px] text-text-muted">
-            Backend: {status?.backendUrl ?? "waiting for check"}{" "}
-            {status?.appTokenConfigured === false ? " / token missing" : ""}
-          </p>
-        </div>
-      </div>
-      <button
-        onClick={onRefresh}
-        disabled={isChecking}
-        className="inline-flex h-9 items-center gap-2 rounded-[12px] border border-border bg-surface-3 px-3 text-[12px] font-bold text-text-secondary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        <RefreshCw className={`h-3.5 w-3.5 ${isChecking ? "animate-spin" : ""}`} />
-        Check AI
-      </button>
     </div>
   );
 }
@@ -624,66 +902,177 @@ function SectionHeader({
   );
 }
 
-function LibraryPanel({
+function SelectedElementsList({
   items,
-  characters,
   selected,
-  uploadRole,
-  setUploadRole,
-  activeCharacterId,
-  setActiveCharacterId,
-  isImporting,
-  importFiles,
-  toggleSelect,
-  updateItem,
-  removeItem,
+  selectedCharacterIds,
+  characters,
 }: {
   items: StoredItem[];
-  characters: CharacterProfile[];
   selected: Record<string, boolean>;
-  uploadRole: Role;
-  setUploadRole: (role: Role) => void;
-  activeCharacterId: string;
-  setActiveCharacterId: (id: string) => void;
-  isImporting: boolean;
-  importFiles: (files: FileList | File[], forcedRole?: Role) => void;
-  toggleSelect: (id: string) => void;
-  updateItem: (id: string, patch: Partial<StoredItem>) => void;
-  removeItem: (id: string) => void;
+  selectedCharacterIds: Record<string, boolean>;
+  characters: CharacterProfile[];
 }) {
-  return (
-    <PanelCard className="xl:max-h-[calc(100vh-165px)]">
-      <SectionHeader icon={Layers} title="Image library" count={items.length} />
-      <div className="scroll-dark flex-1 overflow-y-auto p-4">
-        <ImageImporter
-          uploadRole={uploadRole}
-          setUploadRole={setUploadRole}
-          characters={characters}
-          activeCharacterId={activeCharacterId}
-          setActiveCharacterId={setActiveCharacterId}
-          isImporting={isImporting}
-          importFiles={importFiles}
-        />
+  const firstImageFor = (characterId: string) =>
+    items.find((item) => item.characterId === characterId && item.imageDataUrl);
 
-        <div className="mt-4 flex flex-col gap-3">
-          {items.length === 0 ? (
-            <EmptyState icon={ImageIcon} title="No images imported" />
+  const entries: Array<{ key: string; title: string; item?: StoredItem }> = [
+    ...items
+      .filter((item) => item.role === "Storyboard" && selected[item.id])
+      .map((item) => ({ key: item.id, title: "Structure de la planche", item })),
+    ...characters
+      .filter((character) => selectedCharacterIds[character.id])
+      .map((character) => ({
+        key: `character-${character.id}`,
+        title: character.name || "Personnage",
+        item: firstImageFor(character.id),
+      })),
+    ...items
+      .filter((item) => referenceRoles.includes(item.role) && selected[item.id])
+      .map((item) => ({ key: item.id, title: "Référence", item })),
+  ];
+
+  if (entries.length === 0) {
+    return <EmptyState icon={ImageIcon} title="Aucun élément sélectionné" />;
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {entries.map((entry) => (
+        <div
+          key={entry.key}
+          className="flex items-center gap-3 rounded-[14px] border border-border bg-surface-3 p-3"
+        >
+          {entry.item ? (
+            <AssetThumb item={entry.item} sizeClass="h-[64px] w-[52px]" />
           ) : (
-            items.map((item) => (
-              <LibraryItemCard
-                key={item.id}
-                item={item}
-                characters={characters}
-                selected={!!selected[item.id]}
-                toggleSelect={() => toggleSelect(item.id)}
-                updateItem={(patch) => updateItem(item.id, patch)}
-                removeItem={() => removeItem(item.id)}
-              />
-            ))
+            <div className="flex h-[64px] w-[52px] shrink-0 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-muted">
+              <User className="h-5 w-5" />
+            </div>
+          )}
+          <p className="min-w-0 flex-1 text-[13px] font-bold text-text-primary">{entry.title}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function getPromptSelectedEntries(
+  items: StoredItem[],
+  selected: Record<string, boolean>,
+  selectedCharacterIds: Record<string, boolean>,
+  characters: CharacterProfile[],
+) {
+  const firstImageFor = (characterId: string) =>
+    items.find((item) => item.characterId === characterId && item.imageDataUrl);
+
+  return [
+    ...items
+      .filter((item) => item.role === "Storyboard" && selected[item.id])
+      .map((item) => ({ key: item.id, title: "Structure", item })),
+    ...characters
+      .filter((character) => selectedCharacterIds[character.id])
+      .map((character) => ({
+        key: `character-${character.id}`,
+        title: character.name || "Personnage",
+        item: firstImageFor(character.id),
+      })),
+    ...items
+      .filter((item) => referenceRoles.includes(item.role) && selected[item.id])
+      .map((item) => ({ key: item.id, title: "Reference", item })),
+  ];
+}
+
+function SelectedElementsInline({
+  items,
+  selected,
+  selectedCharacterIds,
+  characters,
+}: {
+  items: StoredItem[];
+  selected: Record<string, boolean>;
+  selectedCharacterIds: Record<string, boolean>;
+  characters: CharacterProfile[];
+}) {
+  const entries = getPromptSelectedEntries(items, selected, selectedCharacterIds, characters);
+  const visibleEntries = entries.slice(0, 6);
+  const remainingCount = entries.length - visibleEntries.length;
+
+  return (
+    <div className="rounded-[14px] border border-border bg-surface-3 p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Layers className="h-4 w-4 shrink-0 text-accent" />
+          <p className="truncate text-[12px] font-bold text-text-primary">Elements selectionnes</p>
+        </div>
+        <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
+          {entries.length}
+        </span>
+      </div>
+      {entries.length === 0 ? (
+        <p className="text-[12px] text-text-muted">Aucun element selectionne.</p>
+      ) : (
+        <div className="grid grid-cols-4 gap-2">
+          {visibleEntries.map((entry) => (
+            <div key={entry.key} className="min-w-0">
+              {entry.item ? (
+                <AssetThumb item={entry.item} sizeClass="aspect-square h-auto w-full" />
+              ) : (
+                <div className="flex aspect-square w-full items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-muted">
+                  <User className="h-4 w-4" />
+                </div>
+              )}
+              <p className="mt-1 truncate text-[10px] font-semibold text-text-secondary">
+                {entry.title}
+              </p>
+            </div>
+          ))}
+          {remainingCount > 0 && (
+            <div className="flex aspect-square items-center justify-center rounded-[10px] border border-border bg-surface-2 text-[12px] font-bold text-text-secondary">
+              +{remainingCount}
+            </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+  maxWidth = 480,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  maxWidth?: number;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(3,7,18,0.82)" }}
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-[18px] border border-border bg-surface-2"
+        style={{ maxWidth }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between border-b border-border p-4">
+          <h2 className="font-display text-base font-bold">{title}</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-text-muted hover:text-text-primary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+        <div className="scroll-dark min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
       </div>
-    </PanelCard>
+    </div>
   );
 }
 
@@ -884,9 +1273,13 @@ function GenerationPanel({
   result,
   error,
   isGenerating,
-  selectedItems,
   selectedImageCount,
   prompt,
+  aspectRatio,
+  history,
+  onSelectHistory,
+  onDeleteHistory,
+  onReturnToCanvas,
   onGenerate,
   onRegenerate,
   onDownload,
@@ -897,13 +1290,33 @@ function GenerationPanel({
   selectedItems: StoredItem[];
   selectedImageCount: number;
   prompt: string;
+  aspectRatio: AspectRatio;
+  history: MangaHistoryEntry[];
+  onSelectHistory: (entry: MangaHistoryEntry) => void;
+  onDeleteHistory: (id: string) => void;
+  onReturnToCanvas: () => void;
   onGenerate: () => void;
   onRegenerate: () => void;
   onDownload: () => void;
 }) {
+  const [lightbox, setLightbox] = useState<{
+    imageUrl: string;
+    prompt?: string;
+    entry?: MangaHistoryEntry;
+  } | null>(null);
+  const portrait = aspectRatio !== "3:2";
+
+  const downloadUrl = (url: string) => {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `collabmanga-page-${Date.now()}.png`;
+    link.click();
+  };
+
   return (
-    <PanelCard className="xl:max-h-[calc(100vh-165px)]">
-      <SectionHeader icon={FileImage} title="Generated page" />
+    <>
+      <PanelCard className="xl:max-h-[calc(100vh-105px)]">
+        <SectionHeader icon={FileImage} title="Generated page" />
       <div className="flex flex-1 flex-col p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-border bg-surface-3 px-3 py-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-border bg-accent-soft px-2.5 py-1 text-[12px] font-bold text-accent">
@@ -911,6 +1324,13 @@ function GenerationPanel({
             {selectedImageCount} image refs
           </span>
           <div className="flex items-center gap-2">
+            <button
+              onClick={onReturnToCanvas}
+              className="flex h-9 items-center gap-1.5 rounded-[10px] border border-border bg-surface-2 px-2.5 text-[12px] font-bold text-text-secondary hover:text-text-primary"
+            >
+              <PenTool className="h-3.5 w-3.5" />
+              Canvas
+            </button>
             <button
               onClick={onDownload}
               disabled={!result}
@@ -930,17 +1350,20 @@ function GenerationPanel({
           </div>
         </div>
 
-        <div className="my-4 flex flex-1 items-center justify-center rounded-[18px] bg-stage p-4">
-          <div className="relative flex h-full max-h-[680px] w-full max-w-[500px] items-center justify-center">
-            <div className="relative aspect-[210/297] w-full overflow-hidden rounded-[10px] bg-artboard shadow-[0_30px_60px_-20px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)]">
+        <div className="my-4 flex flex-1 items-center justify-center overflow-hidden rounded-[18px] bg-stage p-4">
+          <div className="relative flex h-full max-h-[680px] w-full max-w-[560px] items-center justify-center">
+            <div
+              className="relative overflow-hidden rounded-[10px] bg-artboard shadow-[0_30px_60px_-20px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)]"
+              style={{
+                aspectRatio: portrait ? "2 / 3" : "3 / 2",
+                maxHeight: "100%",
+                maxWidth: "100%",
+                height: portrait ? "100%" : "auto",
+                width: portrait ? "auto" : "100%",
+              }}
+            >
               {isGenerating ? (
-                <div className="flex h-full flex-col items-center justify-center bg-[#f7faff] px-8 text-center text-[#0b1430]">
-                  <Sparkles className="mb-4 h-10 w-10 animate-pulse" />
-                  <p className="text-[16px] font-bold">Generating manga page</p>
-                  <p className="mt-2 max-w-[320px] text-[12px] leading-5 text-[#5e6a90]">
-                    Prompt locks and selected images are being sent to PulseNote.
-                  </p>
-                </div>
+                <GeneratingIndicator />
               ) : error ? (
                 <div className="flex h-full flex-col items-center justify-center bg-[#f7faff] px-8 text-center text-[#0b1430]">
                   <X className="mb-4 h-10 w-10 text-danger" />
@@ -948,11 +1371,20 @@ function GenerationPanel({
                   <p className="mt-2 max-w-[340px] text-[12px] leading-5 text-[#5e6a90]">{error}</p>
                 </div>
               ) : result ? (
-                <img
-                  src={result.imageUrl}
-                  alt="Generated manga page"
-                  className="h-full w-full object-contain"
-                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLightbox({ imageUrl: result.imageUrl, prompt: result.finalPrompt })
+                  }
+                  className="block h-full w-full cursor-zoom-in"
+                  title="Voir en grand"
+                >
+                  <img
+                    src={result.imageUrl}
+                    alt="Generated manga page"
+                    className="h-full w-full object-contain"
+                  />
+                </button>
               ) : (
                 <MangaPagePlaceholder />
               )}
@@ -960,26 +1392,45 @@ function GenerationPanel({
           </div>
         </div>
 
-        <div className="rounded-[14px] border border-border bg-surface-3 p-3">
-          <div className="mb-2 flex items-center gap-2 text-[12px] font-bold text-text-primary">
-            <BookImage className="h-4 w-4 text-accent" />
-            Selected references
-          </div>
-          {selectedItems.length === 0 ? (
-            <p className="text-[12px] text-text-muted">No selected image yet.</p>
-          ) : (
-            <div className="grid grid-cols-4 gap-2">
-              {selectedItems.slice(0, 8).map((item) => (
-                <div key={item.id} className="min-w-0">
-                  <AssetThumb item={item} sizeClass="aspect-square h-auto w-full" />
-                  <p className="mt-1 truncate text-[10px] font-semibold text-text-secondary">
-                    {item.role}
-                  </p>
+        {history.length > 0 && (
+          <div className="rounded-[14px] border border-border bg-surface-3 p-3">
+            <div className="mb-2 flex items-center gap-2 text-[12px] font-bold text-text-primary">
+              <History className="h-4 w-4 text-accent" />
+              History
+              <span className="text-text-muted">({history.length})</span>
+            </div>
+            <div className="scroll-dark flex gap-2 overflow-x-auto pb-1">
+              {history.map((entry) => (
+                <div key={entry.id} className="group relative shrink-0">
+                  <button
+                    onClick={() =>
+                      setLightbox({ imageUrl: entry.imageUrl, prompt: entry.prompt, entry })
+                    }
+                    title={entry.prompt}
+                    className={`block h-[72px] w-[52px] overflow-hidden rounded-[10px] border ${
+                      result?.imageUrl === entry.imageUrl
+                        ? "border-accent"
+                        : "border-border hover:border-accent"
+                    }`}
+                  >
+                    <img
+                      src={entry.imageUrl}
+                      alt={entry.prompt}
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                  <button
+                    onClick={() => onDeleteHistory(entry.id)}
+                    aria-label="Delete from history"
+                    className="absolute right-0.5 top-0.5 rounded-md bg-black/60 p-0.5 text-white/80 opacity-0 transition hover:text-danger group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <button
           onClick={onGenerate}
@@ -990,7 +1441,81 @@ function GenerationPanel({
           {isGenerating ? "Generating..." : "Generate with current setup"}
         </button>
       </div>
-    </PanelCard>
+      </PanelCard>
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(3,7,18,0.85)" }}
+          onClick={() => setLightbox(null)}
+        >
+          <div
+            className="relative flex max-h-full w-full max-w-[900px] flex-col"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              onClick={() => setLightbox(null)}
+              aria-label="Close"
+              className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <img
+              src={lightbox.imageUrl}
+              alt={lightbox.prompt ?? "Generated manga page"}
+              className="min-h-0 w-full rounded-[14px] object-contain"
+              style={{ maxHeight: "82vh" }}
+            />
+            <div className="mt-3 flex items-center justify-end gap-2">
+              {lightbox.entry && (
+                <button
+                  onClick={() => {
+                    if (lightbox.entry) onSelectHistory(lightbox.entry);
+                    setLightbox(null);
+                  }}
+                  className="inline-flex h-10 items-center gap-2 rounded-[12px] border border-border bg-surface-2 px-3 text-[13px] font-bold text-text-primary hover:border-accent hover:text-accent"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Utiliser cette image
+                </button>
+              )}
+              <button
+                onClick={() => downloadUrl(lightbox.imageUrl)}
+                className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
+              >
+                <Download className="h-4 w-4" />
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function GeneratingIndicator() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#f7faff] px-8 text-center text-[#0b1430]">
+      <div className="relative h-14 w-14">
+        <div className="absolute inset-0 rounded-full border-4 border-[#d7e0f4]" />
+        <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#12b76a]" />
+        <Sparkles className="absolute inset-0 m-auto h-6 w-6 animate-pulse text-[#12b76a]" />
+      </div>
+      <div>
+        <p className="text-[15px] font-bold">Génération en cours</p>
+        <p className="mt-1 text-[12px] text-[#5e6a90]">L'IA compose votre planche…</p>
+      </div>
+      <div className="flex items-center gap-1.5">
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className="h-2 w-2 animate-bounce rounded-full bg-[#12b76a]"
+            style={{ animationDelay: `${index * 150}ms` }}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1042,6 +1567,8 @@ function WorkspacePanel(props: {
   removeItem: (id: string) => void;
   importFiles: (files: FileList | File[], forcedRole?: Role, forcedCharacterId?: string) => void;
   isImporting: boolean;
+  selectedCharacterIds: Record<string, boolean>;
+  toggleCharacter: (id: string) => void;
   selectedItems: StoredItem[];
   styleMode: "auto" | "black-white" | "color";
   setStyleMode: (style: "auto" | "black-white" | "color") => void;
@@ -1049,17 +1576,20 @@ function WorkspacePanel(props: {
   setBackgroundLevel: (level: "auto" | "empty" | "minimal" | "detailed") => void;
   readingDirection: "right-to-left" | "left-to-right";
   setReadingDirection: (direction: "right-to-left" | "left-to-right") => void;
+  aspectRatio: AspectRatio;
+  setAspectRatio: (value: AspectRatio) => void;
   hasResult: boolean;
+  generationError: string | null;
   isGenerating: boolean;
   onGenerate: () => void;
   onApplyEdit: () => void;
 }) {
   return (
-    <PanelCard className="xl:max-h-[calc(100vh-165px)]">
+    <PanelCard className="xl:max-h-[calc(100vh-105px)]">
       <div className="flex items-center gap-1 border-b border-border p-3">
         {(
           [
-            { id: "structure", label: "Structure de la planche" },
+            { id: "structure", label: "Structure" },
             { id: "characters", label: "Personnages" },
             { id: "references", label: "Références" },
             { id: "prompt", label: "Prompt" },
@@ -1068,7 +1598,7 @@ function WorkspacePanel(props: {
           <button
             key={tab.id}
             onClick={() => props.setTab(tab.id)}
-            className={`min-h-[38px] flex-1 rounded-[12px] px-2 py-1 text-[12px] font-bold leading-tight transition ${
+            className={`min-h-[38px] min-w-0 flex-1 rounded-[12px] px-2 py-1 text-center text-[12px] font-bold leading-tight transition ${
               props.tab === tab.id
                 ? "bg-accent-soft text-accent"
                 : "text-text-secondary hover:text-text-primary"
@@ -1087,6 +1617,14 @@ function WorkspacePanel(props: {
       </div>
 
       <div className="space-y-2 border-t border-border p-4">
+        {props.tab === "prompt" && (
+          <SelectedElementsInline
+            items={props.items}
+            selected={props.selected}
+            selectedCharacterIds={props.selectedCharacterIds}
+            characters={props.characters}
+          />
+        )}
         <button
           onClick={props.onGenerate}
           disabled={props.isGenerating || !props.prompt.trim()}
@@ -1095,6 +1633,11 @@ function WorkspacePanel(props: {
           <Sparkles className="h-4 w-4" />
           {props.isGenerating ? "Generating..." : "Generate Final Page"}
         </button>
+        {props.generationError && (
+          <div className="rounded-[12px] border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-semibold leading-relaxed text-danger">
+            {props.generationError}
+          </div>
+        )}
         {props.hasResult && (
           <button
             onClick={props.onApplyEdit}
@@ -1123,14 +1666,10 @@ function PromptTab({
   setBackgroundLevel,
   readingDirection,
   setReadingDirection,
-  selectedItems,
+  aspectRatio,
+  setAspectRatio,
   hasResult,
 }: Parameters<typeof WorkspacePanel>[0]) {
-  const counts = selectedItems.reduce<Record<string, number>>((acc, item) => {
-    acc[item.role] = (acc[item.role] || 0) + 1;
-    return acc;
-  }, {});
-
   return (
     <div className="flex flex-col gap-4">
       <FieldLabel label="Describe the page" />
@@ -1175,26 +1714,15 @@ function PromptTab({
             ["left-to-right", "Left to right"],
           ]}
         />
-        <div className="rounded-[14px] border border-border bg-surface-3 p-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-            Selected inputs
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {Object.entries(counts).length === 0 ? (
-              <span className="text-[12px] text-text-muted">None</span>
-            ) : (
-              Object.entries(counts).map(([role, count]) => (
-                <span
-                  key={role}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-secondary"
-                >
-                  <Check className="h-3 w-3 text-accent" />
-                  {count} {role}
-                </span>
-              ))
-            )}
-          </div>
-        </div>
+        <SelectField
+          label="Format"
+          value={aspectRatio}
+          onChange={(value) => setAspectRatio(value as AspectRatio)}
+          options={[
+            ["2:3", "Portrait 2:3"],
+            ["3:2", "Paysage 3:2"],
+          ]}
+        />
       </div>
 
       {hasResult && (
@@ -1230,28 +1758,86 @@ function PromptTab({
 
 function CharactersTab({
   characters,
-  updateCharacter,
-  addCharacter,
   items,
-  selected,
-  toggleSelect,
-  removeItem,
+  selectedCharacterIds,
+  toggleCharacter,
+}: Parameters<typeof WorkspacePanel>[0]) {
+  if (characters.length === 0) {
+    return <EmptyState icon={User} title="No character profile yet" />;
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {characters.map((character) => {
+        const firstImage = items.find(
+          (item) => item.characterId === character.id && item.imageDataUrl,
+        );
+        const isSelected = !!selectedCharacterIds[character.id];
+
+        return (
+          <button
+            key={character.id}
+            onClick={() => toggleCharacter(character.id)}
+            aria-pressed={isSelected}
+            className={`group min-w-0 rounded-[14px] border p-2 text-left transition ${
+              isSelected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3"
+            }`}
+          >
+            <div className="relative aspect-[3/4] overflow-hidden rounded-[10px] border border-border bg-surface-2">
+              {firstImage?.imageDataUrl ? (
+                <img
+                  src={firstImage.imageDataUrl}
+                  alt={character.name || "Character"}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-text-muted">
+                  <ImageIcon className="h-6 w-6" />
+                </div>
+              )}
+              <span
+                className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md border ${
+                  isSelected
+                    ? "border-accent bg-accent text-accent-foreground"
+                    : "border-border-strong bg-surface-2/85 text-transparent group-hover:border-accent"
+                }`}
+              >
+                <Check className="h-4 w-4" />
+              </span>
+            </div>
+            <p className="mt-2 truncate text-center text-[12px] font-bold text-text-primary">
+              {character.name || "Personnage"}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CharactersTabOld({
+  characters,
+  updateCharacter,
+  items,
   importFiles,
   isImporting,
+  selectedCharacterIds,
+  toggleCharacter,
 }: Parameters<typeof WorkspacePanel>[0]) {
   return (
     <div className="flex flex-col gap-3">
-      <button
-        onClick={addCharacter}
-        className="flex h-10 items-center justify-center gap-2 rounded-[12px] border border-border bg-surface-3 text-[13px] font-bold text-text-primary hover:border-accent hover:text-accent"
-      >
-        <Plus className="h-4 w-4" />
-        Add character profile
-      </button>
       {characters.map((character) => {
-        const characterImages = items.filter((item) => item.characterId === character.id);
+        const firstImage = items.find(
+          (item) => item.characterId === character.id && item.imageDataUrl,
+        );
+        const isSelected = !!selectedCharacterIds[character.id];
         return (
-          <div key={character.id} className="rounded-[14px] border border-border bg-surface-3 p-3">
+          <div
+            key={character.id}
+            className={`rounded-[14px] border p-3 transition ${
+              isSelected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3"
+            }`}
+          >
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-accent-border bg-accent-soft text-accent">
                 <User className="h-4 w-4" />
@@ -1261,7 +1847,38 @@ function CharactersTab({
                 onChange={(event) => updateCharacter(character.id, { name: event.target.value })}
                 className="h-9 min-w-0 flex-1 rounded-[10px] border border-border bg-input px-3 text-[13px] font-bold text-text-primary outline-none focus:border-accent"
               />
+              <button
+                onClick={() => toggleCharacter(character.id)}
+                aria-pressed={isSelected}
+                aria-label={`Select ${character.name}`}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
+                  isSelected
+                    ? "border-accent bg-accent text-accent-foreground"
+                    : "border-border-strong text-transparent hover:border-accent"
+                }`}
+              >
+                <Check className="h-4 w-4" />
+              </button>
             </div>
+
+            <button
+              onClick={() => toggleCharacter(character.id)}
+              className="mt-3 flex w-full items-center gap-3 rounded-[12px] border border-border bg-surface-2 p-2 text-left hover:border-accent"
+            >
+              {firstImage ? (
+                <AssetThumb item={firstImage} sizeClass="h-[72px] w-[58px]" />
+              ) : (
+                <div className="flex h-[72px] w-[58px] shrink-0 items-center justify-center rounded-[10px] border border-border bg-surface-3 text-text-muted">
+                  <ImageIcon className="h-5 w-5" />
+                </div>
+              )}
+              <span className="min-w-0 flex-1 text-[12px] text-text-secondary">
+                {isSelected
+                  ? "Selected — all this character's images will be used."
+                  : "Select this character for the page."}
+              </span>
+            </button>
+
             <div className="mt-3 grid grid-cols-1 gap-3">
               <TextField
                 label="Narrative role"
@@ -1281,47 +1898,15 @@ function CharactersTab({
                 rows={2}
               />
             </div>
+
             <div className="mt-3">
-              <FieldLabel label="Character images" />
-              {characterImages.length === 0 ? (
-                <p className="text-[12px] text-text-muted">No image yet for this character.</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {characterImages.map((item) => (
-                    <div key={item.id} className="relative min-w-0">
-                      <AssetThumb item={item} sizeClass="aspect-square h-auto w-full" />
-                      <button
-                        onClick={() => toggleSelect(item.id)}
-                        aria-pressed={!!selected[item.id]}
-                        aria-label={`Select ${item.name}`}
-                        className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md border ${
-                          selected[item.id]
-                            ? "border-accent bg-accent text-accent-foreground"
-                            : "border-border-strong bg-surface-2/80 text-transparent hover:border-accent"
-                        }`}
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => removeItem(item.id)}
-                        aria-label={`Remove ${item.name}`}
-                        className="absolute left-1 top-1 rounded-md bg-surface-2/80 p-1 text-text-muted hover:text-danger"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-2">
-                <TabImportButton
-                  label="Import character image"
-                  role="Character"
-                  characterId={character.id}
-                  importFiles={importFiles}
-                  isImporting={isImporting}
-                />
-              </div>
+              <TabImportButton
+                label="Import character image"
+                role="Character"
+                characterId={character.id}
+                importFiles={importFiles}
+                isImporting={isImporting}
+              />
             </div>
           </div>
         );

@@ -1,19 +1,18 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  FileImage,
-  UserPlus,
-  ImagePlus,
-  Wand2,
-  PenLine,
-  UserSquare2,
-  Images,
-  History,
-  CreditCard,
-  Settings,
+  Home,
+  Handshake,
+  Megaphone,
+  Image as ImageIcon,
+  Folder,
+  Lightbulb,
+  BookOpen,
+  MessageSquare,
+  Bell,
+  User,
   Zap,
-  ChevronsUpDown,
-  Users,
-  ArrowLeft,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,33 +21,41 @@ type Group = { title?: string; items: Item[] };
 
 const groups: Group[] = [
   {
-    title: "Création",
+    title: "Communauté",
     items: [
-      { label: "Manga Page Creator", to: "/ai/manga-page", icon: FileImage },
-      { label: "Création de personnage", to: "/ai/character-create", icon: UserPlus },
-      { label: "Transfert de style", to: "/ai/style-transfer", icon: Wand2 },
-      { label: "Croquis → Final", to: "/ai/sketch-final", icon: PenLine },
+      { label: "Home", to: "/hub", icon: Home },
+      { label: "Annonces", to: "/announcements", icon: Megaphone },
+      { label: "Sponsoring", to: "/sponsorship", icon: Handshake },
+      { label: "Illustration", to: "/showcase", icon: ImageIcon },
     ],
   },
   {
-    title: "Bibliothèque",
+    title: "Création",
     items: [
-      { label: "Bibliothèque de personnages", to: "/ai/characters", icon: UserSquare2 },
-      { label: "Historique", to: "/ai/history", icon: History },
+      { label: "Mes projets", to: "/studio", icon: Folder },
+      { label: "Idées", to: "/ideas", icon: Lightbulb },
+    ],
+  },
+  {
+    title: "Lecture",
+    items: [{ label: "Catalogue", to: "/manga", icon: BookOpen }],
+  },
+  {
+    title: "Communication",
+    items: [
+      { label: "Messages", to: "/messages", icon: MessageSquare },
+      { label: "Notifications", to: "/notifications", icon: Bell },
     ],
   },
   {
     title: "Compte",
-    items: [
-      { label: "Plan & Crédits", to: "/ai/plan", icon: CreditCard },
-      { label: "Paramètres", to: "/ai/settings", icon: Settings },
-    ],
+    items: [{ label: "Profil", to: "/profile", icon: User }],
   },
 ];
 
-export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
+export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isActive = (to: string) => (to === "/ai" ? pathname === "/ai" : pathname.startsWith(to));
+  const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
 
   return (
     <aside
@@ -83,20 +90,15 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         </span>
       </div>
 
-      {/* Workspace switcher */}
-      <button
+      {/* Switch to CollabManga AI */}
+      <Link
+        to="/ai"
         className="flex items-center gap-2 w-full mb-4 px-2 transition-colors"
         style={{
           height: 44,
           borderRadius: 10,
-          border: "1px solid var(--border-default)",
-          background: "var(--bg-elevated)",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = "var(--neon-soft-border)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = "var(--border-default)";
+          border: "1px solid var(--neon-soft-border)",
+          background: "var(--neon-soft)",
         }}
       >
         <span
@@ -104,44 +106,21 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
           style={{
             width: 26,
             height: 26,
-            borderRadius: 999,
+            borderRadius: 8,
             background: "linear-gradient(135deg, #39ff88, #12b76a)",
           }}
         >
-          <span className="text-[11px] font-black" style={{ color: "#04111e" }}>
-            C
-          </span>
+          <Sparkles size={14} color="#04111e" strokeWidth={2.6} />
         </span>
         <span className="min-w-0 flex-1 text-left">
-          <span className="block text-[13px] font-bold leading-tight truncate">CollabCreative</span>
+          <span className="block text-[13px] font-bold leading-tight truncate" style={{ color: "var(--neon)" }}>
+            CollabManga AI
+          </span>
           <span className="block text-[11px] leading-tight truncate" style={{ color: "var(--text-muted)" }}>
-            Espace de travail
+            Studio de création IA
           </span>
         </span>
-        <ChevronsUpDown size={14} style={{ color: "var(--text-muted)" }} />
-      </button>
-
-      {/* Switch to CollabManga (social network) */}
-      <Link
-        to="/hub"
-        className="flex items-center gap-2 w-full mb-4 px-2 transition-colors"
-        style={{
-          height: 40,
-          borderRadius: 10,
-          border: "1px solid var(--border-default)",
-          background: "var(--bg-elevated)",
-        }}
-      >
-        <span
-          className="grid place-items-center shrink-0"
-          style={{ width: 24, height: 24, borderRadius: 8, background: "linear-gradient(135deg,#4ea8ff,#39ff88)" }}
-        >
-          <Users size={13} color="#04111e" strokeWidth={2.6} />
-        </span>
-        <span className="min-w-0 flex-1 text-left text-[12px] font-bold truncate">
-          CollabManga (réseau)
-        </span>
-        <ArrowLeft size={13} style={{ color: "var(--text-muted)" }} />
+        <ArrowRight size={14} style={{ color: "var(--neon)" }} />
       </Link>
 
       {/* Nav */}
@@ -218,35 +197,37 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         ))}
       </nav>
 
-      {/* Compact usage */}
-      <div
-        className="mt-2"
+      {/* Account footer */}
+      <Link
+        to="/profile"
+        className="mt-2 flex items-center gap-2 transition-colors"
         style={{
           background: "var(--bg-elevated)",
           border: "1px solid var(--border-default)",
           borderRadius: 12,
-          padding: 12,
+          padding: 10,
         }}
       >
-        <div className="flex items-center justify-between mb-1">
-          <span style={{ font: "700 12px/16px var(--font-sans)" }}>Starter</span>
-          <span className="cma-chip cma-chip-active" style={{ height: 18, padding: "0 6px", fontSize: 10 }}>
-            Active
-          </span>
-        </div>
-        <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Credits <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>000</span> / 000
-        </div>
-        <div
-          className="my-2"
-          style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}
+        {/* Profile picture (placeholder avatar) */}
+        <span
+          className="grid shrink-0 place-items-end overflow-hidden"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            background: "linear-gradient(135deg,#4ea8ff,#39ff88)",
+            border: "1px solid var(--border-default)",
+          }}
         >
-          <div style={{ width: "42%", height: "100%", background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
-        </div>
-        <button className="cma-btn-primary w-full justify-center" style={{ height: 32, fontSize: 12 }}>
-          Upgrade
-        </button>
-      </div>
+          <User size={26} color="rgba(4,17,30,0.55)" fill="rgba(4,17,30,0.55)" strokeWidth={1.5} style={{ marginBottom: -3 }} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12px] font-bold leading-tight truncate">Mon profil</span>
+          <span className="block text-[11px] leading-tight truncate" style={{ color: "var(--text-muted)" }}>
+            Voir et gérer
+          </span>
+        </span>
+      </Link>
     </aside>
   );
 }

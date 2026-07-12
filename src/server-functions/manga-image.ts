@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
+const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
 const PULSENOTE_GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
 const PULSENOTE_GENERATION_ATTEMPTS = 2;
 const PULSENOTE_RETRYABLE_STATUSES = new Set([
@@ -45,6 +46,9 @@ const assetSchema = z.object({
   thumbHue: z.number().optional(),
   imageDataUrl: z.string().optional(),
   mimeType: z.string().optional(),
+  imageWidth: z.number().positive().optional(),
+  imageHeight: z.number().positive().optional(),
+  omitFromImageGeneration: z.boolean().optional(),
   characterId: z.string().optional(),
   characterName: z.string().optional(),
   characterProfile: z.string().optional(),
@@ -65,6 +69,7 @@ const generationInputSchema = z.object({
   styleMode: z.enum(["auto", "black-white", "color"]).default("auto"),
   backgroundLevel: z.enum(["auto", "empty", "minimal", "detailed"]).default("auto"),
   readingDirection: z.enum(["right-to-left", "left-to-right"]).default("right-to-left"),
+  aspectRatio: z.enum(["2:3", "3:2"]).default("2:3"),
   existingImageDataUrl: z.string().optional(),
 });
 
@@ -102,10 +107,12 @@ export type MangaBackendStatusResult = {
     mangaForgeEnabled?: boolean;
     imageModel?: string;
     imageSize?: string;
+    supportedImageSizes?: string[];
     imageQuality?: string;
     imageFormat?: string;
     creditCost?: number;
     referenceImagesEnabled?: boolean;
+    referenceImageAspectGuard?: boolean;
     maxReferenceImages?: number;
     generationEndpoint?: string;
   };
@@ -153,6 +160,10 @@ function getPulseNoteBackendUrl() {
 
 function getPulseNoteAppToken() {
   return getEnv("PULSENOTE_APP_TOKEN") || getEnv("APP_CLIENT_TOKEN");
+}
+
+function imageSizeForAspectRatio(aspectRatio: MangaImageGenerationInput["aspectRatio"]) {
+  return aspectRatio === "3:2" ? "1536x1024" : "1024x1536";
 }
 
 function responseErrorMessage(status: number, payload: PulseNoteMangaResponse) {
@@ -238,7 +249,7 @@ export async function checkPulseNoteMangaBackend() {
   try {
     const healthResponse = await fetch(`${backendUrl}/health`, {
       method: "GET",
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(PULSENOTE_STATUS_TIMEOUT_MS),
     });
     result.health = await parseResponseJson<MangaBackendStatusResult["health"]>(healthResponse);
 
@@ -259,7 +270,7 @@ export async function checkPulseNoteMangaBackend() {
         "x-app-id": "manga-forge",
         "x-app-token": appToken,
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(PULSENOTE_STATUS_TIMEOUT_MS),
     });
     result.manga = await parseResponseJson<PulseNoteStatusResponse>(mangaStatusResponse);
 
@@ -297,10 +308,12 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
     );
   }
 
+  const size = imageSizeForAspectRatio(data.aspectRatio);
   const body = JSON.stringify({
-      project: "manga-forge",
-      task: "manga_page_generation",
-      ...data,
+    project: "manga-forge",
+    task: "manga_page_generation",
+    size,
+    ...data,
   });
   let lastError: unknown;
 
@@ -341,7 +354,7 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
         finalPrompt: payload.finalPrompt ?? data.prompt,
         taskType: payload.taskType ?? "storyboard_page_creation",
         model: payload.model ?? "gpt-image-2",
-        size: payload.size ?? "1024x1536",
+        size: payload.size ?? size,
         quality: payload.quality ?? "high",
         createdAt: payload.createdAt ?? new Date().toISOString(),
         creditsUsed: payload.creditsUsed,
