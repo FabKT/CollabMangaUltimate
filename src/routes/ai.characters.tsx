@@ -88,23 +88,31 @@ function CharacterStudio() {
   const [loaded, setLoaded] = useState(false);
   const [selectedView, setSelectedView] = useState(viewOptions[0]);
   const [isImporting, setIsImporting] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const savedCharacters = loadCharacterProfiles();
-    setCharacters(savedCharacters);
-    setActiveId(savedCharacters[0]?.id ?? "");
-    setLoaded(true);
+    let cancelled = false;
+    void loadCharacterProfiles().then((savedCharacters) => {
+      if (cancelled) return;
+      setCharacters(savedCharacters);
+      setActiveId(savedCharacters[0]?.id ?? "");
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
-    saveCharacterProfiles(characters);
+    void saveCharacterProfiles(characters).then((saved) => {
+      if (!saved) setSaveState("error");
+    });
   }, [characters, loaded]);
 
   useEffect(() => {
-    if (saveState !== "saved") return;
+    if (saveState !== "saved" && saveState !== "error") return;
     const timeout = window.setTimeout(() => setSaveState("idle"), 1400);
     return () => window.clearTimeout(timeout);
   }, [saveState]);
@@ -191,9 +199,10 @@ function CharacterStudio() {
     });
   };
 
-  const saveNow = () => {
-    saveCharacterProfiles(characters);
-    setSaveState("saved");
+  const saveNow = async () => {
+    setSaveState("saving");
+    const saved = await saveCharacterProfiles(characters);
+    setSaveState(saved ? "saved" : "error");
   };
 
   return (
@@ -214,9 +223,20 @@ function CharacterStudio() {
             >
               <Upload size={16} /> {isImporting ? "Importing..." : "Import images"}
             </button>
-            <button className="cma-btn-primary" onClick={saveNow} type="button">
+            <button
+              className="cma-btn-primary"
+              onClick={() => void saveNow()}
+              disabled={saveState === "saving"}
+              type="button"
+            >
               {saveState === "saved" ? <Check size={16} /> : <Save size={16} />}
-              {saveState === "saved" ? "Saved" : "Save"}
+              {saveState === "saving"
+                ? "Saving..."
+                : saveState === "saved"
+                  ? "Saved"
+                  : saveState === "error"
+                    ? "Save failed"
+                    : "Save"}
             </button>
           </>
         }

@@ -1,5 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import {
+  loadWorkflowState,
+  markAllWorkflowNotificationsRead,
+  setWorkflowNotificationRead,
+  subscribeWorkflowState,
+  type WorkflowNotification,
+} from "@/lib/user-workflows";
 import {
   Bell,
   Search,
@@ -400,9 +407,21 @@ function NotificationsPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>("n2");
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [workflowNotifications, setWorkflowNotifications] = useState<WorkflowNotification[]>([]);
+
+  useEffect(() => {
+    const refresh = () => setWorkflowNotifications(loadWorkflowState().notifications);
+    refresh();
+    return subscribeWorkflowState(refresh);
+  }, []);
+
+  const notifications = useMemo(
+    () => [...workflowNotifications.map(workflowToNotification), ...NOTIFICATIONS],
+    [workflowNotifications],
+  );
 
   const filtered = useMemo(() => {
-    return NOTIFICATIONS.filter((n) => {
+    return notifications.filter((n) => {
       if (activeTab !== "all" && n.category !== activeTab) return false;
       if (filter === "Unread" && n.status !== "unread") return false;
       if (filter === "Read" && n.status !== "read") return false;
@@ -414,18 +433,18 @@ function NotificationsPage() {
       }
       return true;
     });
-  }, [activeTab, filter, search]);
+  }, [activeTab, filter, notifications, search]);
 
   const unreadCountByTab = useMemo(() => {
     const map: Record<string, number> = { all: 0 };
-    for (const n of NOTIFICATIONS) {
+    for (const n of notifications) {
       if (n.status === "unread") {
         map.all = (map.all ?? 0) + 1;
         map[n.category] = (map[n.category] ?? 0) + 1;
       }
     }
     return map;
-  }, []);
+  }, [notifications]);
 
   const selected = filtered.find((n) => n.id === selectedId) ?? filtered[0] ?? null;
 
@@ -452,6 +471,8 @@ function NotificationsPage() {
             selectedId={selected?.id ?? null}
             onSelect={(id) => {
               setSelectedId(id);
+              setWorkflowNotificationRead(id, true);
+              setWorkflowNotifications(loadWorkflowState().notifications);
               setMobileDetailOpen(true);
             }}
             search={search}
@@ -492,6 +513,52 @@ function NotificationsPage() {
 
 // ---------- Page title ----------------------------------------------------
 
+function workflowToNotification(n: WorkflowNotification): Notification {
+  return {
+    id: n.id,
+    category: n.category,
+    typeLabel: n.type,
+    title: n.title,
+    preview: n.content,
+    description: n.content,
+    actor: n.actor,
+    time: relativeTime(n.createdAt),
+    status: n.read ? "read" : "unread",
+    importance: n.actions.some((action) => action.kind === "primary" || action.kind === "danger")
+      ? "action"
+      : "normal",
+    entity: workflowEntity(n),
+    meta: n.meta,
+    actions: n.actions,
+    secondaryActions: n.secondaryActions,
+  };
+}
+
+function workflowEntity(n: WorkflowNotification): RelatedEntity {
+  const base = {
+    title: n.entityTitle,
+    subtitle: n.entitySubtitle || n.entityType,
+    status: n.entityStatus || "Nouveau",
+  };
+  if (n.entityType === "profile") return { kind: "profile", ...base };
+  if (n.entityType === "note") return { kind: "note", ...base };
+  if (n.category === "sponsorship") return { kind: "sponsorship", ...base };
+  if (n.entityType === "chapter") return { kind: "chapter", ...base };
+  if (n.entityType === "manga") return { kind: "manga", ...base };
+  return { kind: "project", ...base };
+}
+
+function relativeTime(iso: string) {
+  const elapsed = Math.max(0, Date.now() - new Date(iso).getTime());
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `${days} d`;
+}
+
 function PageTitle() {
   return (
     <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -507,7 +574,14 @@ function PageTitle() {
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <SecondaryButton icon={<CheckCheck className="h-4 w-4" />}>Mark all as read</SecondaryButton>
+        <SecondaryButton
+          icon={<CheckCheck className="h-4 w-4" />}
+          onClick={() => {
+            markAllWorkflowNotificationsRead();
+          }}
+        >
+          Mark all as read
+        </SecondaryButton>
         <SecondaryButton icon={<Trash2 className="h-4 w-4" />}>Clear read</SecondaryButton>
         <IconButton aria-label="Notification settings">
           <Settings2 className="h-4 w-4" />
@@ -825,17 +899,29 @@ function DetailPanel({
       <div className="mt-6 border-t border-[color:var(--color-border-default)] pt-5">
         <div className="flex flex-wrap gap-2">
           {notification.actions.map((a) => (
-            <ActionButton key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
-              {a.label}
-            </ActionButton>
+            isProfileAction(a.label) ? (
+              <ProfileActionLink key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
+                {a.label}
+              </ProfileActionLink>
+            ) : (
+              <ActionButton key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
+                {a.label}
+              </ActionButton>
+            )
           ))}
         </div>
         {notification.secondaryActions && notification.secondaryActions.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {notification.secondaryActions.map((a) => (
-              <ActionButton key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
-                {a.label}
-              </ActionButton>
+              isProfileAction(a.label) ? (
+                <ProfileActionLink key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
+                  {a.label}
+                </ProfileActionLink>
+              ) : (
+                <ActionButton key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
+                  {a.label}
+                </ActionButton>
+              )
             ))}
           </div>
         )}
@@ -963,15 +1049,7 @@ function Chip({
   );
 }
 
-function ActionButton({
-  children,
-  kind = "primary",
-  icon,
-  ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  kind?: ActionKind;
-  icon?: React.ReactNode;
-}) {
+function actionButtonClass(kind: ActionKind = "primary") {
   const base =
     "inline-flex h-11 items-center justify-center gap-2 rounded-[14px] px-[18px] text-[14px] font-bold leading-5 transition-colors";
   const styles: Record<ActionKind, string> = {
@@ -983,8 +1061,41 @@ function ActionButton({
     danger:
       "border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] text-[color:var(--color-danger)] hover:bg-[rgba(255,95,126,0.18)]",
   };
+  return [base, styles[kind]].join(" ");
+}
+
+function isProfileAction(label: string) {
+  return label.toLowerCase().includes("profile");
+}
+
+function ProfileActionLink({
+  children,
+  kind = "primary",
+  icon,
+}: {
+  children: React.ReactNode;
+  kind?: ActionKind;
+  icon?: React.ReactNode;
+}) {
   return (
-    <button {...rest} className={[base, styles[kind]].join(" ")}>
+    <Link to="/profile/$profileId" params={{ profileId: "u1" }} className={actionButtonClass(kind)}>
+      {icon}
+      {children}
+    </Link>
+  );
+}
+
+function ActionButton({
+  children,
+  kind = "primary",
+  icon,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  kind?: ActionKind;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <button {...rest} className={actionButtonClass(kind)}>
       {icon}
       {children}
     </button>
@@ -994,12 +1105,15 @@ function ActionButton({
 function SecondaryButton({
   children,
   icon,
-}: {
-  children: React.ReactNode;
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: React.ReactNode;
 }) {
   return (
-    <button className="inline-flex h-11 items-center gap-2 rounded-[14px] border border-[color:var(--color-border-strong)] px-[18px] text-[14px] font-bold text-text hover:bg-[rgba(255,255,255,0.04)]">
+    <button
+      {...rest}
+      className="inline-flex h-11 items-center gap-2 rounded-[14px] border border-[color:var(--color-border-strong)] px-[18px] text-[14px] font-bold text-text hover:bg-[rgba(255,255,255,0.04)]"
+    >
       {icon}
       {children}
     </button>

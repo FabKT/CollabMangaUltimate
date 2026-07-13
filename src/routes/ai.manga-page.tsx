@@ -10,6 +10,7 @@ import {
   createId,
   loadCharacterProfiles,
   saveCharacterProfiles,
+  type MangaCharacterImage,
   type MangaCharacterProfile,
 } from "@/lib/manga-workspace";
 import {
@@ -224,6 +225,31 @@ function characterImagesToLibraryItems(characters: CharacterProfile[]): StoredIt
       description: image.notes || image.view || "",
     })),
   );
+}
+
+function isProfileCharacterItem(item: StoredItem) {
+  return item.id.startsWith("profile-");
+}
+
+function mergeCharacterImagesIntoItems(items: StoredItem[], characters: CharacterProfile[]) {
+  const profileItems = characterImagesToLibraryItems(characters);
+  return [...profileItems, ...items.filter((item) => !isProfileCharacterItem(item))];
+}
+
+function characterImageItems(character: CharacterProfile, items: StoredItem[]) {
+  const profileItems = characterImagesToLibraryItems([character]);
+  const profileIds = new Set(profileItems.map((item) => item.id));
+  const manualItems = items.filter(
+    (item) =>
+      item.characterId === character.id &&
+      item.imageDataUrl &&
+      (!isProfileCharacterItem(item) || !profileIds.has(item.id)),
+  );
+  return [...profileItems, ...manualItems];
+}
+
+function firstCharacterImageItem(character: CharacterProfile, items: StoredItem[]) {
+  return characterImageItems(character, items)[0];
 }
 
 async function readImageAsDataUrl(file: File) {
@@ -444,17 +470,21 @@ function CollabMangaAIPage() {
   const [showCanvas, setShowCanvas] = useState(true);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("2:3");
 
-  const selectedItems = useMemo(
-    () =>
-      items.filter((item) =>
+  const selectedItems = useMemo(() => {
+    const baseItems = items.filter((item) =>
         item.role === "Character"
           ? item.characterId
             ? !!selectedCharacterIds[item.characterId]
             : false
           : !!selected[item.id],
-      ),
-    [items, selected, selectedCharacterIds],
-  );
+    );
+    const baseIds = new Set(baseItems.map((item) => item.id));
+    const missingProfileItems = characters
+      .filter((character) => selectedCharacterIds[character.id])
+      .flatMap((character) => characterImageItems(character, items))
+      .filter((item) => !baseIds.has(item.id));
+    return [...baseItems, ...missingProfileItems];
+  }, [characters, items, selected, selectedCharacterIds]);
   const selectedImageCount = selectedItems.filter((item) => item.imageDataUrl).length;
 
   const runBackendCheck = useCallback(async () => {
@@ -481,40 +511,47 @@ function CollabMangaAIPage() {
   }, []);
 
   useEffect(() => {
-    const savedCharacters = loadCharacterProfiles();
-    setCharacters(savedCharacters);
+    let cancelled = false;
+    void loadCharacterProfiles().then((savedCharacters) => {
+      if (cancelled) return;
+      setCharacters(savedCharacters);
 
-    const snap = loadSession<MangaSessionSnapshot>("manga-page");
-    if (snap) {
-      setItems(snap.items ?? characterImagesToLibraryItems(savedCharacters));
-      setSelected(snap.selected ?? {});
-      setSelectedCharacterIds(snap.selectedCharacterIds ?? {});
-      setActiveCharacterId(snap.activeCharacterId ?? savedCharacters[0]?.id ?? "");
-      setUploadRole(snap.uploadRole ?? "Character");
-      setPrompt(snap.prompt ?? "");
-      setEditPrompt(snap.editPrompt ?? "");
-      setEditScope(snap.editScope ?? "single");
-      setPanelCount(snap.panelCount ?? 6);
-      setPanelInstructions(snap.panelInstructions ?? Array.from({ length: 6 }, () => ""));
-      setStyleMode(snap.styleMode ?? "auto");
-      setBackgroundLevel(snap.backgroundLevel ?? "auto");
-      setReadingDirection(snap.readingDirection ?? "right-to-left");
-      setAspectRatio(normalizeAspectRatio(snap.aspectRatio));
-      setTab(snap.tab ?? "structure");
-      setShowCanvas(snap.showCanvas ?? true);
-      if (snap.generationResult) setGenerationResult(snap.generationResult);
-    } else {
-      setActiveCharacterId(savedCharacters[0]?.id ?? "");
-      setItems(characterImagesToLibraryItems(savedCharacters));
-      setSelected({});
-      setSelectedCharacterIds({});
-    }
-    setCharactersLoaded(true);
+      const snap = loadSession<MangaSessionSnapshot>("manga-page");
+      if (snap) {
+        setItems(mergeCharacterImagesIntoItems(snap.items ?? [], savedCharacters));
+        setSelected(snap.selected ?? {});
+        setSelectedCharacterIds(snap.selectedCharacterIds ?? {});
+        setActiveCharacterId(snap.activeCharacterId ?? savedCharacters[0]?.id ?? "");
+        setUploadRole(snap.uploadRole ?? "Character");
+        setPrompt(snap.prompt ?? "");
+        setEditPrompt(snap.editPrompt ?? "");
+        setEditScope(snap.editScope ?? "single");
+        setPanelCount(snap.panelCount ?? 6);
+        setPanelInstructions(snap.panelInstructions ?? Array.from({ length: 6 }, () => ""));
+        setStyleMode(snap.styleMode ?? "auto");
+        setBackgroundLevel(snap.backgroundLevel ?? "auto");
+        setReadingDirection(snap.readingDirection ?? "right-to-left");
+        setAspectRatio(normalizeAspectRatio(snap.aspectRatio));
+        setTab(snap.tab ?? "structure");
+        setShowCanvas(snap.showCanvas ?? true);
+        if (snap.generationResult) setGenerationResult(snap.generationResult);
+      } else {
+        setActiveCharacterId(savedCharacters[0]?.id ?? "");
+        setItems(characterImagesToLibraryItems(savedCharacters));
+        setSelected({});
+        setSelectedCharacterIds({});
+      }
+      setCharactersLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (charactersLoaded) {
-      saveCharacterProfiles(characters);
+      setItems((current) => mergeCharacterImagesIntoItems(current, characters));
+      void saveCharacterProfiles(characters);
     }
   }, [characters, charactersLoaded]);
 
@@ -589,6 +626,44 @@ function CollabMangaAIPage() {
           } satisfies StoredItem;
         }),
       );
+      if (role === "Character") {
+        const importedCharacterImages: MangaCharacterImage[] = imported
+          .filter((item) => item.imageDataUrl)
+          .map((item) => ({
+            id: createId("character-image"),
+            name: item.name,
+            view: "Reference imported from Manga Page Creator",
+            imageDataUrl: item.imageDataUrl ?? "",
+            mimeType: item.mimeType,
+            notes: item.description ?? "",
+          }));
+        if (importedCharacterImages.length > 0) {
+          let targetId = forcedCharacterId ?? activeCharacterId;
+          if (!targetId) {
+            const created = {
+              ...createBlankCharacter(characters.length + 1),
+              name: importedCharacterImages[0]?.name || `Character ${characters.length + 1}`,
+              images: importedCharacterImages,
+            };
+            targetId = created.id;
+            setCharacters((current) => [created, ...current]);
+          } else {
+            setCharacters((current) =>
+              current.map((character) =>
+                character.id === targetId
+                  ? {
+                      ...character,
+                      images: [...(character.images ?? []), ...importedCharacterImages],
+                    }
+                  : character,
+              ),
+            );
+          }
+          setActiveCharacterId(targetId);
+          setSelectedCharacterIds((current) => ({ ...current, [targetId]: true }));
+          return;
+        }
+      }
       setItems((current) => [...imported, ...current]);
     } finally {
       setIsImporting(false);
@@ -913,9 +988,6 @@ function SelectedElementsList({
   selectedCharacterIds: Record<string, boolean>;
   characters: CharacterProfile[];
 }) {
-  const firstImageFor = (characterId: string) =>
-    items.find((item) => item.characterId === characterId && item.imageDataUrl);
-
   const entries: Array<{ key: string; title: string; item?: StoredItem }> = [
     ...items
       .filter((item) => item.role === "Storyboard" && selected[item.id])
@@ -925,7 +997,7 @@ function SelectedElementsList({
       .map((character) => ({
         key: `character-${character.id}`,
         title: character.name || "Personnage",
-        item: firstImageFor(character.id),
+        item: firstCharacterImageItem(character, items),
       })),
     ...items
       .filter((item) => referenceRoles.includes(item.role) && selected[item.id])
@@ -963,9 +1035,6 @@ function getPromptSelectedEntries(
   selectedCharacterIds: Record<string, boolean>,
   characters: CharacterProfile[],
 ) {
-  const firstImageFor = (characterId: string) =>
-    items.find((item) => item.characterId === characterId && item.imageDataUrl);
-
   return [
     ...items
       .filter((item) => item.role === "Storyboard" && selected[item.id])
@@ -975,7 +1044,7 @@ function getPromptSelectedEntries(
       .map((character) => ({
         key: `character-${character.id}`,
         title: character.name || "Personnage",
-        item: firstImageFor(character.id),
+        item: firstCharacterImageItem(character, items),
       })),
     ...items
       .filter((item) => referenceRoles.includes(item.role) && selected[item.id])
@@ -1769,9 +1838,7 @@ function CharactersTab({
   return (
     <div className="grid grid-cols-2 gap-3">
       {characters.map((character) => {
-        const firstImage = items.find(
-          (item) => item.characterId === character.id && item.imageDataUrl,
-        );
+        const firstImage = firstCharacterImageItem(character, items);
         const isSelected = !!selectedCharacterIds[character.id];
 
         return (
@@ -1827,9 +1894,7 @@ function CharactersTabOld({
   return (
     <div className="flex flex-col gap-3">
       {characters.map((character) => {
-        const firstImage = items.find(
-          (item) => item.characterId === character.id && item.imageDataUrl,
-        );
+        const firstImage = firstCharacterImageItem(character, items);
         const isSelected = !!selectedCharacterIds[character.id];
         return (
           <div

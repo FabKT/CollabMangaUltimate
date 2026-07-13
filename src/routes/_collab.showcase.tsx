@@ -234,7 +234,7 @@ function ArtworkPlaceholder({ seed, ratio = "portrait" }: { seed: number; ratio?
 const STYLES = ["All styles","Shonen","Seinen","Shojo","Fantasy manga","Dark manga","Action manga","Sports manga","Comedy manga","Webtoon","Semi-realistic","Realistic manga hybrid","Chibi","Retro anime","Experimental","Other"];
 const GENRES = ["All genres","Action","Adventure","Fantasy","Romance","Comedy","Drama","Horror","Mystery","Sports","Slice of life","Sci-fi","Supernatural","Psychological","Historical","Other"];
 const TYPES = ["All types","Character design","Full illustration","Manga page","Panel sample","Cover art","Background","Creature design","Weapon design","Outfit design","Expression sheet","Pose study","Sketch","Line art","Colored artwork","Other"];
-const SKILLS = ["All skills","Anatomy","Facial expressions","Dynamic poses","Action scenes","Backgrounds","Perspective","Character consistency","Outfit design","Creature design","Lighting","Inking","Coloring","Panel composition","Visual storytelling"];
+const SKILLS = ["All skills"];
 const TECHS = ["All techniques","Digital","Traditional","Black and white","Full color","Screentone","Line art","Painted","Sketch","Mixed media","AI-assisted","Other"];
 const AVAILS = ["Any availability","Available now","Open to projects","Open to short missions","Long-term collaboration","Limited availability","Not available","To define"];
 
@@ -251,7 +251,7 @@ const ARTS: Art[] = Array.from({ length: 14 }).map((_, i) => {
   const styles = ["Shonen","Seinen","Dark manga","Fantasy manga","Webtoon","Semi-realistic","Action manga","Shojo"];
   const types = ["Character design","Manga page","Cover art","Full illustration","Panel sample","Expression sheet","Background","Line art"];
   const availOpts: Art["availability"][] = ["Available now","Open to projects","Available now","Limited","Open to projects","Available now","Limited","Open to projects"];
-  const skillSets = [["Dynamic poses","Anatomy"],["Panel composition","Inking"],["Coloring","Lighting"],["Backgrounds","Perspective"],["Facial expressions","Character consistency"],["Action scenes","Anatomy"],["Outfit design","Creature design"],["Visual storytelling","Coloring"]];
+  const skillSets = [["Illustration"],["Manga page"],["Cover art"],["Character design"],["Visual style"],["Line work"],["Portfolio"],["Manga art"]];
   return {
     id: `art-${i}`, title: "Artwork title", artist: "Artist name", role: "Artist",
     style: styles[i % styles.length], type: types[i % types.length],
@@ -486,9 +486,11 @@ function DetailModal({
   art: Art; onClose: () => void; onInvite: () => void; onContact: () => void;
   onPortfolio: () => void; saved: boolean; onSave: () => void;
 }) {
+  const [tab, setTab] = useState<"profile" | "comments">("profile");
+
   return (
     <ModalShell onClose={onClose} width={1180}>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)", gap: 0, flex: 1, minHeight: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 5fr) minmax(280px, 2fr)", gap: 0, flex: 1, minHeight: 0 }}>
         {/* Left: viewer */}
         <div style={{ background: C.stage, padding: 24, display: "flex", flexDirection: "column", gap: 16, position: "relative", minHeight: 520 }}>
           <div style={{ position: "absolute", top: 16, left: 16, display: "flex", gap: 8, zIndex: 2 }}>
@@ -508,6 +510,41 @@ function DetailModal({
 
         {/* Right: info scroll */}
         <div style={{ background: C.details, padding: 24, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h2 style={{ ...sora, fontSize: 18, fontWeight: 800, lineHeight: "26px", margin: 0 }}>{art.title}</h2>
+              <div style={{ ...manrope, fontSize: 12, color: C.muted, marginTop: 3 }}>{art.type}</div>
+            </div>
+            <IconBtn title="Close" onClick={onClose}><X size={16} /></IconBtn>
+          </div>
+
+          <div className="cm-popup-tabs" role="tablist" aria-label="Détails de l'illustration" style={{ width: "100%" }}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "profile"}
+              data-active={tab === "profile"}
+              onClick={() => setTab("profile")}
+              className="cm-popup-tab"
+              style={{ flex: 1 }}
+            >
+              Profil
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "comments"}
+              data-active={tab === "comments"}
+              onClick={() => setTab("comments")}
+              className="cm-popup-tab"
+              style={{ flex: 1 }}
+            >
+              Commentaires
+            </button>
+          </div>
+
+          {tab === "profile" ? (
+            <>
           {/* Artist top */}
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -554,31 +591,6 @@ function DetailModal({
             </p>
           </Section>
 
-          <Section title="Technical focus">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {["Anatomy","Expressions","Backgrounds","Action scenes","Panel composition","Coloring","Inking"].map((s) => <Chip key={s}>{s}</Chip>)}
-            </div>
-          </Section>
-
-          <Section title="Artist strengths">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-              {art.skills.concat(["Character consistency","Lighting"]).map((s) => <Chip key={s} tone="info">{s}</Chip>)}
-            </div>
-            <p style={{ ...manrope, fontSize: 13, color: C.text2, margin: 0 }}>
-              Short strengths summary placeholder highlighting what this artist does best across their portfolio.
-            </p>
-          </Section>
-
-          <Section title="Collaboration preferences">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Meta label="Looking for" value="Scénariste" />
-              <Meta label="Open to" value="Manga project" />
-              <Meta label="Compensation" value="Revenue share · Paid" />
-              <Meta label="Availability" value={art.availability} />
-              <Meta label="Experience" value="Advanced" />
-              <Meta label="Language" value="English · French" />
-            </div>
-          </Section>
 
           <Section title="Portfolio completeness">
             <div style={{ height: 8, borderRadius: 999, background: C.input, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -596,6 +608,22 @@ function DetailModal({
               ))}
             </div>
           </Section>
+            </>
+          ) : (
+            <Section title="Commentaires">
+              <div style={{ display: "grid", gap: 12 }}>
+                {[
+                  "Composition très lisible, idéale pour présenter le style de l'artiste.",
+                  "Les valeurs et la silhouette fonctionnent bien pour une fiche portfolio.",
+                ].map((comment, index) => (
+                  <div key={comment} style={{ background: C.input, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ ...manrope, fontSize: 12, fontWeight: 800, color: C.text }}>Utilisateur {index + 1}</div>
+                    <p style={{ ...manrope, fontSize: 13, color: C.text2, lineHeight: "20px", margin: "4px 0 0" }}>{comment}</p>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
         </div>
       </div>
     </ModalShell>
@@ -627,7 +655,7 @@ function InviteModal({ art, onClose }: { art: Art; onClose: () => void }) {
   return (
     <ModalShell onClose={onClose} width={640}>
       <ModalHeader title="Invite to project" subtitle={`Send a project invitation to ${art.artist}`} onClose={onClose} />
-      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+      <div style={{ padding: 24, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 24, overflowY: "auto" }}>
         <Field label="Manga project">
           <Select value="Select one of your projects" onChange={() => {}} options={["Select one of your projects","Project placeholder A","Project placeholder B","Project placeholder C"]} />
         </Field>
@@ -660,7 +688,7 @@ function ContactModal({ art, onClose }: { art: Art; onClose: () => void }) {
   return (
     <ModalShell onClose={onClose} width={620}>
       <ModalHeader title="Contact artist" subtitle={`Send a message to ${art.artist}`} onClose={onClose} />
-      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+      <div style={{ padding: 24, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 24, overflowY: "auto" }}>
         <Field label="Message subject">
           <Input placeholder="Short subject about your project or intent" />
         </Field>
@@ -684,16 +712,31 @@ function ContactModal({ art, onClose }: { art: Art; onClose: () => void }) {
 
 /* ---------------- Upload Modal ---------------- */
 function UploadModal({ onClose }: { onClose: () => void }) {
+  const [images, setImages] = useState<string[]>([]);
+  const inputId = "showcase-upload-images";
+  const activeImage = images[0];
+
+  const addFiles = (files: FileList | null) => {
+    if (!files?.length) return;
+    const urls = Array.from(files)
+      .filter((file) => file.type.startsWith("image/"))
+      .map((file) => URL.createObjectURL(file));
+    setImages((current) => [...current, ...urls]);
+  };
+
   return (
-    <ModalShell onClose={onClose} width={780}>
+    <ModalShell onClose={onClose} width={980}>
       <ModalHeader title="Upload Illustration" subtitle="Share an artwork to attract scénaristes and manga projects" onClose={onClose} />
-      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+      <div style={{ padding: 24, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 24, overflowY: "auto" }}>
         {/* Drag area */}
-        <div style={{
+        <label htmlFor={inputId} style={{
           background: C.stage, border: `2px dashed ${C.borderStrong}`, borderRadius: 16,
           padding: 32, textAlign: "center", display: "flex", flexDirection: "column",
-          alignItems: "center", gap: 10,
+          alignItems: "center", justifyContent: "center", gap: 10, minHeight: 320, cursor: "pointer",
         }}>
+          {activeImage && (
+            <img src={activeImage} alt="" style={{ width: "100%", height: "100%", minHeight: 320, objectFit: "cover", borderRadius: 14 }} />
+          )}
           <div style={{
             width: 48, height: 48, borderRadius: 14, background: C.neonSoftFill,
             border: `1px solid ${C.neonSoftBorder}`, color: C.neon,
@@ -704,30 +747,32 @@ function UploadModal({ onClose }: { onClose: () => void }) {
           <div style={{ ...manrope, fontSize: 14, fontWeight: 700, color: C.text }}>Upload artwork image</div>
           <div style={{ ...manrope, fontSize: 12, color: C.muted }}>Accepted formats placeholder · JPG, PNG, WEBP · up to placeholder size</div>
           <Btn variant="secondary" size="sm" style={{ marginTop: 6 }}>Choose file</Btn>
+        </label>
+        <input id={inputId} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(event) => addFiles(event.currentTarget.files)} />
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, gridColumn: "1" }}>
+          {images.length > 0 ? images.map((src, index) => (
+            <button
+              key={`${src}-${index}`}
+              type="button"
+              onClick={() => setImages((current) => [current[index], ...current.filter((_, i) => i !== index)])}
+              style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", flex: "0 0 auto", border: `1px solid ${C.border}`, background: C.input }}
+            >
+              <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </button>
+          )) : (
+            <div style={{ ...manrope, fontSize: 12, color: C.muted, background: C.input, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", width: "100%" }}>
+              Selected images will appear here.
+            </div>
+          )}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ gridColumn: "2", gridRow: "1", display: "grid", gap: 12 }}>
           <Field label="Artwork title *"><Input placeholder="Give your artwork a clear title" /></Field>
-          <Field label="Artwork type *"><Select value={TYPES[1]} onChange={() => {}} options={TYPES.slice(1)} /></Field>
-          <Field label="Style *"><Select value={STYLES[1]} onChange={() => {}} options={STYLES.slice(1)} /></Field>
-          <Field label="Genre"><Select value={GENRES[1]} onChange={() => {}} options={GENRES.slice(1)} /></Field>
-          <Field label="Technique"><Select value={TECHS[1]} onChange={() => {}} options={TECHS.slice(1)} /></Field>
-          <Field label="Skill focus"><Select value={SKILLS[1]} onChange={() => {}} options={SKILLS.slice(1)} /></Field>
-          <Field label="Visibility *"><Select value="Public" onChange={() => {}} options={["Public","Collaboration only","Private"]} /></Field>
-          <Field label="Availability status"><Select value={AVAILS[1]} onChange={() => {}} options={AVAILS.slice(1)} /></Field>
         </div>
 
         <Field label="Description">
           <Textarea placeholder="Describe your artwork, intent, and technical focus…" />
         </Field>
-        <Field label="Linked project (optional)">
-          <Select value="No linked project" onChange={() => {}} options={["No linked project","Project placeholder A","Project placeholder B"]} />
-        </Field>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <Toggle label="Allow invitations from scénaristes and project owners" defaultOn />
-          <Toggle label="Display on my public portfolio" defaultOn />
-        </div>
       </div>
       <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
@@ -789,12 +834,6 @@ function PortfolioModal({ art, onClose, onOpenArt }: { art: Art; onClose: () => 
             <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginBottom: 6 }}>Main styles</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               <Chip>{art.style}</Chip><Chip>Shonen</Chip><Chip>Dark manga</Chip>
-            </div>
-          </div>
-          <div>
-            <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginBottom: 6 }}>Skills</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {art.skills.concat(["Inking","Backgrounds"]).map((s) => <Chip key={s} tone="info">{s}</Chip>)}
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

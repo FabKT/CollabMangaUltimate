@@ -1,7 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Home,
+  Compass,
   Handshake,
+  Store,
   Megaphone,
   Image as ImageIcon,
   Folder,
@@ -24,8 +26,10 @@ const groups: Group[] = [
     title: "Communauté",
     items: [
       { label: "Home", to: "/hub", icon: Home },
+      { label: "Découvrir", to: "/discover", icon: Compass },
       { label: "Annonces", to: "/announcements", icon: Megaphone },
       { label: "Sponsoring", to: "/sponsorship", icon: Handshake },
+      { label: "Hub parrainage", to: "/sponsorship-hub", icon: Store },
       { label: "Illustration", to: "/showcase", icon: ImageIcon },
     ],
   },

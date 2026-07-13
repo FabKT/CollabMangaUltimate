@@ -23,6 +23,12 @@ import {
   Users,
   X,
 } from "lucide-react";
+import {
+  followCreator,
+  sendCollaborationInvitation,
+  sendFriendRequest,
+  sendPatronageRequest,
+} from "@/lib/user-workflows";
 
 export const Route = createFileRoute("/_collab/profile")({
   head: () => ({
@@ -31,7 +37,7 @@ export const Route = createFileRoute("/_collab/profile")({
       {
         name: "description",
         content:
-          "CollabManga creator profile — projects, illustrations, propositions, announcements and sponsorship in one premium dark workspace.",
+          "CollabManga creator profile — projects, illustrations, ideas, announcements and sponsorship in one premium dark workspace.",
       },
       { property: "og:title", content: "Profile · CollabManga" },
       {
@@ -41,20 +47,155 @@ export const Route = createFileRoute("/_collab/profile")({
       },
     ],
   }),
-  component: ProfilePage,
+  component: OwnProfilePage,
 });
 
 type ProfileType = "creator" | "content";
 type ViewMode = "own" | "public";
-type AddKind = "sponsorship" | "announcement" | "illustration" | "proposition";
+type AddKind = "project" | "sponsorship" | "announcement" | "illustration" | "proposition";
+type ProfileWorkflow = "invite" | "patronage" | "follow" | "friend";
+export type PublicProfileIdentity = {
+  displayName: string;
+  username: string;
+  initials: string;
+  tagline: string;
+  profileType: ProfileType;
+};
 
-function ProfilePage() {
-  const [profileType, setProfileType] = useState<ProfileType>("creator");
-  const [mode, setMode] = useState<ViewMode>("own");
+const DEFAULT_PROFILE_IDENTITY: PublicProfileIdentity = {
+  displayName: "Kaito Mori",
+  username: "@kaito_mori",
+  initials: "KM",
+  tagline: "Dessinateur manga spécialisé dans les personnages expressifs et les scènes d'action.",
+  profileType: "creator",
+};
+
+const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
+  u1: {
+    displayName: "InkWave Studio",
+    username: "@inkwave_studio",
+    initials: "IW",
+    tagline: "Dessinateur seinen, encrage intense et compositions urbaines dramatiques.",
+    profileType: "creator",
+  },
+  u2: {
+    displayName: "Nova Scriptor",
+    username: "@nova_scriptor",
+    initials: "NS",
+    tagline: "Scénariste shonen, worldbuilding et systèmes de pouvoirs sur le long terme.",
+    profileType: "creator",
+  },
+  u3: {
+    displayName: "PanelPulse",
+    username: "@panelpulse",
+    initials: "PP",
+    tagline: "Créateur de contenu manga, reviews hebdomadaires et mise en avant de projets indépendants.",
+    profileType: "content",
+  },
+  u4: {
+    displayName: "Sakura Lines",
+    username: "@sakura_lines",
+    initials: "SL",
+    tagline: "Décors manga, rues nocturnes, intérieurs et ambiance slice of life.",
+    profileType: "creator",
+  },
+  u5: {
+    displayName: "Lorekeeper",
+    username: "@lorekeeper",
+    initials: "LK",
+    tagline: "Scénariste orienté lore, factions, chronologies et arcs longs.",
+    profileType: "creator",
+  },
+  u6: {
+    displayName: "Bento Reader",
+    username: "@bento_reader",
+    initials: "BR",
+    tagline: "Lecteur bêta, retours structurés chapitre par chapitre et notes de rythme.",
+    profileType: "creator",
+  },
+  u7: {
+    displayName: "Kaiju Hex",
+    username: "@kaiju_hex",
+    initials: "KH",
+    tagline: "Illustrateur de créatures, mecha et couvertures à silhouette forte.",
+    profileType: "creator",
+  },
+  u8: {
+    displayName: "Storycraft HQ",
+    username: "@storycraft_hq",
+    initials: "SC",
+    tagline: "Studio éditorial manga, anthologies seinen et recrutement d'équipes créatives.",
+    profileType: "creator",
+  },
+  u9: {
+    displayName: "Midori Talks",
+    username: "@midori_talks",
+    initials: "MT",
+    tagline: "Créatrice de contenu, essais vidéo sur le shojo classique et le josei moderne.",
+    profileType: "content",
+  },
+};
+
+export function getPublicProfileIdentity(profileId: string): PublicProfileIdentity {
+  return PUBLIC_PROFILE_FIXTURES[profileId] ?? {
+    ...DEFAULT_PROFILE_IDENTITY,
+    displayName: profileId
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || DEFAULT_PROFILE_IDENTITY.displayName,
+    username: profileId ? `@${profileId}` : DEFAULT_PROFILE_IDENTITY.username,
+  };
+}
+
+const PROFILE_ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"] as const;
+const PROFILE_LANGUAGES = [
+  "Français",
+  "English",
+  "Español",
+  "Italiano",
+  "日本語",
+  "Deutsch",
+  "Português",
+  "한국어",
+  "中文",
+  "Nederlands",
+  "العربية",
+  "हिन्दी",
+] as const;
+const PROFILE_VISIBILITY_OPTIONS = ["Public", "Privé", "Sur invitation"] as const;
+
+function OwnProfilePage() {
+  return <ProfilePage />;
+}
+
+export function PublicProfilePage({
+  identity,
+}: {
+  identity: PublicProfileIdentity;
+}) {
+  return <ProfilePage initialMode="public" initialProfileType={identity.profileType} identity={identity} />;
+}
+
+function ProfilePage({
+  initialMode = "own",
+  initialProfileType = "creator",
+  identity = DEFAULT_PROFILE_IDENTITY,
+}: {
+  initialMode?: ViewMode;
+  initialProfileType?: ProfileType;
+  identity?: PublicProfileIdentity;
+}) {
+  const publicLocked = initialMode === "public";
+  const [profileType, setProfileType] = useState<ProfileType>(initialProfileType);
+  const [mode, setMode] = useState<ViewMode>(initialMode);
   const [tab, setTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState<null | { title: string; kind: string }>(null);
   const [addOpen, setAddOpen] = useState<AddKind | null>(null);
+  const [workflowOpen, setWorkflowOpen] = useState<ProfileWorkflow | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [available, setAvailable] = useState(true);
 
   const tabs = useMemo(() => {
     const base =
@@ -63,7 +204,7 @@ function ProfilePage() {
             { id: "overview", label: "Overview" },
             { id: "projects", label: "Projects" },
             { id: "illustrations", label: "Illustrations" },
-            { id: "propositions", label: "Propositions" },
+            { id: "propositions", label: "Idées" },
             { id: "announcements", label: "Announcements" },
           ]
         : [
@@ -71,7 +212,7 @@ function ProfilePage() {
             { id: "sponsorship", label: "Sponsorship" },
             { id: "announcements", label: "Announcements" },
             { id: "projects", label: "Projects Promoted" },
-            { id: "propositions", label: "Propositions" },
+            { id: "propositions", label: "Idées" },
           ];
     if (mode === "own") base.push({ id: "account", label: "Account" });
     return base;
@@ -83,18 +224,27 @@ function ProfilePage() {
         className="mx-auto w-full max-w-[1280px] px-4 py-6 md:px-6 md:py-8 lg:px-8"
         style={{ fontFamily: "var(--font-manrope)" }}
       >
-        <DemoSwitcher
-          profileType={profileType}
-          setProfileType={setProfileType}
-          mode={mode}
-          setMode={setMode}
-        />
+        {!publicLocked && (
+          <DemoSwitcher
+            profileType={profileType}
+            setProfileType={setProfileType}
+            mode={mode}
+            setMode={setMode}
+          />
+        )}
 
         <ProfileHeader
           profileType={profileType}
           mode={mode}
+          identity={identity}
           onEdit={() => setEditOpen(true)}
           onAdd={setAddOpen}
+          available={available}
+          onAvailabilityChange={setAvailable}
+          onInvite={() => setWorkflowOpen("invite")}
+          onPatronage={() => setWorkflowOpen("patronage")}
+          onFollow={() => setWorkflowOpen("follow")}
+          onFriend={() => setWorkflowOpen("friend")}
         />
 
         <div className="mt-6">
@@ -120,6 +270,7 @@ function ProfilePage() {
                 <OverviewTab
                   profileType={profileType}
                   mode={mode}
+                  onAdd={setAddOpen}
                   onDetails={(t, k) => setDetailsOpen({ title: t, kind: k })}
                 />
               </Tabs.Content>
@@ -127,6 +278,7 @@ function ProfilePage() {
                 <ProjectsTab
                   profileType={profileType}
                   mode={mode}
+                  onAdd={() => setAddOpen("project")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Project" })}
                 />
               </Tabs.Content>
@@ -141,7 +293,7 @@ function ProfilePage() {
                 <PropositionsTab
                   mode={mode}
                   onAdd={() => setAddOpen("proposition")}
-                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Proposition" })}
+                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Idée" })}
                 />
               </Tabs.Content>
               <Tabs.Content value="announcements">
@@ -183,6 +335,21 @@ function ProfilePage() {
       <AddAnnouncementModal open={addOpen === "announcement"} onClose={() => setAddOpen(null)} />
       <AddIllustrationModal open={addOpen === "illustration"} onClose={() => setAddOpen(null)} />
       <AddPropositionModal open={addOpen === "proposition"} onClose={() => setAddOpen(null)} />
+      <AddProjectModal open={addOpen === "project"} onClose={() => setAddOpen(null)} />
+      {workflowOpen && (
+        <ProfileWorkflowModal
+          type={workflowOpen}
+          profileType={profileType}
+          profileName={identity.displayName}
+          onClose={() => setWorkflowOpen(null)}
+          onDone={(message) => {
+            setWorkflowOpen(null);
+            setFeedback(message);
+            window.setTimeout(() => setFeedback(null), 3200);
+          }}
+        />
+      )}
+      {feedback && <ProfileToast>{feedback}</ProfileToast>}
 
       <style>{`
         .cm-tab { color: #B8C4E5; }
@@ -510,13 +677,27 @@ function SegBtn({ children, active, onClick }: { children: ReactNode; active: bo
 function ProfileHeader({
   profileType,
   mode,
+  identity,
   onEdit,
   onAdd,
+  available,
+  onAvailabilityChange,
+  onInvite,
+  onPatronage,
+  onFollow,
+  onFriend,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
+  identity: PublicProfileIdentity;
   onEdit: () => void;
   onAdd: (kind: AddKind) => void;
+  available: boolean;
+  onAvailabilityChange: (available: boolean) => void;
+  onInvite: () => void;
+  onPatronage: () => void;
+  onFollow: () => void;
+  onFriend: () => void;
 }) {
   return (
     <div>
@@ -564,7 +745,7 @@ function ProfileHeader({
             }}
           >
             <span className="cm-sora text-[36px] font-bold" style={{ color: "#F7FAFF" }}>
-              KM
+              {identity.initials}
             </span>
           </div>
           <div className="min-w-0 pt-14 md:pt-16">
@@ -573,14 +754,14 @@ function ProfileHeader({
                 className="cm-sora truncate text-[24px] font-bold leading-8 md:text-[30px] md:leading-[38px]"
                 style={{ color: "#F7FAFF" }}
               >
-                Creator display name
+                {identity.displayName}
               </h1>
               <span className="text-[13px] font-semibold" style={{ color: "#7F8CB3" }}>
-                @username
+                {identity.username}
               </span>
             </div>
             <p className="mt-1 text-[13px] font-medium leading-5" style={{ color: "#B8C4E5" }}>
-              Short profile tagline — one line describing focus and current intent.
+              {identity.tagline}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Chip tone="active" icon={<Sparkles size={12} />}>
@@ -595,7 +776,11 @@ function ProfileHeader({
                   <Chip>Lecteur</Chip>
                 </>
               )}
-              <Chip tone="active">Available</Chip>
+              {mode === "own" ? (
+                <AvailabilitySwitch available={available} onChange={onAvailabilityChange} />
+              ) : (
+                <Chip tone={available ? "active" : "neutral"}>{available ? "Available" : "Unavailable"}</Chip>
+              )}
               <Chip tone="info" icon={<Globe2 size={12} />}>EN · FR · JP</Chip>
             </div>
           </div>
@@ -613,15 +798,17 @@ function ProfileHeader({
             </>
           ) : profileType === "content" ? (
             <>
-              <PrimaryButton icon={<Send size={16} />}>Propose Sponsorship</PrimaryButton>
+              <PrimaryButton icon={<Send size={16} />} onClick={onPatronage}>Propose Sponsorship</PrimaryButton>
               <SecondaryButton icon={<MessageSquare size={16} />}>Message</SecondaryButton>
-              <SecondaryButton icon={<Check size={16} />}>Save Profile</SecondaryButton>
+              <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
+              <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
             </>
           ) : (
             <>
-              <PrimaryButton icon={<Users size={16} />}>Invite to Project</PrimaryButton>
+              <PrimaryButton icon={<Users size={16} />} onClick={onInvite}>Invite to Project</PrimaryButton>
               <SecondaryButton icon={<MessageSquare size={16} />}>Message</SecondaryButton>
-              <SecondaryButton icon={<Check size={16} />}>Save Profile</SecondaryButton>
+              <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
+              <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
             </>
           )}
         </div>
@@ -632,11 +819,12 @@ function ProfileHeader({
 
 function CreateDropdown({ profileType, onSelect }: { profileType: ProfileType; onSelect: (kind: AddKind) => void }) {
   const items = [
+    { label: "Create Project", kind: "project" as const },
     profileType === "content" ? { label: "Add Sponsorship Option", kind: "sponsorship" as const } : null,
-    { label: "Create Sponsorship Announcement", kind: "sponsorship" as const },
+    { label: "Create Sponsorship Announcement", kind: "announcement" as const },
     { label: "Upload Illustration", kind: "illustration" as const },
     { label: "Create Collaboration Announcement", kind: "announcement" as const },
-    { label: "Create Proposition", kind: "proposition" as const },
+    { label: "Create Idea", kind: "proposition" as const },
   ].filter(Boolean) as { label: string; kind: AddKind }[];
 
   return (
@@ -683,15 +871,54 @@ function CreateDropdown({ profileType, onSelect }: { profileType: ProfileType; o
   );
 }
 
+function AvailabilitySwitch({
+  available,
+  onChange,
+}: {
+  available: boolean;
+  onChange: (available: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={available}
+      onClick={() => onChange(!available)}
+      className="inline-flex items-center gap-3 rounded-full px-3 py-1.5 text-[12px] font-bold transition-colors"
+      style={{
+        background: available ? "rgba(57,255,136,0.12)" : "#0E193A",
+        border: `1px solid ${available ? "rgba(57,255,136,0.45)" : "rgba(133,154,206,0.22)"}`,
+        color: available ? "#39FF88" : "#B8C4E5",
+      }}
+    >
+      <span>{available ? "Available" : "Unavailable"}</span>
+      <span
+        className="relative inline-flex h-5 w-9 rounded-full transition-colors"
+        style={{ background: available ? "rgba(57,255,136,0.38)" : "#101B3F" }}
+      >
+        <span
+          className="absolute top-[2px] h-4 w-4 rounded-full transition-all"
+          style={{
+            left: available ? 18 : 2,
+            background: available ? "#39FF88" : "#B8C4E5",
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
 /* ---------------- Overview ---------------- */
 
 function OverviewTab({
   profileType,
   mode,
+  onAdd,
   onDetails,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
+  onAdd: (kind: AddKind) => void;
   onDetails: (title: string, kind: string) => void;
 }) {
   return (
@@ -701,9 +928,9 @@ function OverviewTab({
       </div>
       <div className="lg:col-span-2">
         {profileType === "creator" ? (
-          <ProjectShowcase mode={mode} onDetails={(t) => onDetails(t, "Project")} />
+          <ProjectShowcase mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} />
         ) : (
-          <SponsorshipShowcase mode={mode} onDetails={(t) => onDetails(t, "Sponsorship option")} />
+          <SponsorshipShowcase mode={mode} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} />
         )}
       </div>
     </div>
@@ -731,10 +958,6 @@ function BioPanel({ profileType, mode }: { profileType: ProfileType; mode: ViewM
         </InfoRow>
         <InfoRow label="Availability">
           <Chip tone="active">Open to collaborations</Chip>
-        </InfoRow>
-        <InfoRow label="Collaboration">
-          <Chip>Long-term</Chip>
-          <Chip>One-shot</Chip>
         </InfoRow>
         <InfoRow label="Preferred genres">
           <Chip>Shonen</Chip>
@@ -785,7 +1008,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 
 /* ---------------- Project showcase ---------------- */
 
-function ProjectShowcase({ mode, onDetails }: { mode: ViewMode; onDetails: (title: string) => void }) {
+function ProjectShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
   const projects = [
     { title: "Project title placeholder", role: "Dessinateur", status: "In production", chapters: "12 chapters" },
     { title: "Project title placeholder", role: "Scénariste", status: "Ongoing", chapters: "4 chapters" },
@@ -799,7 +1022,7 @@ function ProjectShowcase({ mode, onDetails }: { mode: ViewMode; onDetails: (titl
         subtitle="Manga projects this user created, joined, or contributed to."
         action={
           mode === "own" && (
-            <SecondaryButton icon={<Plus size={16} />}>New Project</SecondaryButton>
+            <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Project</SecondaryButton>
           )
         }
       />
@@ -862,7 +1085,7 @@ function ProjectCard({
 
 /* ---------------- Sponsorship showcase ---------------- */
 
-function SponsorshipShowcase({ mode, onDetails }: { mode: ViewMode; onDetails: (title: string) => void }) {
+function SponsorshipShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
   const options = [
     {
       title: "Short dedicated review",
@@ -892,7 +1115,7 @@ function SponsorshipShowcase({ mode, onDetails }: { mode: ViewMode; onDetails: (
         title="Sponsorship Options"
         subtitle="Services this creator offers to promote manga projects."
         action={
-          mode === "own" && <SecondaryButton icon={<Plus size={16} />}>New Option</SecondaryButton>
+          mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Option</SecondaryButton>
         }
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -982,10 +1205,12 @@ function SponsorshipCard({
 function ProjectsTab({
   profileType,
   mode,
+  onAdd,
   onDetails,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
+  onAdd: () => void;
   onDetails: (title: string) => void;
 }) {
   const projects = Array.from({ length: 4 }).map((_, i) => ({
@@ -1008,6 +1233,7 @@ function ProjectsTab({
           <div className="flex flex-wrap items-center gap-2">
             <input className="cm-input" style={{ height: 40, width: 180 }} placeholder="Search projects" />
             <SecondaryButton>Filters</SecondaryButton>
+            {mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Project</SecondaryButton>}
           </div>
         }
       />
@@ -1089,9 +1315,9 @@ function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails
   return (
     <Panel>
       <SectionTitle
-        title="Propositions"
+        title="Idées"
         subtitle="Story ideas, arcs and creative pitches shared by this creator."
-        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Proposition</SecondaryButton>}
+        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Idea</SecondaryButton>}
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {items.map((_, i) => (
@@ -1101,17 +1327,13 @@ function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails
               <Chip>Shonen</Chip>
             </div>
             <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
-              Proposition title {i + 1}
+              Idea title {i + 1}
             </h3>
             <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
               Short description of the pitch — logline, tone and hook, two lines maximum before View Details.
             </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <Chip>Complexity · Medium</Chip>
-              <Chip>Tone · Dramatic</Chip>
-            </div>
             <div className="mt-4 flex items-center gap-2">
-              <SecondaryButton onClick={() => onDetails(`Proposition ${i + 1}`)}>View Details</SecondaryButton>
+              <SecondaryButton onClick={() => onDetails(`Idée ${i + 1}`)}>View Details</SecondaryButton>
               {mode === "own" ? (
                 <PrimaryButton icon={<Edit3 size={16} />}>Edit</PrimaryButton>
               ) : (
@@ -1190,6 +1412,8 @@ function SponsorshipTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails:
 }
 
 function AccountTab({ profileType }: { profileType: ProfileType }) {
+  const [accountAvailable, setAccountAvailable] = useState(true);
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Panel>
@@ -1208,9 +1432,13 @@ function AccountTab({ profileType }: { profileType: ProfileType }) {
         <SectionTitle title="Profile information" subtitle="Roles, languages and preferences." />
         <div className="space-y-3">
           <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." /></Field>
-          <Field label="Main role"><input className="cm-input" defaultValue={profileType === "content" ? "Créateur de contenu" : "Dessinateur"} /></Field>
-          <Field label="Languages"><input className="cm-input" defaultValue="English, French" /></Field>
-          <Field label="Availability"><input className="cm-input" defaultValue="Open to collaborations" /></Field>
+          <Field label="Main role">
+            <ProfileSelect defaultValue={profileType === "content" ? "Créateur de contenu" : "Dessinateur"} options={PROFILE_ROLES} />
+          </Field>
+          <Field label="Languages">
+            <LanguageMultiSelect defaultValues={["English", "Français"]} />
+          </Field>
+          <AvailabilityEditToggle available={accountAvailable} onChange={setAccountAvailable} />
         </div>
       </Panel>
 
@@ -1219,7 +1447,7 @@ function AccountTab({ profileType }: { profileType: ProfileType }) {
         <div className="space-y-3">
           <ToggleRow label="Show projects" defaultChecked />
           <ToggleRow label="Show illustrations" defaultChecked />
-          <ToggleRow label="Show propositions" defaultChecked />
+          <ToggleRow label="Show ideas" defaultChecked />
           <ToggleRow label="Show sponsorship options" defaultChecked={profileType === "content"} />
           <ToggleRow label="Allow project invitations" defaultChecked />
           <ToggleRow label="Allow direct messages" defaultChecked />
@@ -1258,6 +1486,78 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <div className="mb-1.5 text-[12px] font-bold" style={{ color: "#B8C4E5" }}>{label}</div>
       {children}
     </label>
+  );
+}
+
+function ProfileSelect({
+  options,
+  defaultValue,
+}: {
+  options: readonly string[];
+  defaultValue?: string;
+}) {
+  return (
+    <select className="cm-input" defaultValue={defaultValue ?? options[0]}>
+      {options.map((option) => (
+        <option key={option} value={option}>{option}</option>
+      ))}
+    </select>
+  );
+}
+
+function LanguageMultiSelect({ defaultValues = [] }: { defaultValues?: string[] }) {
+  return (
+    <>
+      <select className="cm-input min-h-[124px]" multiple defaultValue={defaultValues}>
+        {PROFILE_LANGUAGES.map((language) => (
+          <option key={language} value={language}>{language}</option>
+        ))}
+      </select>
+      <p className="mt-1.5 text-[11px] font-medium" style={{ color: "#7F8CB3" }}>
+        Maintiens Ctrl pour sélectionner plusieurs langues.
+      </p>
+    </>
+  );
+}
+
+function AvailabilityEditToggle({
+  available,
+  onChange,
+}: {
+  available: boolean;
+  onChange: (available: boolean) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 text-[12px] font-bold" style={{ color: "#B8C4E5" }}>Availability</div>
+      <div
+        className="flex items-center justify-between rounded-[14px] px-4 py-3"
+        style={{ background: "#0E193A", border: "1px solid rgba(133,154,206,0.18)" }}
+      >
+        <span className="text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>
+          {available ? "Available" : "Not available"}
+        </span>
+        <button
+          type="button"
+          onClick={() => onChange(!available)}
+          role="switch"
+          aria-checked={available}
+          className="relative h-6 w-11 rounded-full transition-colors"
+          style={{
+            background: available ? "rgba(57,255,136,0.35)" : "#101B3F",
+            border: `1px solid ${available ? "rgba(57,255,136,0.55)" : "rgba(133,154,206,0.28)"}`,
+          }}
+        >
+          <span
+            className="absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all"
+            style={{
+              left: available ? 22 : 2,
+              background: available ? "#39FF88" : "#B8C4E5",
+            }}
+          />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1399,6 +1699,8 @@ function EditProfileModal({
   onClose: () => void;
   profileType: ProfileType;
 }) {
+  const [available, setAvailable] = useState(true);
+
   return (
     <ModalShell
       open={open}
@@ -1425,23 +1727,36 @@ function EditProfileModal({
         <FormGroup title="About">
           <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." /></Field>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Spoken languages"><input className="cm-input" placeholder="English, French, Japanese" /></Field>
-            <Field label="Availability"><input className="cm-input" placeholder="Open to collaborations" /></Field>
-            <Field label="Main role"><input className="cm-input" defaultValue={profileType === "content" ? "Créateur de contenu" : "Dessinateur"} /></Field>
-            <Field label="Secondary roles"><input className="cm-input" placeholder="Scénariste, Lecteur" /></Field>
+            <Field label="Spoken languages">
+              <LanguageMultiSelect defaultValues={["English", "Français", "日本語"]} />
+            </Field>
+            <AvailabilityEditToggle available={available} onChange={setAvailable} />
+            <Field label="Main role">
+              <ProfileSelect defaultValue={profileType === "content" ? "Créateur de contenu" : "Dessinateur"} options={PROFILE_ROLES} />
+            </Field>
+            <Field label="Secondary role">
+              <ProfileSelect defaultValue="Scénariste" options={PROFILE_ROLES} />
+            </Field>
           </div>
         </FormGroup>
 
         <FormGroup title="Preferences">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Profile visibility"><input className="cm-input" defaultValue="Public" /></Field>
-            <Field label="Collaboration preferences"><input className="cm-input" placeholder="Long-term, remote" /></Field>
+            <Field label="Profile visibility">
+              <ProfileSelect defaultValue="Public" options={PROFILE_VISIBILITY_OPTIONS} />
+            </Field>
             {profileType === "content" ? (
-              <Field label="Sponsorship settings"><input className="cm-input" placeholder="Accepting sponsorships" /></Field>
+              <Field label="Sponsorship settings">
+                <ProfileSelect defaultValue="Accepting sponsorships" options={["Accepting sponsorships", "Paused", "Hidden"]} />
+              </Field>
             ) : (
-              <Field label="Portfolio visibility"><input className="cm-input" defaultValue="Public" /></Field>
+              <Field label="Portfolio visibility">
+                <ProfileSelect defaultValue="Public" options={PROFILE_VISIBILITY_OPTIONS} />
+              </Field>
             )}
-            <Field label="Writing sample visibility"><input className="cm-input" defaultValue="Public" /></Field>
+            <Field label="Writing sample visibility">
+              <ProfileSelect defaultValue="Public" options={PROFILE_VISIBILITY_OPTIONS} />
+            </Field>
           </div>
         </FormGroup>
       </div>
@@ -1517,6 +1832,81 @@ function Dropzone() {
       style={{ background: "#08112B", border: "1px dashed rgba(133,154,206,0.28)", color: "#7F8CB3" }}
     >
       Drop files here to upload (or click)
+    </div>
+  );
+}
+
+function ClassicImageUploader({
+  multiple = true,
+  label = "Importer une image",
+}: {
+  multiple?: boolean;
+  label?: string;
+}) {
+  const [images, setImages] = useState<string[]>([]);
+  const inputId = useMemo(() => `classic-upload-${Math.random().toString(36).slice(2)}`, []);
+  const activeImage = images[0];
+
+  const addFiles = (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    const urls = Array.from(fileList)
+      .filter((file) => file.type.startsWith("image/"))
+      .map((file) => URL.createObjectURL(file));
+    setImages((current) => (multiple ? [...current, ...urls] : urls.slice(0, 1)));
+  };
+
+  return (
+    <div className="min-w-0">
+      <label
+        htmlFor={inputId}
+        className="group grid aspect-[4/3] cursor-pointer place-items-center overflow-hidden rounded-[18px] text-center"
+        style={{ background: "#08112B", border: "1px dashed rgba(133,154,206,0.32)", color: "#B8C4E5" }}
+      >
+        {activeImage ? (
+          <img src={activeImage} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center gap-3 px-6">
+            <span
+              className="grid h-12 w-12 place-items-center rounded-[14px]"
+              style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.32)", color: "#39FF88" }}
+            >
+              <ImageIcon size={22} />
+            </span>
+            <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{label}</span>
+            <span className="text-[12px]" style={{ color: "#7F8CB3" }}>PNG, JPG, WEBP</span>
+          </div>
+        )}
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        multiple={multiple}
+        className="hidden"
+        onChange={(event) => addFiles(event.currentTarget.files)}
+      />
+      {multiple && (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {images.length > 0 ? (
+            images.map((src, index) => (
+              <button
+                key={`${src}-${index}`}
+                type="button"
+                onClick={() => setImages((current) => [current[index], ...current.filter((_, i) => i !== index)])}
+                className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px]"
+                style={{ border: "1px solid rgba(133,154,206,0.22)", background: "#0E193A" }}
+              >
+                <img src={src} alt="" className="h-full w-full object-cover" />
+              </button>
+            ))
+          ) : (
+            <div className="h-16 w-full rounded-[12px] px-3 text-[12px] font-semibold flex items-center"
+              style={{ border: "1px solid rgba(133,154,206,0.18)", color: "#7F8CB3", background: "#0E193A" }}>
+              Les images importées apparaîtront ici.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1604,7 +1994,7 @@ function AddIllustrationModal({ open, onClose }: { open: boolean; onClose: () =>
       open={open}
       onClose={onClose}
       title="Ajouter illustration"
-      width={720}
+      width={980}
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
@@ -1612,10 +2002,12 @@ function AddIllustrationModal({ open, onClose }: { open: boolean; onClose: () =>
         </>
       }
     >
-      <div className="space-y-6">
-        <Field label="Titre"><input className="cm-input" placeholder="Titre" /></Field>
-        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" /></Field>
-        <Dropzone />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <ClassicImageUploader multiple label="Importer des illustrations" />
+        <div className="space-y-4">
+          <Field label="Titre"><input className="cm-input" placeholder="Titre" /></Field>
+          <Field label="Description"><textarea className="cm-textarea" placeholder="Description" /></Field>
+        </div>
       </div>
     </ModalShell>
   );
@@ -1626,8 +2018,8 @@ function AddPropositionModal({ open, onClose }: { open: boolean; onClose: () => 
     <ModalShell
       open={open}
       onClose={onClose}
-      title="Ajouter proposition"
-      width={860}
+      title="Ajouter une idée"
+      width={980}
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
@@ -1635,17 +2027,190 @@ function AddPropositionModal({ open, onClose }: { open: boolean; onClose: () => 
         </>
       }
     >
-      <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <ClassicImageUploader multiple label="Importer des images d'idée" />
+        <div className="space-y-4">
         <ChoiceRow
-          label="Type de proposition"
+          label="Type d'idée"
           defaultValue="Autre"
           options={["Autre", "Système de pouvoirs", "Motivations", "Charadesign", "Worldbuilding", "Équipement"]}
         />
         <Field label="Titre"><input className="cm-input" placeholder="Titre" /></Field>
         <Field label="Description"><textarea className="cm-textarea" placeholder="Description" /></Field>
-        <Dropzone />
+        </div>
       </div>
     </ModalShell>
+  );
+}
+
+function AddProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title="Créer un projet"
+      width={980}
+      footer={
+        <>
+          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
+          <PrimaryButton onClick={onClose}>Créer le projet</PrimaryButton>
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <ClassicImageUploader multiple={false} label="Importer une couverture" />
+        <div className="space-y-4">
+          <Field label="Nom du projet"><input className="cm-input" placeholder="Nom du projet" /></Field>
+          <Field label="Synopsis"><textarea className="cm-textarea" placeholder="Synopsis du projet" /></Field>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ProfileWorkflowModal({
+  type,
+  profileType,
+  profileName,
+  onClose,
+  onDone,
+}: {
+  type: ProfileWorkflow;
+  profileType: ProfileType;
+  profileName: string;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [projectTitle, setProjectTitle] = useState("Neon Ronin");
+  const [role, setRole] = useState(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
+  const [level, setLevel] = useState("Niveau 1");
+  const [startDate, setStartDate] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const title =
+    type === "invite"
+      ? "Inviter au projet"
+      : type === "patronage"
+        ? "Proposer un parrainage"
+        : type === "friend"
+          ? "Ajouter en ami"
+          : "S'abonner";
+
+  const submit = () => {
+    setError("");
+    if (type === "invite") {
+      if (!projectTitle.trim()) {
+        setError("Le projet concerné est obligatoire.");
+        return;
+      }
+      sendCollaborationInvitation({
+        recipient: profileName,
+        projectTitle,
+        role,
+        message,
+      });
+      onDone("Invitation de collaboration envoyée et notification créée.");
+      return;
+    }
+    if (type === "patronage") {
+      if (!level.trim()) {
+        setError("Le niveau de parrainage est obligatoire.");
+        return;
+      }
+      sendPatronageRequest({
+        recipient: profileName,
+        level,
+        startDate,
+        message,
+      });
+      onDone("Demande de parrainage envoyée et notification créée.");
+      return;
+    }
+    if (type === "friend") {
+      sendFriendRequest({ recipient: profileName });
+      onDone("Demande d'amitié envoyée.");
+      return;
+    }
+    followCreator({ creatorName: profileName });
+    onDone("Abonnement ajouté. Le créateur recevra une notification.");
+  };
+
+  return (
+    <ModalShell
+      open
+      onClose={onClose}
+      title={title}
+      width={720}
+      footer={
+        <>
+          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
+          <PrimaryButton onClick={submit}>{type === "follow" || type === "friend" ? "Confirmer" : "Envoyer"}</PrimaryButton>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <div className="rounded-[16px] p-4" style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)" }}>
+          <div className="text-[12px] font-bold uppercase tracking-[0.06em]" style={{ color: "#7F8CB3" }}>Destinataire</div>
+          <div className="mt-1 cm-sora text-[16px] font-bold" style={{ color: "#F7FAFF" }}>{profileName}</div>
+        </div>
+
+        {type === "invite" && (
+          <>
+            <Field label="Projet concerné">
+              <input className="cm-input" value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} placeholder="Titre du projet" />
+            </Field>
+            <Field label="Rôle proposé">
+              <select className="cm-input" value={role} onChange={(event) => setRole(event.target.value)}>
+                {["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"].map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Message d'invitation">
+              <textarea className="cm-textarea" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Explique le rôle attendu, le rythme et les prochaines étapes." />
+            </Field>
+          </>
+        )}
+
+        {type === "patronage" && (
+          <>
+            <Field label="Niveau de parrainage">
+              <select className="cm-input" value={level} onChange={(event) => setLevel(event.target.value)}>
+                {["Niveau 1", "Niveau 2", "Niveau 3"].map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Date de début souhaitée">
+              <input className="cm-input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            </Field>
+            <Field label="Message personnalisé">
+              <textarea className="cm-textarea" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ajoute les avantages, attentes ou conditions utiles." />
+            </Field>
+          </>
+        )}
+
+        {(type === "follow" || type === "friend") && (
+          <p className="text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
+            Cette action utilise une confirmation directe, sans champ supplémentaire, conformément au workflow du document.
+          </p>
+        )}
+
+        {error && <div className="text-[13px] font-bold" style={{ color: "#FF5F7E" }}>{error}</div>}
+      </div>
+    </ModalShell>
+  );
+}
+
+function ProfileToast({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="fixed bottom-6 right-6 z-[70] max-w-[420px] rounded-[16px] px-4 py-3 text-[14px] font-bold shadow-[0_18px_44px_rgba(0,0,0,0.45)]"
+      style={{ background: "#101B3F", border: "1px solid rgba(57,255,136,0.45)", color: "#F7FAFF" }}
+    >
+      {children}
+    </div>
   );
 }
 

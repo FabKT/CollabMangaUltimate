@@ -8,6 +8,15 @@ import {
   Filter, ArrowUpDown, Bell, Target, Sparkles, Star, X,
   Users, UserPlus, Rocket, Undo2,
 } from "lucide-react";
+import {
+  createAnnouncementWorkflow,
+  createProjectNote,
+  createProjectWorkflow,
+  removeCollaborator,
+  sendCollaborationInvitation,
+  sendPatronageRequest,
+  updateCollaboratorRole,
+} from "@/lib/user-workflows";
 
 export const Route = createFileRoute("/_collab/studio")({
   component: CollabMangaPage,
@@ -359,7 +368,17 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
 
 type ProjectTab = "Chapters" | "Notes" | "Calendar" | "Recrutement" | "Parrainage" | "Collaborateurs" | "Settings";
 
-function ProjectWorkspace({ project, onBack, onOpenChapter }: { project: Project; onBack: () => void; onOpenChapter: (id: string) => void }) {
+function ProjectWorkspace({
+  project,
+  onBack,
+  onOpenChapter,
+  onWorkflow,
+}: {
+  project: Project;
+  onBack: () => void;
+  onOpenChapter: (id: string) => void;
+  onWorkflow: (message: string) => void;
+}) {
   const [tab, setTab] = useState<ProjectTab>("Chapters");
   const editing = false;
   const [modal, setModal] = useState<"chapter" | "note" | "parrainage" | "recruit" | null>(null);
@@ -459,14 +478,33 @@ function ProjectWorkspace({ project, onBack, onOpenChapter }: { project: Project
         {tab === "Calendar" && <CalendarTab project={project} onAddNote={openNote} />}
         {tab === "Recrutement" && <RecrutementTab onAddRecruit={() => setModal("recruit")} />}
         {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => setModal("parrainage")} />}
-        {tab === "Collaborateurs" && <CollaborateursTab project={project} />}
+        {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} />}
         {tab === "Settings" && <SettingsTab />}
       </div>
 
       {modal === "chapter" && <AddChapterModal onClose={() => setModal(null)} />}
-      {modal === "note" && <AddNoteModal onClose={() => setModal(null)} defaultDate={noteDate} />}
-      {modal === "parrainage" && <AddParrainageModal onClose={() => setModal(null)} />}
-      {modal === "recruit" && <AddRecruitModal onClose={() => setModal(null)} />}
+      {modal === "note" && (
+        <AddNoteModal
+          project={project}
+          onClose={() => setModal(null)}
+          defaultDate={noteDate}
+          onDone={onWorkflow}
+        />
+      )}
+      {modal === "parrainage" && (
+        <AddParrainageModal
+          project={project}
+          onClose={() => setModal(null)}
+          onDone={onWorkflow}
+        />
+      )}
+      {modal === "recruit" && (
+        <AddRecruitModal
+          project={project}
+          onClose={() => setModal(null)}
+          onDone={onWorkflow}
+        />
+      )}
     </div>
   );
 }

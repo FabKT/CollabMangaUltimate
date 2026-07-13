@@ -28,7 +28,7 @@ export const Route = createFileRoute("/_collab/manga/")({
 
 const GENRE_OPTIONS = ["Shonen", "Seinen", "Shojo", "Josei"];
 const SUBGENRE_OPTIONS = ["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique"];
-const LANGUAGES = ["FR", "ENG"];
+const LANGUAGES = ["FR", "ENG", "ES", "IT", "JP"];
 const RATING_VALUES = [0, 1, 2, 3, 4, 5];
 
 function CatalogPage() {

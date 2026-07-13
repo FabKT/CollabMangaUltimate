@@ -1,4 +1,5 @@
 export type MangaStatus = "Ongoing" | "Completed" | "New";
+export type MangaDemographic = "Shonen" | "Seinen" | "Shojo" | "Josei";
 
 export interface Chapter {
   id: string;
@@ -18,7 +19,9 @@ export interface Manga {
   title: string;
   creator: string;
   cover: string;
+  demographic: MangaDemographic;
   genres: string[];
+  subgenres: string[];
   status: MangaStatus;
   rating: number;
   ratingCount: number;
@@ -80,12 +83,13 @@ function makeChapters(count: number, hue: number): Chapter[] {
   return Array.from({ length: count }, (_, i) => {
     const n = i + 1;
     const pages = 18 + ((n * 3) % 8);
+    const weeksAgo = count - n + 1;
     return {
       id: `ch-${n}`,
       number: n,
       title: `Chapter title ${n}`,
-      note: "Short release note placeholder for this chapter.",
-      published: "Published date",
+      note: n === count ? "The newest release pushes the main conflict forward." : "A key chapter in the ongoing arc.",
+      published: n === count ? "Published today" : `Published ${weeksAgo} weeks ago`,
       pages,
       rating: 0,
       comments: 0,
@@ -97,31 +101,194 @@ function makeChapters(count: number, hue: number): Chapter[] {
   });
 }
 
-const seed = (title: string, creator: string, hue: number, chapters: number, genres: string[], status: MangaStatus): Omit<Manga, "id"> => ({
+const seed = ({
+  title,
+  creator,
+  hue,
+  chapters,
+  demographic,
+  subgenres,
+  status,
+  rating,
+  ratingCount,
+  language,
+  updated,
+  synopsis,
+}: {
+  title: string;
+  creator: string;
+  hue: number;
+  chapters: number;
+  demographic: MangaDemographic;
+  subgenres: string[];
+  status: MangaStatus;
+  rating: number;
+  ratingCount: number;
+  language: string;
+  updated: string;
+  synopsis: string;
+}): Omit<Manga, "id"> => ({
   title,
   creator,
   cover: cover(title, hue),
-  genres,
+  demographic,
+  genres: subgenres,
+  subgenres,
   status,
-  rating: 0,
-  ratingCount: 0,
+  rating,
+  ratingCount,
   chapterCount: chapters,
-  language: "Language",
-  updated: "Updated recently",
-  synopsis:
-    "Synopsis placeholder. A short overview of the story, its main characters, and the world they inhabit will appear here. Creators can describe the tone, themes, and stakes of their manga so readers get a clear sense of what to expect before opening the first chapter.",
+  language,
+  updated,
+  synopsis,
   chapters: makeChapters(chapters, hue),
 });
 
 export const MANGA_LIST: Manga[] = [
-  { id: "aurora-drift", ...seed("Manga title A", "Creator name", 210, 12, ["Genre A", "Genre B", "Genre C"], "Ongoing") },
-  { id: "hollow-signal", ...seed("Manga title B", "Creator name", 160, 8, ["Genre A", "Genre D"], "New") },
-  { id: "quiet-mecha", ...seed("Manga title C", "Creator name", 20, 24, ["Genre B", "Genre E"], "Completed") },
-  { id: "paper-lanterns", ...seed("Manga title D", "Creator name", 300, 6, ["Genre F"], "Ongoing") },
-  { id: "static-bloom", ...seed("Manga title E", "Creator name", 340, 15, ["Genre A", "Genre G", "Genre H"], "Ongoing") },
-  { id: "ember-fold", ...seed("Manga title F", "Creator name", 40, 4, ["Genre I"], "New") },
-  { id: "north-lens", ...seed("Manga title G", "Creator name", 100, 20, ["Genre B", "Genre C"], "Ongoing") },
-  { id: "salt-harbor", ...seed("Manga title H", "Creator name", 250, 32, ["Genre D", "Genre E"], "Completed") },
+  {
+    id: "aurora-drift",
+    ...seed({
+      title: "Aurora Drift",
+      creator: "Mina Laurent",
+      hue: 210,
+      chapters: 12,
+      demographic: "Shonen",
+      subgenres: ["Action", "Aventure", "Fantastique"],
+      status: "Ongoing",
+      rating: 4.8,
+      ratingCount: 1840,
+      language: "FR",
+      updated: "Updated today",
+      synopsis:
+        "A young courier carrying fragments of a fallen star crosses a city split between rival guilds, each convinced that the aurora above them hides the path to an ancient weapon.",
+    }),
+  },
+  {
+    id: "hollow-signal",
+    ...seed({
+      title: "Hollow Signal",
+      creator: "Noah Vesper",
+      hue: 160,
+      chapters: 8,
+      demographic: "Seinen",
+      subgenres: ["Science fiction", "Mystere", "Psychologique"],
+      status: "New",
+      rating: 4.5,
+      ratingCount: 620,
+      language: "ENG",
+      updated: "Updated 2 days ago",
+      synopsis:
+        "In a silent orbital colony, a maintenance engineer starts receiving messages from a crew that officially died years earlier.",
+    }),
+  },
+  {
+    id: "quiet-mecha",
+    ...seed({
+      title: "Quiet Mecha",
+      creator: "Sora Kline",
+      hue: 20,
+      chapters: 24,
+      demographic: "Shonen",
+      subgenres: ["Mecha", "Action", "Drame"],
+      status: "Completed",
+      rating: 4.6,
+      ratingCount: 3120,
+      language: "FR",
+      updated: "Completed last month",
+      synopsis:
+        "After the war, a former pilot repairs farming machines in a mountain town until an abandoned combat frame wakes beneath the fields.",
+    }),
+  },
+  {
+    id: "paper-lanterns",
+    ...seed({
+      title: "Paper Lanterns",
+      creator: "Elise Haru",
+      hue: 300,
+      chapters: 6,
+      demographic: "Shojo",
+      subgenres: ["Romance", "Slice of life", "Drame"],
+      status: "Ongoing",
+      rating: 4.4,
+      ratingCount: 780,
+      language: "FR",
+      updated: "Updated this week",
+      synopsis:
+        "A reserved calligraphy student and a festival musician exchange anonymous lantern notes every summer, never realizing they sit in the same classroom.",
+    }),
+  },
+  {
+    id: "static-bloom",
+    ...seed({
+      title: "Static Bloom",
+      creator: "Ari Mendes",
+      hue: 340,
+      chapters: 15,
+      demographic: "Josei",
+      subgenres: ["Mystere", "Romance", "Psychologique"],
+      status: "Ongoing",
+      rating: 4.7,
+      ratingCount: 1410,
+      language: "ENG",
+      updated: "Updated yesterday",
+      synopsis:
+        "A radio host who can hear emotions inside static investigates the disappearance of a listener whose final broadcast predicted her own future.",
+    }),
+  },
+  {
+    id: "ember-fold",
+    ...seed({
+      title: "Ember Fold",
+      creator: "Kenji Armand",
+      hue: 40,
+      chapters: 4,
+      demographic: "Seinen",
+      subgenres: ["Horreur", "Historique", "Mystere"],
+      status: "New",
+      rating: 4.2,
+      ratingCount: 390,
+      language: "FR",
+      updated: "Updated 3 days ago",
+      synopsis:
+        "A printer in a fire-scarred district discovers that each forbidden manuscript he restores changes a detail in the city's history.",
+    }),
+  },
+  {
+    id: "north-lens",
+    ...seed({
+      title: "North Lens",
+      creator: "Camille Ryo",
+      hue: 100,
+      chapters: 20,
+      demographic: "Shonen",
+      subgenres: ["Sport", "Comedie", "Drame"],
+      status: "Ongoing",
+      rating: 4.3,
+      ratingCount: 1180,
+      language: "ENG",
+      updated: "Updated this week",
+      synopsis:
+        "A failed striker joins a tiny northern school team where every match is filmed, studied, and turned into a second chance.",
+    }),
+  },
+  {
+    id: "salt-harbor",
+    ...seed({
+      title: "Salt Harbor",
+      creator: "Lina Moreau",
+      hue: 250,
+      chapters: 32,
+      demographic: "Josei",
+      subgenres: ["Historique", "Romance", "Aventure"],
+      status: "Completed",
+      rating: 4.9,
+      ratingCount: 4260,
+      language: "FR",
+      updated: "Completed 6 months ago",
+      synopsis:
+        "On a coast ruled by merchant families, a cartographer returns home to expose the map that ruined her father and the captain who helped draw it.",
+    }),
+  },
 ];
 
 export function getManga(id: string): Manga | undefined {

@@ -26,11 +26,13 @@ export function AnnouncementCard({
   saved,
   onToggleSave,
   onViewDetails,
+  onContact,
 }: {
   a: Announcement;
   saved: boolean;
   onToggleSave: () => void;
   onViewDetails: () => void;
+  onContact: () => void;
 }) {
   const isProject = a.mode === "project";
   return (
@@ -110,7 +112,7 @@ export function AnnouncementCard({
           <button type="button" onClick={onViewDetails} className={cn(btnInfo, "flex-1")}>
             View Details
           </button>
-          <button type="button" className={cn(btnPrimary, "flex-1")}>
+          <button type="button" onClick={onContact} className={cn(btnPrimary, "flex-1")}>
             {isProject ? "Apply" : "Contact"}
           </button>
         </div>

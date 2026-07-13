@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AiRouteImport } from './routes/ai'
 import { Route as CollabRouteImport } from './routes/_collab'
 import { Route as IndexRouteImport } from './routes/index'
@@ -28,6 +30,7 @@ import { Route as AiCharacterCreateRouteImport } from './routes/ai.character-cre
 import { Route as AiChapterRouteImport } from './routes/ai.chapter'
 import { Route as AiAssetsRouteImport } from './routes/ai.assets'
 import { Route as CollabStudioRouteImport } from './routes/_collab.studio'
+import { Route as CollabSponsorshipHubRouteImport } from './routes/_collab.sponsorship-hub'
 import { Route as CollabSponsorshipRouteImport } from './routes/_collab.sponsorship'
 import { Route as CollabShowcaseRouteImport } from './routes/_collab.showcase'
 import { Route as CollabProfileRouteImport } from './routes/_collab.profile'
@@ -35,6 +38,7 @@ import { Route as CollabNotificationsRouteImport } from './routes/_collab.notifi
 import { Route as CollabMessagesRouteImport } from './routes/_collab.messages'
 import { Route as CollabIdeasRouteImport } from './routes/_collab.ideas'
 import { Route as CollabHubRouteImport } from './routes/_collab.hub'
+import { Route as CollabDiscoverRouteImport } from './routes/_collab.discover'
 import { Route as CollabConnectRouteImport } from './routes/_collab.connect'
 import { Route as CollabChatRouteImport } from './routes/_collab.chat'
 import { Route as CollabAnnouncementsRouteImport } from './routes/_collab.announcements'
@@ -45,9 +49,21 @@ import { Route as ApiMangaStatusRouteImport } from './routes/api.manga.status'
 import { Route as ApiMangaGeneratePageRouteImport } from './routes/api.manga.generate-page'
 import { Route as ApiDecorGenerateRouteImport } from './routes/api.decor.generate'
 import { Route as ApiCharacterGenerateRouteImport } from './routes/api.character.generate'
+import { Route as CollabSponsorshipHubIdRouteImport } from './routes/_collab.sponsorship-hub.$id'
+import { Route as CollabProfileProfileIdRouteImport } from './routes/_collab.profile.$profileId'
 import { Route as CollabMangaIdIndexRouteImport } from './routes/_collab.manga.$id.index'
 import { Route as CollabMangaIdChapterChapterIdRouteImport } from './routes/_collab.manga.$id.chapter.$chapterId'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiRoute = AiRouteImport.update({
   id: '/ai',
   path: '/ai',
@@ -142,6 +158,11 @@ const CollabStudioRoute = CollabStudioRouteImport.update({
   path: '/studio',
   getParentRoute: () => CollabRoute,
 } as any)
+const CollabSponsorshipHubRoute = CollabSponsorshipHubRouteImport.update({
+  id: '/sponsorship-hub',
+  path: '/sponsorship-hub',
+  getParentRoute: () => CollabRoute,
+} as any)
 const CollabSponsorshipRoute = CollabSponsorshipRouteImport.update({
   id: '/sponsorship',
   path: '/sponsorship',
@@ -175,6 +196,11 @@ const CollabIdeasRoute = CollabIdeasRouteImport.update({
 const CollabHubRoute = CollabHubRouteImport.update({
   id: '/hub',
   path: '/hub',
+  getParentRoute: () => CollabRoute,
+} as any)
+const CollabDiscoverRoute = CollabDiscoverRouteImport.update({
+  id: '/discover',
+  path: '/discover',
   getParentRoute: () => CollabRoute,
 } as any)
 const CollabConnectRoute = CollabConnectRouteImport.update({
@@ -228,6 +254,16 @@ const ApiCharacterGenerateRoute = ApiCharacterGenerateRouteImport.update({
   path: '/api/character/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CollabSponsorshipHubIdRoute = CollabSponsorshipHubIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => CollabSponsorshipHubRoute,
+} as any)
+const CollabProfileProfileIdRoute = CollabProfileProfileIdRouteImport.update({
+  id: '/$profileId',
+  path: '/$profileId',
+  getParentRoute: () => CollabProfileRoute,
+} as any)
 const CollabMangaIdIndexRoute = CollabMangaIdIndexRouteImport.update({
   id: '/manga/$id/',
   path: '/manga/$id/',
@@ -243,16 +279,20 @@ const CollabMangaIdChapterChapterIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai': typeof AiRouteWithChildren
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/announcements': typeof CollabAnnouncementsRoute
   '/chat': typeof CollabChatRoute
   '/connect': typeof CollabConnectRoute
+  '/discover': typeof CollabDiscoverRoute
   '/hub': typeof CollabHubRoute
   '/ideas': typeof CollabIdeasRoute
   '/messages': typeof CollabMessagesRoute
   '/notifications': typeof CollabNotificationsRoute
-  '/profile': typeof CollabProfileRoute
+  '/profile': typeof CollabProfileRouteWithChildren
   '/showcase': typeof CollabShowcaseRoute
   '/sponsorship': typeof CollabSponsorshipRoute
+  '/sponsorship-hub': typeof CollabSponsorshipHubRouteWithChildren
   '/studio': typeof CollabStudioRoute
   '/ai/assets': typeof AiAssetsRoute
   '/ai/chapter': typeof AiChapterRoute
@@ -269,6 +309,8 @@ export interface FileRoutesByFullPath {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/': typeof AiIndexRoute
+  '/profile/$profileId': typeof CollabProfileProfileIdRoute
+  '/sponsorship-hub/$id': typeof CollabSponsorshipHubIdRoute
   '/api/character/generate': typeof ApiCharacterGenerateRoute
   '/api/decor/generate': typeof ApiDecorGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
@@ -281,16 +323,20 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/announcements': typeof CollabAnnouncementsRoute
   '/chat': typeof CollabChatRoute
   '/connect': typeof CollabConnectRoute
+  '/discover': typeof CollabDiscoverRoute
   '/hub': typeof CollabHubRoute
   '/ideas': typeof CollabIdeasRoute
   '/messages': typeof CollabMessagesRoute
   '/notifications': typeof CollabNotificationsRoute
-  '/profile': typeof CollabProfileRoute
+  '/profile': typeof CollabProfileRouteWithChildren
   '/showcase': typeof CollabShowcaseRoute
   '/sponsorship': typeof CollabSponsorshipRoute
+  '/sponsorship-hub': typeof CollabSponsorshipHubRouteWithChildren
   '/studio': typeof CollabStudioRoute
   '/ai/assets': typeof AiAssetsRoute
   '/ai/chapter': typeof AiChapterRoute
@@ -307,6 +353,8 @@ export interface FileRoutesByTo {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai': typeof AiIndexRoute
+  '/profile/$profileId': typeof CollabProfileProfileIdRoute
+  '/sponsorship-hub/$id': typeof CollabSponsorshipHubIdRoute
   '/api/character/generate': typeof ApiCharacterGenerateRoute
   '/api/decor/generate': typeof ApiDecorGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
@@ -322,16 +370,20 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_collab': typeof CollabRouteWithChildren
   '/ai': typeof AiRouteWithChildren
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/_collab/announcements': typeof CollabAnnouncementsRoute
   '/_collab/chat': typeof CollabChatRoute
   '/_collab/connect': typeof CollabConnectRoute
+  '/_collab/discover': typeof CollabDiscoverRoute
   '/_collab/hub': typeof CollabHubRoute
   '/_collab/ideas': typeof CollabIdeasRoute
   '/_collab/messages': typeof CollabMessagesRoute
   '/_collab/notifications': typeof CollabNotificationsRoute
-  '/_collab/profile': typeof CollabProfileRoute
+  '/_collab/profile': typeof CollabProfileRouteWithChildren
   '/_collab/showcase': typeof CollabShowcaseRoute
   '/_collab/sponsorship': typeof CollabSponsorshipRoute
+  '/_collab/sponsorship-hub': typeof CollabSponsorshipHubRouteWithChildren
   '/_collab/studio': typeof CollabStudioRoute
   '/ai/assets': typeof AiAssetsRoute
   '/ai/chapter': typeof AiChapterRoute
@@ -348,6 +400,8 @@ export interface FileRoutesById {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/': typeof AiIndexRoute
+  '/_collab/profile/$profileId': typeof CollabProfileProfileIdRoute
+  '/_collab/sponsorship-hub/$id': typeof CollabSponsorshipHubIdRoute
   '/api/character/generate': typeof ApiCharacterGenerateRoute
   '/api/decor/generate': typeof ApiDecorGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
@@ -363,9 +417,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/ai'
+    | '/login'
+    | '/signup'
     | '/announcements'
     | '/chat'
     | '/connect'
+    | '/discover'
     | '/hub'
     | '/ideas'
     | '/messages'
@@ -373,6 +430,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/showcase'
     | '/sponsorship'
+    | '/sponsorship-hub'
     | '/studio'
     | '/ai/assets'
     | '/ai/chapter'
@@ -389,6 +447,8 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/'
+    | '/profile/$profileId'
+    | '/sponsorship-hub/$id'
     | '/api/character/generate'
     | '/api/decor/generate'
     | '/api/manga/generate-page'
@@ -401,9 +461,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/login'
+    | '/signup'
     | '/announcements'
     | '/chat'
     | '/connect'
+    | '/discover'
     | '/hub'
     | '/ideas'
     | '/messages'
@@ -411,6 +474,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/showcase'
     | '/sponsorship'
+    | '/sponsorship-hub'
     | '/studio'
     | '/ai/assets'
     | '/ai/chapter'
@@ -427,6 +491,8 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai'
+    | '/profile/$profileId'
+    | '/sponsorship-hub/$id'
     | '/api/character/generate'
     | '/api/decor/generate'
     | '/api/manga/generate-page'
@@ -441,9 +507,12 @@ export interface FileRouteTypes {
     | '/'
     | '/_collab'
     | '/ai'
+    | '/login'
+    | '/signup'
     | '/_collab/announcements'
     | '/_collab/chat'
     | '/_collab/connect'
+    | '/_collab/discover'
     | '/_collab/hub'
     | '/_collab/ideas'
     | '/_collab/messages'
@@ -451,6 +520,7 @@ export interface FileRouteTypes {
     | '/_collab/profile'
     | '/_collab/showcase'
     | '/_collab/sponsorship'
+    | '/_collab/sponsorship-hub'
     | '/_collab/studio'
     | '/ai/assets'
     | '/ai/chapter'
@@ -467,6 +537,8 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/'
+    | '/_collab/profile/$profileId'
+    | '/_collab/sponsorship-hub/$id'
     | '/api/character/generate'
     | '/api/decor/generate'
     | '/api/manga/generate-page'
@@ -482,6 +554,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CollabRoute: typeof CollabRouteWithChildren
   AiRoute: typeof AiRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
   ApiCharacterGenerateRoute: typeof ApiCharacterGenerateRoute
   ApiDecorGenerateRoute: typeof ApiDecorGenerateRoute
   ApiMangaGeneratePageRoute: typeof ApiMangaGeneratePageRoute
@@ -492,6 +566,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai': {
       id: '/ai'
       path: '/ai'
@@ -625,6 +713,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CollabStudioRouteImport
       parentRoute: typeof CollabRoute
     }
+    '/_collab/sponsorship-hub': {
+      id: '/_collab/sponsorship-hub'
+      path: '/sponsorship-hub'
+      fullPath: '/sponsorship-hub'
+      preLoaderRoute: typeof CollabSponsorshipHubRouteImport
+      parentRoute: typeof CollabRoute
+    }
     '/_collab/sponsorship': {
       id: '/_collab/sponsorship'
       path: '/sponsorship'
@@ -672,6 +767,13 @@ declare module '@tanstack/react-router' {
       path: '/hub'
       fullPath: '/hub'
       preLoaderRoute: typeof CollabHubRouteImport
+      parentRoute: typeof CollabRoute
+    }
+    '/_collab/discover': {
+      id: '/_collab/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof CollabDiscoverRouteImport
       parentRoute: typeof CollabRoute
     }
     '/_collab/connect': {
@@ -744,6 +846,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCharacterGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_collab/sponsorship-hub/$id': {
+      id: '/_collab/sponsorship-hub/$id'
+      path: '/$id'
+      fullPath: '/sponsorship-hub/$id'
+      preLoaderRoute: typeof CollabSponsorshipHubIdRouteImport
+      parentRoute: typeof CollabSponsorshipHubRoute
+    }
+    '/_collab/profile/$profileId': {
+      id: '/_collab/profile/$profileId'
+      path: '/$profileId'
+      fullPath: '/profile/$profileId'
+      preLoaderRoute: typeof CollabProfileProfileIdRouteImport
+      parentRoute: typeof CollabProfileRoute
+    }
     '/_collab/manga/$id/': {
       id: '/_collab/manga/$id/'
       path: '/manga/$id'
@@ -761,17 +877,42 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface CollabProfileRouteChildren {
+  CollabProfileProfileIdRoute: typeof CollabProfileProfileIdRoute
+}
+
+const CollabProfileRouteChildren: CollabProfileRouteChildren = {
+  CollabProfileProfileIdRoute: CollabProfileProfileIdRoute,
+}
+
+const CollabProfileRouteWithChildren = CollabProfileRoute._addFileChildren(
+  CollabProfileRouteChildren,
+)
+
+interface CollabSponsorshipHubRouteChildren {
+  CollabSponsorshipHubIdRoute: typeof CollabSponsorshipHubIdRoute
+}
+
+const CollabSponsorshipHubRouteChildren: CollabSponsorshipHubRouteChildren = {
+  CollabSponsorshipHubIdRoute: CollabSponsorshipHubIdRoute,
+}
+
+const CollabSponsorshipHubRouteWithChildren =
+  CollabSponsorshipHubRoute._addFileChildren(CollabSponsorshipHubRouteChildren)
+
 interface CollabRouteChildren {
   CollabAnnouncementsRoute: typeof CollabAnnouncementsRoute
   CollabChatRoute: typeof CollabChatRoute
   CollabConnectRoute: typeof CollabConnectRoute
+  CollabDiscoverRoute: typeof CollabDiscoverRoute
   CollabHubRoute: typeof CollabHubRoute
   CollabIdeasRoute: typeof CollabIdeasRoute
   CollabMessagesRoute: typeof CollabMessagesRoute
   CollabNotificationsRoute: typeof CollabNotificationsRoute
-  CollabProfileRoute: typeof CollabProfileRoute
+  CollabProfileRoute: typeof CollabProfileRouteWithChildren
   CollabShowcaseRoute: typeof CollabShowcaseRoute
   CollabSponsorshipRoute: typeof CollabSponsorshipRoute
+  CollabSponsorshipHubRoute: typeof CollabSponsorshipHubRouteWithChildren
   CollabStudioRoute: typeof CollabStudioRoute
   CollabMangaIndexRoute: typeof CollabMangaIndexRoute
   CollabMangaIdIndexRoute: typeof CollabMangaIdIndexRoute
@@ -782,13 +923,15 @@ const CollabRouteChildren: CollabRouteChildren = {
   CollabAnnouncementsRoute: CollabAnnouncementsRoute,
   CollabChatRoute: CollabChatRoute,
   CollabConnectRoute: CollabConnectRoute,
+  CollabDiscoverRoute: CollabDiscoverRoute,
   CollabHubRoute: CollabHubRoute,
   CollabIdeasRoute: CollabIdeasRoute,
   CollabMessagesRoute: CollabMessagesRoute,
   CollabNotificationsRoute: CollabNotificationsRoute,
-  CollabProfileRoute: CollabProfileRoute,
+  CollabProfileRoute: CollabProfileRouteWithChildren,
   CollabShowcaseRoute: CollabShowcaseRoute,
   CollabSponsorshipRoute: CollabSponsorshipRoute,
+  CollabSponsorshipHubRoute: CollabSponsorshipHubRouteWithChildren,
   CollabStudioRoute: CollabStudioRoute,
   CollabMangaIndexRoute: CollabMangaIndexRoute,
   CollabMangaIdIndexRoute: CollabMangaIdIndexRoute,
@@ -840,6 +983,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CollabRoute: CollabRouteWithChildren,
   AiRoute: AiRouteWithChildren,
+  LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
   ApiCharacterGenerateRoute: ApiCharacterGenerateRoute,
   ApiDecorGenerateRoute: ApiDecorGenerateRoute,
   ApiMangaGeneratePageRoute: ApiMangaGeneratePageRoute,

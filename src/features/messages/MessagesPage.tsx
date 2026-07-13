@@ -1,1440 +1,1075 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
+  Check,
   FileText,
-  Filter,
-  Gift,
-  Hash,
-  Home,
+  FolderKanban,
+  Handshake,
   Image as ImageIcon,
   Info,
-  Layers,
   Link2,
-  Lock,
-  MessageSquarePlus,
   MoreHorizontal,
   Paperclip,
   Plus,
   Search,
   Send,
-  Sparkles,
-  Sticker,
-  UserPlus,
+  Smile,
   Users,
   X,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-
-/* -------------------------------------------------------------------------- */
-/* Types & sample data                                                        */
-/* -------------------------------------------------------------------------- */
-
-type BaseTab = "amis" | "projets" | "parrainages";
-type ServerType = "public" | "private" | "project" | "sponsorship" | "community";
-
-type ServerEntry = {
-  id: string;
-  name: string;
-  type: ServerType;
-  initials: string;
-  unread?: number;
-};
-
-type ConversationKind = "dm" | "project" | "sponsorship" | "channel";
+type ConversationKind = "project" | "sponsorship" | "friend";
 
 type Conversation = {
   id: string;
   kind: ConversationKind;
   title: string;
-  preview: string;
-  timestamp: string;
-  unread?: number;
-  online?: boolean;
-  avatarInitials: string;
-  meta?: string;
-  context: string;
-};
-
-type Message = {
-  id: string;
-  author: string;
+  subtitle: string;
   initials: string;
-  time: string;
-  text?: string;
-  attachment?:
-    | { kind: "image"; alt: string; caption?: string }
-    | { kind: "gif"; alt: string }
-    | { kind: "file"; name: string; type: string; size: string }
-    | { kind: "link"; title: string; type: string; description: string };
-  mention?: string;
+  participants: string[];
+  linkedLabel?: string;
+  unread: number;
+  pinned?: boolean;
+  updatedAt: string;
 };
 
-const SERVERS: ServerEntry[] = [
-  { id: "srv-public", name: "Mangaka Public", type: "public", initials: "MP", unread: 3 },
-  { id: "srv-private", name: "Studio Kuro", type: "private", initials: "SK" },
-  { id: "srv-project", name: "Project — Nightfall", type: "project", initials: "NF", unread: 12 },
-  { id: "srv-sponsor", name: "Sponsorship Hub", type: "sponsorship", initials: "SH" },
-  { id: "srv-community", name: "Ink Community", type: "community", initials: "IC" },
-];
-
-const AMIS: Conversation[] = [
-  {
-    id: "dm-aiko",
-    kind: "dm",
-    title: "Aiko Tanaka",
-    preview: "Sent you the revised cover panel",
-    timestamp: "12:04",
-    unread: 2,
-    online: true,
-    avatarInitials: "AT",
-    context: "Direct message",
-  },
-  {
-    id: "dm-ren",
-    kind: "dm",
-    title: "Ren Sato",
-    preview: "Okay, let's sync tomorrow.",
-    timestamp: "Yesterday",
-    online: false,
-    avatarInitials: "RS",
-    context: "Direct message",
-  },
-  {
-    id: "dm-mika",
-    kind: "dm",
-    title: "Mika Ito",
-    preview: "Loved the linework 🖤",
-    timestamp: "Mon",
-    online: true,
-    avatarInitials: "MI",
-    context: "Direct message",
-  },
-];
-
-const PROJETS: Conversation[] = [
-  {
-    id: "prj-nightfall",
-    kind: "project",
-    title: "Nightfall Chronicles",
-    preview: "Yui: draft for chapter 4 uploaded",
-    timestamp: "10:41",
-    unread: 5,
-    avatarInitials: "NC",
-    meta: "# chapters",
-    context: "Project conversation",
-  },
-  {
-    id: "prj-hollow",
-    kind: "project",
-    title: "Hollow Bloom",
-    preview: "You: pushed panel sketches",
-    timestamp: "Tue",
-    avatarInitials: "HB",
-    meta: "# feedback",
-    context: "Project conversation",
-  },
-];
-
-const PARRAINAGES: Conversation[] = [
-  {
-    id: "spn-orion",
-    kind: "sponsorship",
-    title: "Orion Ink — Volume 2",
-    preview: "Contract draft ready for review",
-    timestamp: "09:12",
-    unread: 1,
-    avatarInitials: "OI",
-    meta: "YouTube · Long-form",
-    context: "Linked to announcement",
-  },
-  {
-    id: "spn-lumen",
-    kind: "sponsorship",
-    title: "Lumen Studio Collab",
-    preview: "Deliverables signed off",
-    timestamp: "Mon",
-    avatarInitials: "LS",
-    meta: "Instagram · Reels",
-    context: "Linked to announcement",
-  },
-];
-
-type ChannelGroup = { title: string; channels: { id: string; name: string; unread?: number }[] };
-
-const SERVER_CHANNELS: Record<ServerType, ChannelGroup[]> = {
-  public: [
-    { title: "General", channels: [{ id: "c1", name: "general", unread: 3 }, { id: "c2", name: "introductions" }, { id: "c3", name: "questions" }] },
-    { title: "Manga", channels: [{ id: "c4", name: "recommendations" }, { id: "c5", name: "chapter-talk" }, { id: "c6", name: "theories" }] },
-    { title: "Media", channels: [{ id: "c7", name: "images" }, { id: "c8", name: "gifs" }, { id: "c9", name: "references" }] },
-  ],
-  private: [
-    { title: "General", channels: [{ id: "p1", name: "studio" }, { id: "p2", name: "planning" }] },
-    { title: "Media", channels: [{ id: "p3", name: "references" }] },
-  ],
-  project: [
-    { title: "Project", channels: [{ id: "pj1", name: "project-chat", unread: 4 }, { id: "pj2", name: "chapters" }, { id: "pj3", name: "notes" }, { id: "pj4", name: "tasks" }] },
-    { title: "Creation", channels: [{ id: "pj5", name: "character-design" }, { id: "pj6", name: "illustrations" }, { id: "pj7", name: "worldbuilding" }, { id: "pj8", name: "feedback" }] },
-    { title: "Media", channels: [{ id: "pj9", name: "assets" }, { id: "pj10", name: "pages" }, { id: "pj11", name: "references" }] },
-  ],
-  sponsorship: [
-    { title: "Sponsorship", channels: [{ id: "s1", name: "discussion" }, { id: "s2", name: "proposal" }, { id: "s3", name: "deliverables" }, { id: "s4", name: "agreement-notes" }] },
-    { title: "Media", channels: [{ id: "s5", name: "files" }, { id: "s6", name: "images" }, { id: "s7", name: "references" }] },
-  ],
-  community: [
-    { title: "General", channels: [{ id: "cm1", name: "lounge" }, { id: "cm2", name: "showcase" }] },
-  ],
-};
-
-const SAMPLE_MESSAGES: Message[] = [
-  {
-    id: "m1",
-    author: "Aiko Tanaka",
-    initials: "AT",
-    time: "Today at 11:52",
-    text: "Just pushed the revised cover panel — the lighting feels a lot closer to the mood board now.",
-  },
-  {
-    id: "m2",
-    author: "Aiko Tanaka",
-    initials: "AT",
-    time: "Today at 11:53",
-    attachment: { kind: "image", alt: "Cover panel revision", caption: "cover-v3.png" },
-  },
-  {
-    id: "m3",
-    author: "You",
-    initials: "YO",
-    time: "Today at 12:01",
-    text: "This is huge. Let's mark this as the reference and move to inking.",
-    mention: "@Aiko",
-  },
-  {
-    id: "m4",
-    author: "You",
-    initials: "YO",
-    time: "Today at 12:02",
-    attachment: {
-      kind: "link",
-      title: "Nightfall Chronicles — Chapter 4",
-      type: "Project chapter",
-      description: "Draft synced with the team. Ready for panel review.",
-    },
-  },
-  {
-    id: "m5",
-    author: "Ren Sato",
-    initials: "RS",
-    time: "Today at 12:04",
-    attachment: { kind: "file", name: "chapter-04-script.pdf", type: "PDF", size: "1.4 MB" },
-  },
-];
-
-/* -------------------------------------------------------------------------- */
-/* Small helpers                                                              */
-/* -------------------------------------------------------------------------- */
-
-function typeChip(type: ServerType) {
-  const map: Record<ServerType, { label: string; className: string }> = {
-    public: { label: "Public", className: "bg-[color:var(--info)]/10 text-[color:var(--info)]" },
-    private: { label: "Private", className: "bg-white/5 text-[color:var(--text-secondary)]" },
-    project: { label: "Project", className: "bg-[color:var(--neon)]/10 text-[color:var(--neon)]" },
-    sponsorship: { label: "Sponsorship", className: "bg-[color:var(--warning)]/10 text-[color:var(--warning)]" },
-    community: { label: "Community", className: "bg-white/5 text-[color:var(--text-secondary)]" },
-  };
-  const c = map[type];
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider",
-        c.className,
-      )}
-    >
-      {c.label}
-    </span>
-  );
-}
-
-function UnreadBadge({ count }: { count: number }) {
-  return (
-    <span
-      aria-label={`${count} unread`}
-      className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-[color:var(--neon)] px-1.5 text-[11px] font-extrabold text-[#04111E]"
-    >
-      {count > 99 ? "99+" : count}
-    </span>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Server rail                                                                */
-/* -------------------------------------------------------------------------- */
-
-function ServerRail({
-  selected,
-  onSelect,
-  onCreateServer,
-}: {
-  selected: string;
-  onSelect: (id: string) => void;
-  onCreateServer: () => void;
-}) {
-  return (
-    <TooltipProvider delayDuration={150}>
-      <aside
-        aria-label="Server selection"
-        className="flex h-full w-[72px] flex-col items-center gap-2.5 overflow-y-auto border-r border-[color:var(--cm-divider)] bg-[color:var(--rail)] px-2 py-3"
-      >
-        <RailIcon
-          id="base"
-          label="Base"
-          selected={selected === "base"}
-          onClick={() => onSelect("base")}
-        >
-          <Home className="h-5 w-5" />
-        </RailIcon>
-
-        <div className="my-1 h-px w-8 bg-[color:var(--cm-divider)]" />
-
-        {SERVERS.map((s) => (
-          <RailIcon
-            key={s.id}
-            id={s.id}
-            label={s.name}
-            selected={selected === s.id}
-            onClick={() => onSelect(s.id)}
-            unread={s.unread}
-            typeIcon={s.type}
-          >
-            <span className="font-display text-[13px] font-bold">{s.initials}</span>
-          </RailIcon>
-        ))}
-
-        <div className="my-1 h-px w-8 bg-[color:var(--cm-divider)]" />
-
-        <RailIcon id="add" label="Add server" onClick={onCreateServer} accent>
-          <Plus className="h-5 w-5" />
-        </RailIcon>
-        <RailIcon id="explore" label="Explore servers" onClick={() => {}}>
-          <Sparkles className="h-5 w-5" />
-        </RailIcon>
-      </aside>
-    </TooltipProvider>
-  );
-}
-
-function RailIcon({
-  id,
-  label,
-  selected,
-  onClick,
-  children,
-  unread,
-  typeIcon,
-  accent,
-}: {
+type ChatMessage = {
   id: string;
-  label: string;
-  selected?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  unread?: number;
-  typeIcon?: ServerType;
-  accent?: boolean;
-}) {
+  conversationId: string;
+  author: "me" | "them";
+  name: string;
+  initials: string;
+  body: string;
+  createdAt: string;
+  attachment?: {
+    label: string;
+    detail: string;
+    icon: "project" | "sponsorship" | "file" | "image";
+  };
+};
+
+type StoreState = {
+  conversations: Conversation[];
+  messages: Record<string, ChatMessage[]>;
+};
+
+const STORAGE_KEY = "collabmanga.messages.home.v1";
+
+const kindMeta: Record<ConversationKind, { label: string; icon: typeof FolderKanban; description: string }> = {
+  project: {
+    label: "Projets",
+    icon: FolderKanban,
+    description: "Discussions liees aux projets manga, chapitres, pages et collaborateurs.",
+  },
+  sponsorship: {
+    label: "Parrainages",
+    icon: Handshake,
+    description: "Echanges autour des campagnes, options, validations et livrables.",
+  },
+  friend: {
+    label: "Amis",
+    icon: Users,
+    description: "Messages prives avec les createurs, lecteurs et collaborateurs.",
+  },
+};
+
+const tabs: ConversationKind[] = ["project", "sponsorship", "friend"];
+
+const nowIso = () => new Date().toISOString();
+const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+
+const seedState: StoreState = {
+  conversations: [
+    {
+      id: "project-nightfall",
+      kind: "project",
+      title: "Nightfall Chronicles",
+      subtitle: "Equipe principale",
+      initials: "NC",
+      participants: ["Vous", "Aiko Tanaka", "Ren Sato"],
+      linkedLabel: "Projet manga",
+      unread: 2,
+      pinned: true,
+      updatedAt: "2026-07-12T12:42:00.000Z",
+    },
+    {
+      id: "project-hollow",
+      kind: "project",
+      title: "Hollow Bloom",
+      subtitle: "Retours chapitre 4",
+      initials: "HB",
+      participants: ["Vous", "Mika Ito"],
+      linkedLabel: "Chapitre en relecture",
+      unread: 0,
+      updatedAt: "2026-07-11T18:20:00.000Z",
+    },
+    {
+      id: "sponsor-orion",
+      kind: "sponsorship",
+      title: "Orion Ink - Volume 2",
+      subtitle: "Demande en attente",
+      initials: "OI",
+      participants: ["Vous", "PanelPulse"],
+      linkedLabel: "Parrainage pending",
+      unread: 1,
+      pinned: true,
+      updatedAt: "2026-07-12T09:12:00.000Z",
+    },
+    {
+      id: "sponsor-recap",
+      kind: "sponsorship",
+      title: "Hollow Sun recap",
+      subtitle: "Livrables a verifier",
+      initials: "HS",
+      participants: ["Vous", "Midori Talks"],
+      linkedLabel: "Campagne YouTube",
+      unread: 0,
+      updatedAt: "2026-07-10T15:10:00.000Z",
+    },
+    {
+      id: "friend-aiko",
+      kind: "friend",
+      title: "Aiko Tanaka",
+      subtitle: "Dessinatrice",
+      initials: "AT",
+      participants: ["Vous", "Aiko Tanaka"],
+      linkedLabel: "En ligne",
+      unread: 0,
+      updatedAt: "2026-07-12T08:34:00.000Z",
+    },
+    {
+      id: "friend-ren",
+      kind: "friend",
+      title: "Ren Sato",
+      subtitle: "Scenariste",
+      initials: "RS",
+      participants: ["Vous", "Ren Sato"],
+      linkedLabel: "Disponible",
+      unread: 0,
+      updatedAt: "2026-07-09T19:30:00.000Z",
+    },
+  ],
+  messages: {
+    "project-nightfall": [
+      {
+        id: "m-1",
+        conversationId: "project-nightfall",
+        author: "them",
+        name: "Aiko Tanaka",
+        initials: "AT",
+        body: "J'ai depose les recherches visuelles du chapitre 4. Les deux premieres pages sont pretes pour validation.",
+        createdAt: "2026-07-12T12:14:00.000Z",
+        attachment: { label: "Chapitre 4", detail: "Brouillon de pages", icon: "project" },
+      },
+      {
+        id: "m-2",
+        conversationId: "project-nightfall",
+        author: "me",
+        name: "Vous",
+        initials: "VO",
+        body: "Parfait. Je relis la sequence ce soir et je te note les ajustements de rythme.",
+        createdAt: "2026-07-12T12:18:00.000Z",
+      },
+      {
+        id: "m-3",
+        conversationId: "project-nightfall",
+        author: "them",
+        name: "Ren Sato",
+        initials: "RS",
+        body: "Je vais aussi verifier si la transition vers la scene de combat reste claire.",
+        createdAt: "2026-07-12T12:42:00.000Z",
+      },
+    ],
+    "project-hollow": [
+      {
+        id: "m-4",
+        conversationId: "project-hollow",
+        author: "them",
+        name: "Mika Ito",
+        initials: "MI",
+        body: "Le twist fonctionne mieux avec la derniere version. Il reste juste une bulle trop longue en page 7.",
+        createdAt: "2026-07-11T18:20:00.000Z",
+      },
+    ],
+    "sponsor-orion": [
+      {
+        id: "m-5",
+        conversationId: "sponsor-orion",
+        author: "them",
+        name: "PanelPulse",
+        initials: "PP",
+        body: "Merci pour la demande. Je peux couvrir la sortie avec une review courte et deux shorts.",
+        createdAt: "2026-07-12T09:12:00.000Z",
+        attachment: { label: "Options proposees", detail: "Review + shorts", icon: "sponsorship" },
+      },
+    ],
+    "sponsor-recap": [
+      {
+        id: "m-6",
+        conversationId: "sponsor-recap",
+        author: "me",
+        name: "Vous",
+        initials: "VO",
+        body: "Je t'envoie les visuels valides et le resume court pour la video.",
+        createdAt: "2026-07-10T15:10:00.000Z",
+      },
+    ],
+    "friend-aiko": [
+      {
+        id: "m-7",
+        conversationId: "friend-aiko",
+        author: "them",
+        name: "Aiko Tanaka",
+        initials: "AT",
+        body: "Je suis dispo demain matin pour revoir les silhouettes des personnages secondaires.",
+        createdAt: "2026-07-12T08:34:00.000Z",
+      },
+    ],
+    "friend-ren": [
+      {
+        id: "m-8",
+        conversationId: "friend-ren",
+        author: "them",
+        name: "Ren Sato",
+        initials: "RS",
+        body: "On peut garder l'idee du duel, mais il faudrait renforcer l'enjeu emotionnel avant.",
+        createdAt: "2026-07-09T19:30:00.000Z",
+      },
+    ],
+  },
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function asString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeKind(value: unknown): ConversationKind {
+  return tabs.includes(value as ConversationKind) ? (value as ConversationKind) : "friend";
+}
+
+function normalizeAttachment(value: unknown): ChatMessage["attachment"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const rawIcon = asString(value.icon, asString(value.kind));
+  const icon: ChatMessage["attachment"]["icon"] =
+    rawIcon === "project" || rawIcon === "sponsorship" || rawIcon === "file" || rawIcon === "image"
+      ? rawIcon
+      : rawIcon === "gif" || rawIcon === "link"
+        ? "file"
+      : "file";
+  return {
+    label: asString(value.label, asString(value.name, asString(value.title, asString(value.alt, "Attachment")))),
+    detail: asString(value.detail, asString(value.caption, asString(value.description, asString(value.type)))),
+    icon,
+  };
+}
+
+function normalizeConversation(value: unknown, index: number): Conversation {
+  const item = isRecord(value) ? value : {};
+  return {
+    id: asString(item.id, `conversation-${index}`),
+    kind: normalizeKind(item.kind),
+    title: asString(item.title, "Conversation"),
+    subtitle: asString(item.subtitle, asString(item.preview, asString(item.context))),
+    initials: asString(item.initials, asString(item.avatarInitials, "CM")).slice(0, 3),
+    participants: Array.isArray(item.participants)
+      ? item.participants.filter((participant): participant is string => typeof participant === "string")
+      : [],
+    linkedLabel: asString(item.linkedLabel, asString(item.meta)) || undefined,
+    unread: Math.max(0, asNumber(item.unread, 0)),
+    pinned: Boolean(item.pinned),
+    updatedAt: asString(item.updatedAt, asString(item.timestamp, nowIso())),
+  };
+}
+
+function normalizeMessage(value: unknown, fallbackConversationId: string, index: number): ChatMessage {
+  const item = isRecord(value) ? value : {};
+  const rawAuthor = asString(item.author);
+  return {
+    id: asString(item.id, `message-${fallbackConversationId}-${index}`),
+    conversationId: asString(item.conversationId, fallbackConversationId),
+    author: rawAuthor === "me" ? "me" : "them",
+    name: asString(item.name, rawAuthor === "me" ? "Vous" : "Contact"),
+    initials: asString(item.initials, rawAuthor === "me" ? "VO" : "CO").slice(0, 3),
+    body: asString(item.body, asString(item.content, asString(item.text))),
+    createdAt: asString(item.createdAt, nowIso()),
+    attachment: normalizeAttachment(item.attachment),
+  };
+}
+
+function normalizeMessages(value: unknown): Record<string, ChatMessage[]> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).map(([conversationId, messages]) => [
+      conversationId,
+      Array.isArray(messages)
+        ? messages.map((message, index) => normalizeMessage(message, conversationId, index))
+        : [],
+    ]),
+  );
+}
+
+function normalizeStoreState(value: unknown): StoreState {
+  if (!isRecord(value)) return seedState;
+  const conversations = Array.isArray(value.conversations)
+    ? value.conversations.map((conversation, index) => normalizeConversation(conversation, index))
+    : seedState.conversations;
+  const messages = normalizeMessages(value.messages);
+  conversations.forEach((conversation) => {
+    messages[conversation.id] ??= [];
+  });
+  return { conversations, messages };
+}
+
+function loadState(): StoreState {
+  if (typeof window === "undefined") return seedState;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return seedState;
+    return normalizeStoreState(JSON.parse(raw));
+  } catch {
+    return seedState;
+  }
+}
+
+function saveState(state: StoreState) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Keep the UI usable if the browser refuses local persistence.
+  }
+}
+
+function formatTime(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const sameDay = date.toDateString() === today.toDateString();
+  if (sameDay) return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+}
+
+function lastMessage(messages: ChatMessage[] | undefined) {
+  return messages?.[messages.length - 1] ?? null;
+}
+
+export default function MessagesPage() {
+  const [store, setStore] = useState<StoreState>(() => loadState());
+  const [tab, setTab] = useState<ConversationKind>("project");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState(() => seedState.conversations.find((item) => item.kind === "project")?.id ?? "");
+  const [draft, setDraft] = useState("");
+  const [newOpen, setNewOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [pendingAttachment, setPendingAttachment] = useState<ChatMessage["attachment"] | null>(null);
+
+  useEffect(() => {
+    saveState(store);
+  }, [store]);
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return store.conversations
+      .filter((conversation) => conversation.kind === tab)
+      .filter((conversation) => {
+        if (!term) return true;
+        return [
+          conversation.title,
+          conversation.subtitle,
+          conversation.linkedLabel ?? "",
+          conversation.participants.join(" "),
+        ].join(" ").toLowerCase().includes(term);
+      })
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || +new Date(b.updatedAt) - +new Date(a.updatedAt));
+  }, [query, store.conversations, tab]);
+
+  const selected = store.conversations.find((conversation) => conversation.id === selectedId) ?? filtered[0] ?? null;
+  const messages = selected ? store.messages[selected.id] ?? [] : [];
+
+  useEffect(() => {
+    if (!selected && filtered[0]) setSelectedId(filtered[0].id);
+  }, [filtered, selected]);
+
+  useEffect(() => {
+    if (!selected || selected.unread === 0) return;
+    setStore((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === selected.id ? { ...conversation, unread: 0 } : conversation,
+      ),
+    }));
+  }, [selected?.id]);
+
+  const selectTab = (kind: ConversationKind) => {
+    setTab(kind);
+    setQuery("");
+    const first = store.conversations
+      .filter((conversation) => conversation.kind === kind)
+      .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt))[0];
+    setSelectedId(first?.id ?? "");
+  };
+
+  const sendMessage = () => {
+    if (!selected) return;
+    const text = draft.trim();
+    if (!text && !pendingAttachment) return;
+    const createdAt = nowIso();
+    const message: ChatMessage = {
+      id: uid("msg"),
+      conversationId: selected.id,
+      author: "me",
+      name: "Vous",
+      initials: "VO",
+      body: text || "Piece jointe envoyee.",
+      createdAt,
+      attachment: pendingAttachment ?? undefined,
+    };
+
+    setStore((current) => ({
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === selected.id
+          ? {
+              ...conversation,
+              updatedAt: createdAt,
+              subtitle: "Dernier message envoye",
+            }
+          : conversation,
+      ),
+      messages: {
+        ...current.messages,
+        [selected.id]: [...(current.messages[selected.id] ?? []), message],
+      },
+    }));
+    setDraft("");
+    setPendingAttachment(null);
+  };
+
+  const createConversation = (input: {
+    kind: ConversationKind;
+    title: string;
+    subtitle: string;
+    firstMessage: string;
+    linkedLabel?: string;
+  }) => {
+    const id = uid(input.kind);
+    const createdAt = nowIso();
+    const initials = input.title
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase())
+      .join("") || "CM";
+    const conversation: Conversation = {
+      id,
+      kind: input.kind,
+      title: input.title,
+      subtitle: input.subtitle,
+      initials,
+      participants: ["Vous", input.title],
+      linkedLabel: input.linkedLabel,
+      unread: 0,
+      updatedAt: createdAt,
+    };
+    const firstMessage: ChatMessage = {
+      id: uid("msg"),
+      conversationId: id,
+      author: "me",
+      name: "Vous",
+      initials: "VO",
+      body: input.firstMessage,
+      createdAt,
+    };
+
+    setStore((current) => ({
+      conversations: [conversation, ...current.conversations],
+      messages: { ...current.messages, [id]: [firstMessage] },
+    }));
+    setTab(input.kind);
+    setSelectedId(id);
+    setNewOpen(false);
+  };
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="relative">
-          {selected && (
-            <span
-              aria-hidden
-              className="absolute -left-2 top-1/2 h-8 w-[3px] -translate-y-1/2 rounded-r-full bg-[color:var(--neon)]"
-            />
-          )}
+    <main className="min-h-screen overflow-hidden bg-background px-4 py-4 text-text-primary md:px-6 md:py-6 lg:px-8 lg:py-8">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-[28px] font-bold leading-9">Messages</h1>
+          <p className="mt-1 max-w-2xl text-[13px] font-medium text-text-secondary">
+            Centralise les discussions de projets, les parrainages et les messages avec tes amis.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <IconButton label="Notifications">
+            <Bell className="h-4 w-4" />
+          </IconButton>
           <button
             type="button"
-            onClick={onClick}
-            aria-label={label}
-            aria-pressed={selected}
-            className={cn(
-              "relative flex h-12 w-12 items-center justify-center rounded-2xl border transition-all",
-              "border-[color:var(--cm-border)] bg-[color:var(--elevated)] text-[color:var(--text-secondary)]",
-              "hover:border-[color:var(--cm-border-strong)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]",
-              selected &&
-                "border-[color:var(--cm-neon-border)] bg-[color:var(--cm-active)] text-[color:var(--neon)] shadow-[0_0_18px_-4px_rgba(57,255,136,0.4)]",
-              accent && "text-[color:var(--neon)]",
-            )}
-            data-id={id}
+            onClick={() => setNewOpen(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-[14px] bg-neon px-4 text-[14px] font-bold text-[#04111E] transition-colors hover:bg-neon-hover"
           >
-            {children}
-            {typeIcon === "private" && (
-              <Lock className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full bg-[color:var(--rail)] p-0.5 text-[color:var(--text-muted)]" />
-            )}
-            {unread ? (
-              <span
-                aria-label={`${unread} unread`}
-                className="absolute -bottom-1 -right-1 inline-flex min-w-[18px] items-center justify-center rounded-full border-2 border-[color:var(--rail)] bg-[color:var(--neon)] px-1 text-[10px] font-extrabold text-[#04111E]"
-              >
-                {unread > 99 ? "99+" : unread}
-              </span>
-            ) : null}
+            <Plus className="h-4 w-4" />
+            Nouveau message
           </button>
         </div>
-      </TooltipTrigger>
-      <TooltipContent side="right" className="border-[color:var(--cm-border)] bg-[color:var(--elevated)] text-[color:var(--text-primary)]">
-        {label}
-      </TooltipContent>
-    </Tooltip>
+      </header>
+
+      <section
+        className={[
+          "grid h-[calc(100vh-154px)] min-h-[620px] grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[380px_minmax(0,1fr)]",
+          detailsOpen ? "xl:grid-cols-[380px_minmax(0,1fr)_320px]" : "xl:grid-cols-[380px_minmax(0,1fr)]",
+        ].join(" ")}
+      >
+        <aside className="flex min-h-0 flex-col rounded-[22px] border border-border-default bg-panel">
+          <div className="border-b border-border-default p-3">
+            <div className="grid grid-cols-3 gap-1 rounded-[16px] border border-border-default bg-input-bg p-1">
+              {tabs.map((item) => {
+                const active = tab === item;
+                const Icon = kindMeta[item].icon;
+                const unread = store.conversations.filter((conversation) => conversation.kind === item).reduce((sum, item) => sum + item.unread, 0);
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => selectTab(item)}
+                    className={[
+                      "relative flex h-12 items-center justify-center gap-2 rounded-[12px] text-[12px] font-bold transition",
+                      active ? "bg-neon-soft text-neon" : "text-text-secondary hover:text-text-primary",
+                    ].join(" ")}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{kindMeta[item].label}</span>
+                    {unread > 0 && (
+                      <span className="absolute right-1.5 top-1.5 min-w-4 rounded-full bg-neon px-1 text-[10px] leading-4 text-[#04111E]">
+                        {unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="relative mt-3">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={`Rechercher dans ${kindMeta[tab].label.toLowerCase()}...`}
+                className="h-11 w-full rounded-[14px] border border-border-default bg-input-bg pl-9 pr-3 text-[14px] text-text-primary outline-none transition focus:border-neon focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]"
+              />
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {filtered.length === 0 ? (
+              <EmptyList kind={tab} />
+            ) : (
+              <div className="space-y-2">
+                {filtered.map((conversation) => (
+                  <ConversationCard
+                    key={conversation.id}
+                    conversation={conversation}
+                    active={selected?.id === conversation.id}
+                    last={lastMessage(store.messages[conversation.id])}
+                    onClick={() => setSelectedId(conversation.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-[22px] border border-border-default bg-container">
+          {selected ? (
+            <>
+              <ChatHeader conversation={selected} onToggleDetails={() => setDetailsOpen((value) => !value)} />
+              <MessageStream messages={messages} />
+              <Composer
+                draft={draft}
+                onDraftChange={setDraft}
+                onSend={sendMessage}
+                attachment={pendingAttachment}
+                onAttachment={setPendingAttachment}
+                onClearAttachment={() => setPendingAttachment(null)}
+                kind={selected.kind}
+              />
+            </>
+          ) : (
+            <div className="grid h-full place-items-center p-6 text-center">
+              <div>
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-[18px] border border-border-default bg-neon-soft text-neon">
+                  <Send className="h-6 w-6" />
+                </div>
+                <h2 className="mt-4 font-display text-[22px] font-bold">Aucune conversation selectionnee</h2>
+                <p className="mt-2 max-w-md text-[14px] leading-6 text-text-secondary">
+                  Choisis une discussion dans la liste ou cree un nouveau message.
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {selected && detailsOpen && (
+          <aside className="hidden min-h-0 overflow-y-auto rounded-[22px] border border-border-default bg-panel p-4 xl:block">
+            <ConversationDetails conversation={selected} />
+          </aside>
+        )}
+      </section>
+
+      {newOpen && (
+        <NewConversationDialog
+          initialKind={tab}
+          onClose={() => setNewOpen(false)}
+          onCreate={createConversation}
+        />
+      )}
+    </main>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Conversation menu — Base                                                   */
-/* -------------------------------------------------------------------------- */
-
-const BASE_TABS: { id: BaseTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "amis", label: "Amis", icon: Users },
-  { id: "projets", label: "Projets", icon: Layers },
-  { id: "parrainages", label: "Parrainages", icon: Gift },
-];
-
-function BaseMenu({
-  tab,
-  onTabChange,
-  selectedConv,
-  onSelectConv,
-  onNewMessage,
-}: {
-  tab: BaseTab;
-  onTabChange: (t: BaseTab) => void;
-  selectedConv: string | null;
-  onSelectConv: (c: Conversation | null) => void;
-  onNewMessage: () => void;
-}) {
-  const list = tab === "amis" ? AMIS : tab === "projets" ? PROJETS : PARRAINAGES;
-  const sectionTitle =
-    tab === "amis"
-      ? "Messages privés"
-      : tab === "projets"
-        ? "Discussions projets"
-        : "Discussions parrainages";
-
-  return (
-    <>
-      <div className="border-b border-[color:var(--cm-divider)] p-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
-          <Input
-            placeholder="Search or start a conversation"
-            className="h-10 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] pl-9 text-[color:var(--text-primary)] placeholder:text-[color:var(--text-muted)]"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-0.5 px-2 pt-2">
-        {BASE_TABS.map(({ id, label, icon: Icon }) => {
-          const active = tab === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                onTabChange(id);
-                onSelectConv(null);
-              }}
-              aria-pressed={active}
-              className={cn(
-                "relative flex h-[46px] items-center gap-3 rounded-lg px-3.5 text-left transition-colors",
-                "text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]",
-                active && "bg-[color:var(--cm-active)] text-[color:var(--neon)]",
-              )}
-              style={{ font: "800 15px/22px Manrope, sans-serif" }}
-            >
-              {active && (
-                <span
-                  aria-hidden
-                  className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-[color:var(--neon)]"
-                />
-              )}
-              <Icon className={cn("h-4 w-4", active ? "text-[color:var(--neon)]" : "text-[color:var(--text-muted)]")} />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mx-3 my-2 border-t border-[color:var(--cm-divider)]" />
-
-      <div className="flex items-center justify-between px-4 pb-1 pt-1">
-        <span
-          className="text-[color:var(--text-muted)]"
-          style={{ font: "800 11px/16px Manrope, sans-serif", letterSpacing: "0.07em", textTransform: "uppercase" }}
-        >
-          {sectionTitle}
-        </span>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={onNewMessage}
-          className="h-6 w-6 text-[color:var(--text-muted)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]"
-          aria-label="New conversation"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <ScrollArea className="flex-1 px-2 pb-2">
-        <div className="flex flex-col gap-0.5">
-          {list.map((c) => (
-            <ConversationRow
-              key={c.id}
-              conv={c}
-              selected={selectedConv === c.id}
-              onClick={() => onSelectConv(c)}
-            />
-          ))}
-        </div>
-      </ScrollArea>
-    </>
-  );
-}
-
-function ConversationRow({
-  conv,
-  selected,
+function ConversationCard({
+  conversation,
+  active,
+  last,
   onClick,
 }: {
-  conv: Conversation;
-  selected: boolean;
+  conversation: Conversation;
+  active: boolean;
+  last: ChatMessage | null;
   onClick: () => void;
 }) {
+  const Icon = kindMeta[conversation.kind].icon;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        "group flex h-14 items-center gap-2.5 rounded-lg px-3 text-left transition-colors",
-        "text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]",
-        selected && "bg-[color:var(--cm-active)] text-[color:var(--neon)]",
-      )}
+      className={[
+        "grid w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-3 rounded-[18px] border p-3 text-left transition",
+        active
+          ? "border-neon-border bg-neon-soft shadow-[0_0_0_1px_rgba(57,255,136,0.20)]"
+          : "border-transparent bg-transparent hover:border-border-default hover:bg-input-bg/70",
+      ].join(" ")}
     >
-      <div className="relative">
-        <Avatar className="h-9 w-9 border border-[color:var(--cm-border)]">
-          <AvatarFallback className="bg-[color:var(--elevated)] text-[12px] font-bold text-[color:var(--text-primary)]">
-            {conv.avatarInitials}
-          </AvatarFallback>
-        </Avatar>
-        {conv.kind === "dm" && (
-          <span
-            aria-label={conv.online ? "Online" : "Offline"}
-            className={cn(
-              "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[color:var(--menu)]",
-              conv.online ? "bg-[color:var(--neon)]" : "bg-[color:var(--text-disabled)]",
-            )}
-          />
+      <div className="relative grid h-11 w-11 place-items-center rounded-[14px] border border-border-default bg-surface font-display text-[13px] font-bold text-neon">
+        {conversation.initials}
+        {conversation.kind === "friend" && (
+          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-panel bg-neon" />
         )}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "truncate text-[color:var(--text-primary)]",
-              conv.unread ? "font-extrabold" : "font-bold",
-            )}
-            style={{ font: `${conv.unread ? 800 : 700} 14px/20px Manrope, sans-serif` }}
-          >
-            {conv.title}
-          </span>
-          <span className="ml-auto shrink-0 text-[color:var(--text-muted)]" style={{ font: "600 11px/16px Manrope, sans-serif" }}>
-            {conv.timestamp}
-          </span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[14px] font-bold text-text-primary">{conversation.title}</span>
+          {conversation.pinned && <Check className="h-3.5 w-3.5 shrink-0 text-neon" />}
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="truncate text-[color:var(--text-muted)]"
-            style={{ font: "500 13px/20px Manrope, sans-serif" }}
-          >
-            {conv.meta ? `${conv.meta} · ` : ""}
-            {conv.preview}
-          </span>
-          {conv.unread ? <UnreadBadge count={conv.unread} /> : null}
+        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
+          <Icon className="h-3.5 w-3.5" />
+          {conversation.linkedLabel ?? kindMeta[conversation.kind].label}
         </div>
+        <p className="mt-1 truncate text-[13px] text-text-secondary">
+          {last?.body ?? conversation.subtitle}
+        </p>
+      </div>
+      <div className="flex flex-col items-end gap-2">
+        <span className="text-[11px] font-semibold text-text-muted">{formatTime(conversation.updatedAt)}</span>
+        {conversation.unread > 0 && (
+          <span className="grid min-h-5 min-w-5 place-items-center rounded-full bg-neon px-1.5 text-[11px] font-bold text-[#04111E]">
+            {conversation.unread}
+          </span>
+        )}
       </div>
     </button>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Conversation menu — Server                                                 */
-/* -------------------------------------------------------------------------- */
+function ChatHeader({ conversation, onToggleDetails }: { conversation: Conversation; onToggleDetails: () => void }) {
+  const Icon = kindMeta[conversation.kind].icon;
+  return (
+    <header className="flex items-center justify-between gap-3 border-b border-border-default bg-panel/70 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border border-border-default bg-input-bg font-display text-[13px] font-bold text-neon">
+          {conversation.initials}
+        </div>
+        <div className="min-w-0">
+          <h2 className="truncate font-display text-[18px] font-bold">{conversation.title}</h2>
+          <div className="mt-0.5 flex items-center gap-2 text-[12px] text-text-secondary">
+            <Icon className="h-3.5 w-3.5 text-neon" />
+            <span className="truncate">{conversation.subtitle}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <IconButton label="Details" onClick={onToggleDetails}>
+          <Info className="h-4 w-4" />
+        </IconButton>
+        <IconButton label="More">
+          <MoreHorizontal className="h-4 w-4" />
+        </IconButton>
+      </div>
+    </header>
+  );
+}
 
-function ServerMenu({
-  server,
-  selectedChannel,
-  onSelectChannel,
-  onOpenDetails,
-}: {
-  server: ServerEntry;
-  selectedChannel: string | null;
-  onSelectChannel: (id: string, name: string) => void;
-  onOpenDetails: () => void;
-}) {
-  const groups = SERVER_CHANNELS[server.type];
+function MessageStream({ messages }: { messages: ChatMessage[] }) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
 
   return (
-    <>
-      <div className="flex items-center gap-2 border-b border-[color:var(--cm-divider)] px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span
-              className="truncate text-[color:var(--text-primary)]"
-              style={{ font: "700 15px/22px Sora, sans-serif" }}
-            >
-              {server.name}
-            </span>
-          </div>
-          <div className="mt-1">{typeChip(server.type)}</div>
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+      <div className="mx-auto flex max-w-4xl flex-col gap-4">
+        {messages.map((message) => (
+          <MessageBubble key={message.id} message={message} />
+        ))}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({ message }: { message: ChatMessage }) {
+  const mine = message.author === "me";
+  return (
+    <article className={`flex gap-3 ${mine ? "justify-end" : "justify-start"}`}>
+      {!mine && (
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] border border-border-default bg-input-bg font-display text-[12px] font-bold text-neon">
+          {message.initials}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onOpenDetails}
-          className="h-8 w-8 text-[color:var(--text-muted)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]"
-          aria-label="Server options"
+      )}
+      <div className={`max-w-[min(680px,82%)] ${mine ? "items-end" : "items-start"} flex flex-col`}>
+        <div className={`mb-1 flex items-center gap-2 text-[11px] text-text-muted ${mine ? "flex-row-reverse" : ""}`}>
+          <span className="font-bold text-text-secondary">{message.name}</span>
+          <span>{formatTime(message.createdAt)}</span>
+        </div>
+        <div
+          className={[
+            "rounded-[18px] border px-4 py-3 text-[14px] leading-6",
+            mine
+              ? "border-neon-border bg-neon-soft text-text-primary"
+              : "border-border-default bg-panel text-text-secondary",
+          ].join(" ")}
         >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="border-b border-[color:var(--cm-divider)] p-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
-          <Input
-            placeholder="Search in server…"
-            className="h-10 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] pl-9 text-[color:var(--text-primary)] placeholder:text-[color:var(--text-muted)]"
-          />
+          <p>{message.body}</p>
+          {message.attachment && <AttachmentPreview attachment={message.attachment} compact />}
         </div>
       </div>
+    </article>
+  );
+}
 
-      <ScrollArea className="flex-1 px-2 py-2">
-        {groups.map((g, idx) => (
-          <div key={g.title} className={idx > 0 ? "mt-2 border-t border-[color:var(--cm-divider)] pt-2" : ""}>
-            <div
-              className="px-3 pb-1.5 pt-2 text-[color:var(--text-muted)]"
-              style={{ font: "800 11px/16px Manrope, sans-serif", letterSpacing: "0.07em", textTransform: "uppercase" }}
+function Composer({
+  draft,
+  onDraftChange,
+  onSend,
+  attachment,
+  onAttachment,
+  onClearAttachment,
+  kind,
+}: {
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onSend: () => void;
+  attachment: ChatMessage["attachment"] | null;
+  onAttachment: (attachment: ChatMessage["attachment"]) => void;
+  onClearAttachment: () => void;
+  kind: ConversationKind;
+}) {
+  const attachProject = kind === "sponsorship"
+    ? { label: "Annonce de parrainage", detail: "Lien de campagne", icon: "sponsorship" as const }
+    : { label: "Projet manga", detail: "Lien de projet", icon: "project" as const };
+
+  return (
+    <footer className="border-t border-border-default bg-panel/80 p-3">
+      <div className="mx-auto max-w-4xl">
+        {attachment && (
+          <div className="mb-2 flex items-center justify-between rounded-[14px] border border-border-default bg-input-bg px-3 py-2">
+            <AttachmentPreview attachment={attachment} compact />
+            <button
+              type="button"
+              onClick={onClearAttachment}
+              className="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface hover:text-text-primary"
+              aria-label="Retirer la piece jointe"
             >
-              {g.title}
-            </div>
-            <div className="flex flex-col gap-0.5">
-              {g.channels.map((c) => {
-                const active = selectedChannel === c.id;
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2 rounded-[18px] border border-border-default bg-input-bg p-2">
+          <div className="flex gap-1">
+            <IconButton label="Joindre un lien" onClick={() => onAttachment(attachProject)}>
+              <Link2 className="h-4 w-4" />
+            </IconButton>
+            <IconButton label="Joindre un fichier" onClick={() => onAttachment({ label: "Document", detail: "Fichier ajoute", icon: "file" })}>
+              <Paperclip className="h-4 w-4" />
+            </IconButton>
+            <IconButton label="Joindre une image" onClick={() => onAttachment({ label: "Image", detail: "Reference visuelle", icon: "image" })}>
+              <ImageIcon className="h-4 w-4" />
+            </IconButton>
+          </div>
+          <textarea
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onSend();
+              }
+            }}
+            placeholder="Ecrire un message..."
+            className="max-h-36 min-h-11 resize-none rounded-[14px] border-0 bg-transparent px-2 py-3 text-[14px] leading-5 text-text-primary outline-none placeholder:text-text-muted"
+          />
+          <div className="flex items-center gap-1">
+            <IconButton label="Emoji">
+              <Smile className="h-4 w-4" />
+            </IconButton>
+            <button
+              type="button"
+              onClick={onSend}
+              className="grid h-11 w-11 place-items-center rounded-[14px] bg-neon text-[#04111E] transition hover:bg-neon-hover"
+              aria-label="Envoyer le message"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function ConversationDetails({ conversation }: { conversation: Conversation }) {
+  const Icon = kindMeta[conversation.kind].icon;
+  return (
+    <div>
+      <div className="grid place-items-center rounded-[18px] border border-border-default bg-input-bg p-5 text-center">
+        <div className="grid h-16 w-16 place-items-center rounded-[20px] bg-neon-soft font-display text-lg font-bold text-neon">
+          {conversation.initials}
+        </div>
+        <h3 className="mt-3 font-display text-[18px] font-bold">{conversation.title}</h3>
+        <p className="mt-1 text-[13px] text-text-secondary">{conversation.subtitle}</p>
+      </div>
+      <InfoRow icon={Icon} label="Type" value={kindMeta[conversation.kind].label} />
+      <InfoRow icon={FileText} label="Lien" value={conversation.linkedLabel ?? "Aucun lien specifique"} />
+      <InfoRow icon={Users} label="Participants" value={conversation.participants.join(", ")} />
+      <div className="mt-4 rounded-[18px] border border-border-default bg-input-bg p-4">
+        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">Usage actuel</div>
+        <p className="mt-2 text-[13px] leading-6 text-text-secondary">
+          {kindMeta[conversation.kind].description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function NewConversationDialog({
+  initialKind,
+  onClose,
+  onCreate,
+}: {
+  initialKind: ConversationKind;
+  onClose: () => void;
+  onCreate: (input: { kind: ConversationKind; title: string; subtitle: string; firstMessage: string; linkedLabel?: string }) => void;
+}) {
+  const [kind, setKind] = useState<ConversationKind>(initialKind);
+  const [title, setTitle] = useState("");
+  const [linked, setLinked] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = () => {
+    setError("");
+    if (!title.trim()) {
+      setError("Ajoute un destinataire, un projet ou un parrainage.");
+      return;
+    }
+    if (!message.trim()) {
+      setError("Ecris un premier message.");
+      return;
+    }
+    const subtitle = kind === "project" ? "Conversation de projet" : kind === "sponsorship" ? "Conversation de parrainage" : "Message prive";
+    onCreate({
+      kind,
+      title: title.trim(),
+      subtitle,
+      firstMessage: message.trim(),
+      linkedLabel: linked.trim() || undefined,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
+      <div className="w-full max-w-xl rounded-[24px] border border-border-default bg-elevated p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-display text-[20px] font-bold">Nouveau message</h2>
+            <p className="mt-1 text-[13px] text-text-secondary">
+              Cree une discussion de projet, de parrainage ou avec un ami.
+            </p>
+          </div>
+          <IconButton label="Fermer" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </IconButton>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div>
+            <label className="label-small text-text-secondary">Type</label>
+            <div className="cm-popup-tabs mt-2 w-full" role="tablist" aria-label="Type de message">
+              {tabs.map((item) => {
+                const active = kind === item;
+                const Icon = kindMeta[item].icon;
                 return (
                   <button
-                    key={c.id}
+                    key={item}
                     type="button"
-                    onClick={() => onSelectChannel(c.id, c.name)}
-                    aria-pressed={active}
-                    className={cn(
-                      "flex h-9 items-center gap-2 rounded-lg px-3 text-left transition-colors",
-                      "text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]",
-                      active && "bg-[color:var(--cm-active)] text-[color:var(--neon)]",
-                    )}
+                    role="tab"
+                    aria-selected={active}
+                    data-active={active}
+                    onClick={() => setKind(item)}
+                    className="cm-popup-tab flex-1"
                   >
-                    <Hash className={cn("h-4 w-4", active ? "text-[color:var(--neon)]" : "text-[color:var(--text-muted)]")} />
-                    <span style={{ font: "700 14px/20px Manrope, sans-serif" }}>{c.name}</span>
-                    {c.unread ? <UnreadBadge count={c.unread} /> : null}
+                    <Icon className="h-4 w-4" />
+                    {kindMeta[item].label}
                   </button>
                 );
               })}
             </div>
           </div>
-        ))}
-      </ScrollArea>
-    </>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Chat area                                                                  */
-/* -------------------------------------------------------------------------- */
-
-type ActiveContext = {
-  title: string;
-  context: string;
-  icon: React.ReactNode;
-  kind: "dm" | "project" | "sponsorship" | "channel" | "overview-amis" | "overview-projets" | "overview-parrainages" | "none";
-  detailsKind?: "dm" | "project" | "sponsorship" | "server";
-  placeholder?: string;
-};
-
-function ChatArea({
-  active,
-  onOpenDetails,
-}: {
-  active: ActiveContext;
-  onOpenDetails: () => void;
-}) {
-  const [draft, setDraft] = useState("");
-  const [attachments, setAttachments] = useState<{ id: string; name: string; kind: "image" | "file" | "gif" }[]>([]);
-  const [attachOpen, setAttachOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const canSend = draft.trim().length > 0 || attachments.length > 0;
-
-  const send = () => {
-    if (!canSend) return;
-    setDraft("");
-    setAttachments([]);
-  };
-
-  return (
-    <section className="flex h-full min-w-0 flex-col overflow-hidden bg-[color:var(--chat)]">
-      {/* Top bar */}
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-[color:var(--cm-divider)] bg-[color:var(--topbar)] px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--elevated)] text-[color:var(--text-secondary)]">
-            {active.icon}
+          <TextField
+            label={kind === "friend" ? "Ami ou profil" : kind === "project" ? "Nom du projet" : "Nom du parrainage"}
+            value={title}
+            onChange={setTitle}
+            placeholder={kind === "friend" ? "Aiko Tanaka" : kind === "project" ? "Nightfall Chronicles" : "Campagne Volume 2"}
+          />
+          <TextField
+            label="Lien optionnel"
+            value={linked}
+            onChange={setLinked}
+            placeholder={kind === "project" ? "Chapitre, page, projet..." : kind === "sponsorship" ? "Annonce, option, campagne..." : "Projet commun..."}
+          />
+          <div>
+            <label className="label-small text-text-secondary">Premier message</label>
+            <textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="Ecris ton message..."
+              className="mt-2 min-h-[112px] w-full resize-none rounded-[16px] border border-border-default bg-input-bg px-3 py-3 text-[14px] text-text-primary outline-none transition focus:border-neon focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]"
+            />
           </div>
-          <div className="min-w-0">
-            <h1
-              className="truncate text-[color:var(--text-primary)]"
-              style={{ font: "700 18px/26px Sora, sans-serif" }}
-            >
-              {active.title}
-            </h1>
-            <div className="flex items-center gap-2 text-[color:var(--text-muted)]" style={{ font: "500 13px/18px Manrope, sans-serif" }}>
-              <span className="truncate">{active.context}</span>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <IconBtn label="Search"><Search className="h-4 w-4" /></IconBtn>
-          <IconBtn label="Media & files"><ImageIcon className="h-4 w-4" /></IconBtn>
-          <IconBtn label="More" onClick={onOpenDetails}><MoreHorizontal className="h-4 w-4" /></IconBtn>
-        </div>
-      </div>
-
-      {/* Thread */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        {active.kind === "none" && <EmptyState title="Select a conversation" text="Choose a friend, project discussion, sponsorship discussion, or server channel from the left menu." icon={<MessageSquarePlus className="h-6 w-6" />} />}
-        {active.kind === "overview-amis" && <FriendsOverview />}
-        {active.kind === "overview-projets" && <OverviewList items={PROJETS} title="Recent project discussions" />}
-        {active.kind === "overview-parrainages" && <OverviewList items={PARRAINAGES} title="Recent sponsorship discussions" />}
-        {(active.kind === "dm" || active.kind === "project" || active.kind === "sponsorship" || active.kind === "channel") && (
-          <MessageThread />
-        )}
-      </div>
-
-      {/* Composer */}
-      {(active.kind === "dm" || active.kind === "project" || active.kind === "sponsorship" || active.kind === "channel") && (
-        <div className="shrink-0 border-t border-[color:var(--cm-divider)] bg-[color:var(--topbar)] px-5 py-3.5">
-          {attachments.length > 0 && (
-            <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-              {attachments.map((a) => (
-                <div
-                  key={a.id}
-                  className="relative flex h-16 min-w-[140px] items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--elevated)] px-3 text-[color:var(--text-primary)]"
-                >
-                  {a.kind === "image" ? <ImageIcon className="h-4 w-4 text-[color:var(--neon)]" /> : <FileText className="h-4 w-4 text-[color:var(--info)]" />}
-                  <span className="truncate text-sm">{a.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
-                    aria-label={`Remove ${a.name}`}
-                    className="ml-1 rounded-md p-1 text-[color:var(--text-muted)] hover:bg-white/10 hover:text-[color:var(--text-primary)]"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+          {error && (
+            <div className="rounded-[14px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-3 py-2 text-[13px] font-bold text-[#FF5F7E]">
+              {error}
             </div>
           )}
-
-          <div className="flex items-end gap-2">
-            <Popover open={attachOpen} onOpenChange={setAttachOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 shrink-0 rounded-xl bg-[color:var(--input-bg)] text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]"
-                  aria-label="Attach"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                side="top"
-                align="start"
-                className="w-64 border-[color:var(--cm-border-strong)] bg-[color:var(--elevated)] p-2 text-[color:var(--text-primary)]"
-              >
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setAttachments((prev) => [
-                        ...prev,
-                        { id: `${Date.now()}`, name: f.name, kind: f.type.startsWith("image/") ? "image" : "file" },
-                      ]);
-                    }
-                    setAttachOpen(false);
-                  }}
-                />
-                {[
-                  { label: "Upload image", icon: ImageIcon, action: () => fileRef.current?.click() },
-                  { label: "Upload file", icon: FileText, action: () => fileRef.current?.click() },
-                  { label: "Add GIF", icon: Sticker, action: () => setAttachments((p) => [...p, { id: `${Date.now()}`, name: "trending.gif", kind: "gif" }]) },
-                  { label: "Attach project", icon: Layers, action: () => setAttachOpen(false) },
-                  { label: "Attach chapter", icon: FileText, action: () => setAttachOpen(false) },
-                  { label: "Attach manga page", icon: ImageIcon, action: () => setAttachOpen(false) },
-                  { label: "Attach sponsorship announcement", icon: Gift, action: () => setAttachOpen(false) },
-                  { label: "Attach illustration", icon: ImageIcon, action: () => setAttachOpen(false) },
-                  { label: "Attach proposition", icon: Link2, action: () => setAttachOpen(false) },
-                ].map(({ label, icon: Icon, action }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={action}
-                    className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]"
-                  >
-                    <Icon className="h-4 w-4 text-[color:var(--text-muted)]" />
-                    {label}
-                  </button>
-                ))}
-              </PopoverContent>
-            </Popover>
-
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder={active.placeholder ?? "Message…"}
-              aria-label="Message"
-              className="min-h-[44px] max-h-[120px] resize-none rounded-2xl border-[color:var(--cm-border)] bg-[color:var(--input-bg)] px-3.5 py-3 text-[color:var(--text-primary)] placeholder:text-[color:var(--text-muted)] focus-visible:ring-[color:var(--cm-neon-border)]"
-            />
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 shrink-0 rounded-xl bg-[color:var(--input-bg)] text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]"
-              aria-label="Add GIF"
-              onClick={() => setAttachments((p) => [...p, { id: `${Date.now()}`, name: "reaction.gif", kind: "gif" }])}
-            >
-              <Sticker className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 shrink-0 rounded-xl bg-[color:var(--input-bg)] text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]"
-              aria-label="Add image"
-              onClick={() => fileRef.current?.click()}
-            >
-              <ImageIcon className="h-4 w-4" />
-            </Button>
-
-            <Button
-              type="button"
-              onClick={send}
-              disabled={!canSend}
-              aria-label="Send message"
-              className="h-11 min-w-11 shrink-0 rounded-2xl bg-[color:var(--neon)] px-3 text-[#04111E] hover:bg-[color:var(--neon-hover)] disabled:opacity-50"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
-      )}
-    </section>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-11 rounded-[14px] border border-border-default px-4 text-[14px] font-bold text-text-secondary transition hover:text-text-primary"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            className="h-11 rounded-[14px] bg-neon px-4 text-[14px] font-bold text-[#04111E] transition hover:bg-neon-hover"
+          >
+            Creer la discussion
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function IconBtn({ children, label, onClick }: { children: React.ReactNode; label: string; onClick?: () => void }) {
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
   return (
-    <Button
+    <div>
+      <label className="label-small text-text-secondary">{label}</label>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="mt-2 h-11 w-full rounded-[16px] border border-border-default bg-input-bg px-3 text-[14px] text-text-primary outline-none transition focus:border-neon focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]"
+      />
+    </div>
+  );
+}
+
+function AttachmentPreview({ attachment, compact = false }: { attachment: NonNullable<ChatMessage["attachment"]>; compact?: boolean }) {
+  const Icon = attachment.icon === "project" ? FolderKanban : attachment.icon === "sponsorship" ? Handshake : attachment.icon === "image" ? ImageIcon : FileText;
+  return (
+    <div className={`mt-3 flex items-center gap-3 rounded-[14px] border border-border-default bg-input-bg ${compact ? "px-3 py-2" : "p-3"}`}>
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-neon-soft text-neon">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="truncate text-[13px] font-bold text-text-primary">{attachment.label}</div>
+        <div className="truncate text-[12px] text-text-muted">{attachment.detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value }: { icon: typeof FolderKanban; label: string; value: string }) {
+  return (
+    <div className="mt-3 flex items-start gap-3 rounded-[16px] border border-border-default bg-input-bg p-3">
+      <div className="grid h-9 w-9 place-items-center rounded-[12px] bg-neon-soft text-neon">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">{label}</div>
+        <div className="mt-1 text-[13px] font-semibold text-text-primary">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function IconButton({ label, children, onClick }: { label: string; children: React.ReactNode; onClick?: () => void }) {
+  return (
+    <button
       type="button"
-      variant="ghost"
-      size="icon"
       onClick={onClick}
       aria-label={label}
-      className="h-9 w-9 text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]"
+      className="grid h-10 w-10 place-items-center rounded-[13px] border border-border-default bg-input-bg text-text-secondary transition hover:border-neon-border hover:text-neon"
     >
       {children}
-    </Button>
+    </button>
   );
 }
 
-function EmptyState({ title, text, icon }: { title: string; text: string; icon: React.ReactNode }) {
+function EmptyList({ kind }: { kind: ConversationKind }) {
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[color:var(--cm-border)] bg-[color:var(--elevated)] text-[color:var(--neon)]">
-        {icon}
-      </div>
-      <h2 className="text-[color:var(--text-primary)]" style={{ font: "700 20px/28px Sora, sans-serif" }}>
-        {title}
-      </h2>
-      <p className="mt-2 text-[color:var(--text-secondary)]" style={{ font: "500 14px/22px Manrope, sans-serif" }}>
-        {text}
-      </p>
-    </div>
-  );
-}
-
-function FriendsOverview() {
-  const [filter, setFilter] = useState<"online" | "all" | "pending">("online");
-  const filters: { id: typeof filter; label: string }[] = [
-    { id: "online", label: "Online" },
-    { id: "all", label: "All" },
-    { id: "pending", label: "Pending" },
-  ];
-  return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-4 flex items-center gap-2">
-        {filters.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => setFilter(f.id)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-bold transition-colors",
-              filter === f.id
-                ? "bg-[color:var(--cm-active)] text-[color:var(--neon)]"
-                : "text-[color:var(--text-secondary)] hover:bg-white/[0.045] hover:text-[color:var(--text-primary)]",
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-        <Button
-          type="button"
-          className="ml-auto h-8 rounded-lg bg-[color:var(--neon)] px-3 text-[#04111E] hover:bg-[color:var(--neon-hover)]"
-        >
-          <UserPlus className="mr-2 h-4 w-4" /> Add Friend
-        </Button>
-      </div>
-      <div className="rounded-2xl border border-[color:var(--cm-border)] bg-[color:var(--elevated)]">
-        {AMIS.filter((c) => (filter === "online" ? c.online : filter === "all" ? true : false)).map(
-          (c, i, arr) => (
-            <div
-              key={c.id}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3",
-                i < arr.length - 1 && "border-b border-[color:var(--cm-divider)]",
-              )}
-            >
-              <Avatar className="h-9 w-9 border border-[color:var(--cm-border)]">
-                <AvatarFallback className="bg-[color:var(--container)] text-[12px] font-bold text-[color:var(--text-primary)]">
-                  {c.avatarInitials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <div className="font-bold text-[color:var(--text-primary)]">{c.title}</div>
-                <div className="text-xs text-[color:var(--text-muted)]">
-                  {c.online ? "Online" : "Offline"}
-                </div>
-              </div>
-              <div className="ml-auto flex items-center gap-1">
-                <IconBtn label="Message"><MessageSquarePlus className="h-4 w-4" /></IconBtn>
-                <IconBtn label="More"><MoreHorizontal className="h-4 w-4" /></IconBtn>
-              </div>
-            </div>
-          ),
-        )}
-        {filter === "pending" && (
-          <div className="p-6 text-center text-sm text-[color:var(--text-muted)]">No pending requests.</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function OverviewList({ items, title }: { items: Conversation[]; title: string }) {
-  return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[color:var(--text-primary)]" style={{ font: "700 16px/22px Sora, sans-serif" }}>
-          {title}
-        </h2>
-        <Button variant="ghost" className="text-[color:var(--text-secondary)] hover:bg-white/[0.045]">
-          <Filter className="mr-2 h-4 w-4" /> Filter
-        </Button>
-      </div>
-      <div className="rounded-2xl border border-[color:var(--cm-border)] bg-[color:var(--elevated)]">
-        {items.map((c, i) => (
-          <div
-            key={c.id}
-            className={cn(
-              "flex items-center gap-3 px-4 py-3",
-              i < items.length - 1 && "border-b border-[color:var(--cm-divider)]",
-            )}
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--container)] text-xs font-bold text-[color:var(--text-primary)]">
-              {c.avatarInitials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-bold text-[color:var(--text-primary)]">{c.title}</div>
-              <div className="truncate text-xs text-[color:var(--text-muted)]">
-                {c.meta ? `${c.meta} · ` : ""}
-                {c.preview}
-              </div>
-            </div>
-            <Button className="h-8 rounded-lg bg-[color:var(--cm-active)] px-3 text-[color:var(--neon)] hover:bg-[color:var(--cm-active)]/80">
-              Open
-            </Button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MessageThread() {
-  return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
-      <div className="relative my-2 flex items-center gap-3">
-        <div className="h-px flex-1 bg-[color:var(--cm-neon-border)]/50" />
-        <span className="rounded-md bg-[color:var(--cm-active)] px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[color:var(--neon)]">
-          New messages
-        </span>
-        <div className="h-px flex-1 bg-[color:var(--cm-neon-border)]/50" />
-      </div>
-
-      {SAMPLE_MESSAGES.map((m) => (
-        <MessageRow key={m.id} m={m} />
-      ))}
-    </div>
-  );
-}
-
-function MessageRow({ m }: { m: Message }) {
-  return (
-    <div className="flex gap-3">
-      <Avatar className="h-10 w-10 border border-[color:var(--cm-border)]">
-        <AvatarFallback className="bg-[color:var(--elevated)] text-[13px] font-bold text-[color:var(--text-primary)]">
-          {m.initials}
-        </AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[color:var(--text-primary)]" style={{ font: "800 14px/20px Manrope, sans-serif" }}>
-            {m.author}
-          </span>
-          <span className="text-[color:var(--text-muted)]" style={{ font: "600 11px/16px Manrope, sans-serif" }}>
-            {m.time}
-          </span>
+    <div className="grid h-full place-items-center px-4 py-10 text-center">
+      <div>
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-[16px] border border-border-default bg-input-bg text-neon">
+          <Search className="h-5 w-5" />
         </div>
-        {m.text && (
-          <p className="text-[color:var(--text-primary)]" style={{ font: "500 14px/22px Manrope, sans-serif" }}>
-            {m.mention && (
-              <span className="mr-1 rounded-md bg-[color:var(--cm-active)] px-1 py-[1px] text-[color:var(--neon)]">
-                {m.mention}
-              </span>
-            )}
-            {m.text}
-          </p>
-        )}
-        {m.attachment?.kind === "image" && (
-          <div className="mt-2 max-w-[360px] overflow-hidden rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--elevated)]">
-            <div className="flex h-56 items-center justify-center bg-gradient-to-br from-[#0E193A] via-[#101B3F] to-[#050B1D] text-[color:var(--text-muted)]">
-              <ImageIcon className="h-8 w-8" />
-            </div>
-            {m.attachment.caption && (
-              <div className="px-3 py-2 text-xs text-[color:var(--text-muted)]">{m.attachment.caption}</div>
-            )}
-          </div>
-        )}
-        {m.attachment?.kind === "file" && (
-          <div className="mt-2 flex max-w-[360px] items-center gap-3 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--elevated)] px-3 py-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color:var(--container)] text-[color:var(--info)]">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-[color:var(--text-primary)]">{m.attachment.name}</div>
-              <div className="text-xs text-[color:var(--text-muted)]">
-                {m.attachment.type} · {m.attachment.size}
-              </div>
-            </div>
-          </div>
-        )}
-        {m.attachment?.kind === "link" && (
-          <div className="mt-2 max-w-[420px] rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--elevated)] p-3">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="rounded-md bg-[color:var(--cm-active)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[color:var(--neon)]">
-                {m.attachment.type}
-              </span>
-            </div>
-            <div className="font-bold text-[color:var(--text-primary)]">{m.attachment.title}</div>
-            <p className="mt-1 text-sm text-[color:var(--text-muted)]">{m.attachment.description}</p>
-          </div>
-        )}
+        <h3 className="mt-3 font-display text-[16px] font-bold">Aucune discussion</h3>
+        <p className="mt-1 text-[13px] leading-5 text-text-secondary">
+          Aucun resultat dans {kindMeta[kind].label.toLowerCase()}.
+        </p>
       </div>
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Modals                                                                     */
-/* -------------------------------------------------------------------------- */
-
-function DetailsModal({
-  open,
-  onOpenChange,
-  kind,
-  title,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  kind: "dm" | "project" | "sponsorship" | "server";
-  title: string;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-[color:var(--cm-border-strong)] bg-[color:var(--elevated)] text-[color:var(--text-primary)]">
-        <DialogHeader>
-          <DialogTitle style={{ font: "700 18px/26px Sora, sans-serif" }}>{title}</DialogTitle>
-          <DialogDescription className="text-[color:var(--text-secondary)]">
-            {kind === "dm" && "Direct message details"}
-            {kind === "project" && "Project conversation details"}
-            {kind === "sponsorship" && "Sponsorship conversation details"}
-            {kind === "server" && "Server details"}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 text-sm text-[color:var(--text-secondary)]">
-          {kind === "dm" && (
-            <>
-              <Row label="Role" value="Dessinateur" />
-              <Row label="Languages" value="French · English · JP" />
-              <Row label="Availability" value="Weekdays · GMT+1" />
-            </>
-          )}
-          {kind === "project" && (
-            <>
-              <Row label="Status" value="In production" />
-              <Row label="Team" value="6 members" />
-              <Row label="Chapters" value="4 published · 2 in draft" />
-            </>
-          )}
-          {kind === "sponsorship" && (
-            <>
-              <Row label="Budget" value="€ 2,400" />
-              <Row label="Platform" value="YouTube · Instagram" />
-              <Row label="Type" value="Long-form video" />
-              <Row label="Duration" value="6 weeks" />
-              <Row label="Status" value="Awaiting signature" />
-            </>
-          )}
-          {kind === "server" && (
-            <>
-              <Row label="Type" value="Project server" />
-              <Row label="Members" value="12" />
-              <Row label="Channels" value="11 text channels" />
-            </>
-          )}
-        </div>
-
-        <DialogFooter className="flex-wrap gap-2 sm:justify-between">
-          <DialogClose asChild>
-            <Button variant="ghost" className="text-[color:var(--text-secondary)]">
-              Close
-            </Button>
-          </DialogClose>
-          <div className="flex gap-2">
-            {kind === "dm" && (
-              <>
-                <Button variant="ghost" className="text-[color:var(--text-secondary)]">Block</Button>
-                <Button className="bg-[color:var(--neon)] text-[#04111E] hover:bg-[color:var(--neon-hover)]">View Profile</Button>
-              </>
-            )}
-            {kind === "project" && (
-              <>
-                <Button variant="ghost" className="text-[color:var(--text-secondary)]">View Notes</Button>
-                <Button className="bg-[color:var(--neon)] text-[#04111E] hover:bg-[color:var(--neon-hover)]">Open Project</Button>
-              </>
-            )}
-            {kind === "sponsorship" && (
-              <>
-                <Button variant="ghost" className="text-[color:var(--text-secondary)]">View Proposal</Button>
-                <Button className="bg-[color:var(--neon)] text-[#04111E] hover:bg-[color:var(--neon-hover)]">View Announcement</Button>
-              </>
-            )}
-            {kind === "server" && (
-              <>
-                <Button variant="ghost" className="text-[color:var(--text-secondary)]">Leave Server</Button>
-                <Button className="bg-[color:var(--neon)] text-[#04111E] hover:bg-[color:var(--neon-hover)]">Invite Members</Button>
-              </>
-            )}
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--container)] px-3 py-2">
-      <span className="text-[color:var(--text-muted)]">{label}</span>
-      <span className="font-semibold text-[color:var(--text-primary)]">{value}</span>
-    </div>
-  );
-}
-
-function CreateServerModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-[color:var(--cm-border-strong)] bg-[color:var(--elevated)] text-[color:var(--text-primary)]">
-        <DialogHeader>
-          <DialogTitle style={{ font: "700 18px/26px Sora, sans-serif" }}>Create a server</DialogTitle>
-          <DialogDescription className="text-[color:var(--text-secondary)]">
-            Organize conversations around a community, project, or sponsorship.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label className="text-[color:var(--text-secondary)]">Server name</Label>
-            <Input placeholder="Ex. Nightfall Studio" className="mt-1 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] text-[color:var(--text-primary)]" />
-          </div>
-          <div>
-            <Label className="text-[color:var(--text-secondary)]">Server type</Label>
-            <Select defaultValue="public">
-              <SelectTrigger className="mt-1 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] text-[color:var(--text-primary)]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="public">Public</SelectItem>
-                <SelectItem value="private">Private</SelectItem>
-                <SelectItem value="project">Project server</SelectItem>
-                <SelectItem value="sponsorship">Sponsorship server</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-[color:var(--text-secondary)]">Description</Label>
-            <Textarea placeholder="Short description" className="mt-1 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] text-[color:var(--text-primary)]" />
-          </div>
-          <div>
-            <Label className="text-[color:var(--text-secondary)]">Default text channels</Label>
-            <Input defaultValue="general, planning, media" className="mt-1 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] text-[color:var(--text-primary)]" />
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="ghost" className="text-[color:var(--text-secondary)]">Cancel</Button>
-          </DialogClose>
-          <Button className="bg-[color:var(--neon)] text-[#04111E] hover:bg-[color:var(--neon-hover)]">
-            Create server
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function NewMessageModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-[color:var(--cm-border-strong)] bg-[color:var(--elevated)] text-[color:var(--text-primary)]">
-        <DialogHeader>
-          <DialogTitle style={{ font: "700 18px/26px Sora, sans-serif" }}>New message</DialogTitle>
-          <DialogDescription className="text-[color:var(--text-secondary)]">
-            Start a conversation with a collaborator.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label className="text-[color:var(--text-secondary)]">To</Label>
-            <Input placeholder="Search user" className="mt-1 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] text-[color:var(--text-primary)]" />
-          </div>
-          <div>
-            <Label className="text-[color:var(--text-secondary)]">Linked project (optional)</Label>
-            <Input placeholder="Search project" className="mt-1 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] text-[color:var(--text-primary)]" />
-          </div>
-          <div>
-            <Label className="text-[color:var(--text-secondary)]">First message</Label>
-            <Textarea placeholder="Say hi…" className="mt-1 border-[color:var(--cm-border)] bg-[color:var(--input-bg)] text-[color:var(--text-primary)]" />
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="ghost" className="text-[color:var(--text-secondary)]">Cancel</Button>
-          </DialogClose>
-          <Button className="bg-[color:var(--neon)] text-[#04111E] hover:bg-[color:var(--neon-hover)]">
-            Start Conversation
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Page                                                                       */
-/* -------------------------------------------------------------------------- */
-
-export default function MessagesPage() {
-  const [selectedServer, setSelectedServer] = useState<string>("base");
-  const [baseTab, setBaseTab] = useState<BaseTab>("amis");
-  const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
-  const [selectedChannel, setSelectedChannel] = useState<{ id: string; name: string } | null>(null);
-
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [createServerOpen, setCreateServerOpen] = useState(false);
-  const [newMessageOpen, setNewMessageOpen] = useState(false);
-
-  const server = SERVERS.find((s) => s.id === selectedServer);
-  const isBase = selectedServer === "base";
-
-  const active: ActiveContext = useMemo(() => {
-    if (!isBase && server) {
-      if (selectedChannel) {
-        return {
-          title: `# ${selectedChannel.name}`,
-          context: server.name,
-          icon: <Hash className="h-4 w-4" />,
-          kind: "channel",
-          detailsKind: "server",
-          placeholder: `Message #${selectedChannel.name}…`,
-        };
-      }
-      return {
-        title: server.name,
-        context: "Select a channel to start chatting",
-        icon: <Hash className="h-4 w-4" />,
-        kind: "none",
-      };
-    }
-
-    if (selectedConv) {
-      const detailsKind = selectedConv.kind === "dm" ? "dm" : selectedConv.kind === "project" ? "project" : "sponsorship";
-      return {
-        title: selectedConv.kind === "dm" ? selectedConv.title : selectedConv.title,
-        context: selectedConv.context,
-        icon:
-          selectedConv.kind === "dm" ? <Users className="h-4 w-4" /> :
-          selectedConv.kind === "project" ? <Layers className="h-4 w-4" /> :
-          <Gift className="h-4 w-4" />,
-        kind: selectedConv.kind,
-        detailsKind,
-        placeholder:
-          selectedConv.kind === "dm"
-            ? `Message ${selectedConv.title}…`
-            : selectedConv.kind === "project"
-              ? "Message project conversation…"
-              : "Message sponsorship discussion…",
-      };
-    }
-
-    if (baseTab === "amis") {
-      return { title: "Amis", context: "Private conversations", icon: <Users className="h-4 w-4" />, kind: "overview-amis" };
-    }
-    if (baseTab === "projets") {
-      return { title: "Projets", context: "Project discussions", icon: <Layers className="h-4 w-4" />, kind: "overview-projets" };
-    }
-    return { title: "Parrainages", context: "Sponsorship discussions", icon: <Gift className="h-4 w-4" />, kind: "overview-parrainages" };
-  }, [isBase, server, selectedChannel, selectedConv, baseTab]);
-
-  return (
-    <main
-      className="h-screen w-full min-w-0 overflow-hidden bg-[color:var(--page)] text-[color:var(--text-primary)]"
-      style={{ fontFamily: "Manrope, ui-sans-serif, system-ui, sans-serif" }}
-    >
-      <div
-        className="grid h-full w-full overflow-hidden bg-[color:var(--container)]"
-        style={{ gridTemplateColumns: "72px 320px 1fr" }}
-      >
-        <ServerRail
-          selected={selectedServer}
-          onSelect={(id) => {
-            setSelectedServer(id);
-            setSelectedConv(null);
-            setSelectedChannel(null);
-          }}
-          onCreateServer={() => setCreateServerOpen(true)}
-        />
-
-        <div className="flex h-full flex-col overflow-hidden border-r border-[color:var(--cm-divider)] bg-[color:var(--menu)]">
-          {isBase ? (
-            <BaseMenu
-              tab={baseTab}
-              onTabChange={setBaseTab}
-              selectedConv={selectedConv?.id ?? null}
-              onSelectConv={setSelectedConv}
-              onNewMessage={() => setNewMessageOpen(true)}
-            />
-          ) : server ? (
-            <ServerMenu
-              server={server}
-              selectedChannel={selectedChannel?.id ?? null}
-              onSelectChannel={(id, name) => setSelectedChannel({ id, name })}
-              onOpenDetails={() => setDetailsOpen(true)}
-            />
-          ) : null}
-        </div>
-
-        <ChatArea active={active} onOpenDetails={() => setDetailsOpen(true)} />
-      </div>
-
-      <DetailsModal
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
-        kind={active.detailsKind ?? "server"}
-        title={active.title}
-      />
-      <CreateServerModal open={createServerOpen} onOpenChange={setCreateServerOpen} />
-      <NewMessageModal open={newMessageOpen} onOpenChange={setNewMessageOpen} />
-
-      {/* Hidden decorative icons to satisfy tree-shake for consistent bundle */}
-      <div className="hidden">
-        <Bell />
-        <Info />
-      </div>
-    </main>
   );
 }

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { SlidersHorizontal, X } from "lucide-react";
+import { Send, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ANNOUNCEMENTS, type Announcement, type AnnouncementMode } from "@/lib/sponsorship-data";
 import { btnSecondary, inputCls, metaLabel } from "@/components/sponsorship/ui";
 import { AnnouncementCard, CardSkeleton } from "@/components/sponsorship/AnnouncementCard";
 import { DetailDialog } from "@/components/sponsorship/DetailDialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { sendSponsorshipContact } from "@/lib/user-workflows";
 import {
   AdvancedFiltersDialog,
   emptyFilters,
@@ -23,6 +25,8 @@ function SponsorshipPage() {
   const [filters, setFilters] = useState<SponsorFilters>(emptyFilters);
 
   const [detail, setDetail] = useState<Announcement | null>(null);
+  const [contactFor, setContactFor] = useState<Announcement | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -257,6 +261,7 @@ function SponsorshipPage() {
                   saved={!!saved[a.id]}
                   onToggleSave={() => setSaved((s) => ({ ...s, [a.id]: !s[a.id] }))}
                   onViewDetails={() => setDetail(a)}
+                  onContact={() => setContactFor(a)}
                 />
               ))}
             </div>
@@ -264,7 +269,23 @@ function SponsorshipPage() {
         </div>
       </div>
 
-      <DetailDialog announcement={detail} onOpenChange={(o) => !o && setDetail(null)} />
+      <DetailDialog
+        announcement={detail}
+        onOpenChange={(o) => !o && setDetail(null)}
+        onContact={(announcement) => {
+          setDetail(null);
+          setContactFor(announcement);
+        }}
+      />
+      <SponsorshipContactDialog
+        announcement={contactFor}
+        onOpenChange={(open) => !open && setContactFor(null)}
+        onDone={(message) => {
+          setContactFor(null);
+          setFeedback(message);
+          window.setTimeout(() => setFeedback(null), 3200);
+        }}
+      />
       <AdvancedFiltersDialog
         open={advancedOpen}
         onOpenChange={setAdvancedOpen}
@@ -273,6 +294,137 @@ function SponsorshipPage() {
         setFilters={setFilters}
         onReset={resetFilters}
       />
+      {feedback && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-sm rounded-[18px] border border-[rgba(57,255,136,0.45)] bg-cm-panel px-4 py-3 font-manrope text-[13px] font-bold text-cm-text shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+          {feedback}
+        </div>
+      )}
     </div>
+  );
+}
+
+function SponsorshipContactDialog({
+  announcement,
+  onOpenChange,
+  onDone,
+}: {
+  announcement: Announcement | null;
+  onOpenChange: (open: boolean) => void;
+  onDone: (message: string) => void;
+}) {
+  const [linked, setLinked] = useState("");
+  const [budget, setBudget] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const a = announcement;
+  const isProjectAnnouncement = a?.mode === "project";
+
+  useEffect(() => {
+    if (!a) return;
+    setLinked(a.mode === "project" ? "Ma chaîne / mon profil créateur" : "Mon projet manga");
+    setBudget(a.price ?? "");
+    setMessage("");
+    setError("");
+  }, [a]);
+
+  const submit = () => {
+    if (!a) return;
+    if (!linked.trim()) {
+      setError(isProjectAnnouncement ? "Indique ton profil ou ta chaîne." : "Indique le projet à promouvoir.");
+      return;
+    }
+    if (!message.trim()) {
+      setError("Ajoute un court message pour contextualiser la demande.");
+      return;
+    }
+    sendSponsorshipContact({
+      announcementTitle: a.title,
+      announcementMode: a.mode,
+      owner: a.ownerName,
+      linked,
+      budgetOrPrice: budget || a.price || "A définir",
+      sponsorshipType: a.sponsorshipType,
+      message,
+    });
+    onDone(
+      isProjectAnnouncement
+        ? "Candidature envoyée au projet. Le workflow de parrainage est créé."
+        : "Message envoyé au créateur de contenu. Le workflow de parrainage est créé.",
+    );
+  };
+
+  return (
+    <Dialog open={!!a} onOpenChange={onOpenChange}>
+      <DialogContent className="border-[rgba(133,154,206,0.28)] bg-cm-panel text-cm-text sm:max-w-[620px]">
+        {a && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="font-sora text-[22px] font-bold">
+                {isProjectAnnouncement ? "Répondre à ce projet" : "Contacter ce créateur"}
+              </DialogTitle>
+              <DialogDescription className="font-manrope text-cm-text2">
+                {a.title} · {a.ownerName}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div>
+                <label className={cn(metaLabel, "mb-2 block")}>
+                  {isProjectAnnouncement ? "Profil créateur / chaîne" : "Projet manga à promouvoir"}
+                </label>
+                <input
+                  className={inputCls}
+                  value={linked}
+                  onChange={(event) => setLinked(event.target.value)}
+                  placeholder={isProjectAnnouncement ? "Ex : ma chaîne YouTube manga" : "Ex : Neon Ronin"}
+                />
+              </div>
+
+              <div>
+                <label className={cn(metaLabel, "mb-2 block")}>
+                  {isProjectAnnouncement ? "Tarif proposé" : "Budget ou créneau souhaité"}
+                </label>
+                <input
+                  className={inputCls}
+                  value={budget}
+                  onChange={(event) => setBudget(event.target.value)}
+                  placeholder={isProjectAnnouncement ? "Ex : 250 €" : "Ex : budget à définir"}
+                />
+              </div>
+
+              <div>
+                <label className={cn(metaLabel, "mb-2 block")}>Message</label>
+                <textarea
+                  className="min-h-[128px] w-full resize-y rounded-[14px] border border-[rgba(133,154,206,0.20)] bg-cm-input px-[14px] py-3 font-manrope text-[14px] font-medium text-cm-text outline-none placeholder:text-cm-muted focus:border-cm-neon focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]"
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  placeholder={
+                    isProjectAnnouncement
+                      ? "Présente ton audience, ton format de contenu et ce que tu proposes pour ce projet."
+                      : "Présente ton manga, ton objectif de promotion et la période souhaitée."
+                  }
+                />
+              </div>
+
+              {error && (
+                <p className="rounded-[12px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-3 py-2 font-manrope text-[13px] font-semibold text-[#ff5f7e]">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 sm:space-x-0">
+              <button type="button" className={btnSecondary} onClick={() => onOpenChange(false)}>
+                Annuler
+              </button>
+              <button type="button" className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-cm-neon px-[18px] font-manrope text-[14px] font-bold text-[#04111e] transition-colors hover:bg-cm-neon-hover" onClick={submit}>
+                <Send className="h-4 w-4" />
+                Envoyer
+              </button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -317,6 +317,51 @@
   color: var(--neon);
 }
 
+@layer components {
+  .cm-popup-tabs {
+    display: inline-flex;
+    max-width: 100%;
+    gap: 4px;
+    overflow-x: auto;
+    border: 1px solid var(--border-default);
+    border-radius: 18px;
+    background: var(--bg-panel);
+    padding: 4px;
+    scrollbar-width: none;
+  }
+
+  .cm-popup-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cm-popup-tab {
+    display: inline-flex;
+    min-height: 44px;
+    shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 14px;
+    padding: 0 18px;
+    color: var(--text-secondary);
+    font: 800 14px/20px var(--font-sans);
+    white-space: nowrap;
+    transition:
+      background 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease;
+  }
+
+  .cm-popup-tab:hover {
+    color: var(--text-primary);
+  }
+
+  .cm-popup-tab[data-active="true"] {
+    background: var(--neon-soft);
+    color: var(--neon);
+  }
+}
+
 @utility cma-label {
   font: 600 12px/18px var(--font-sans);
   color: var(--text-secondary);
@@ -500,4 +545,34 @@
   --color-neon-soft: var(--neon-soft);
   --color-neon-fill: var(--neon);
   --color-reader-bg: #050b1d;
+}
+
+/* ---- Discover / user-search page (collabmanga-discover) tokens ---- */
+:root {
+  --cm-bg: #050b1d;
+  --cm-section: #0b1430;
+  --cm-card: #101b3f;
+  --cm-input: #0e193a;
+  --cm-panel: #08112b;
+  --cm-text: #f7faff;
+  --cm-text-2: #b8c4e5;
+  --cm-text-3: #7f8cb3;
+  --cm-accent: #39ff88;
+  --cm-accent-hover: #25e575;
+  --cm-accent-soft: rgba(57, 255, 136, 0.12);
+  --cm-border-hover: rgba(57, 255, 136, 0.35);
+  --cm-star: #ffb84d;
+
+  /* sponsorship-hub */
+  --deep: #08112b;
+}
+
+@utility btn-neon {
+  background: var(--neon);
+  color: var(--primary-foreground);
+  transition: background 150ms ease, transform 150ms ease, box-shadow 200ms ease;
+  box-shadow: 0 6px 20px -8px rgba(57, 255, 136, 0.55);
+  &:hover { background: var(--neon-hover); }
+  &:active { transform: translateY(1px); }
+  &:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
 }

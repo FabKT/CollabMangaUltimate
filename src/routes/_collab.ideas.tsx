@@ -364,14 +364,14 @@ function PropositionsPage() {
               onChange={(e)=>setSearch(e.target.value)}
               placeholder="Search character designs, powers, equipment, worlds, motivations…"
               className="!pl-11"
-              aria-label="Search propositions"
+              aria-label="Search ideas"
             />
           </div>
 
           {/* Type de proposition — on-page filter */}
           <div className="mt-4">
             <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] mb-2">
-              Type de proposition
+              Type d'idée
             </div>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((c) => (
@@ -400,7 +400,7 @@ function PropositionsPage() {
           <section className="space-y-6">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h2 className="font-display text-[20px] leading-[28px] font-bold text-[var(--text)]">Creative propositions</h2>
+                <h2 className="font-display text-[20px] leading-[28px] font-bold text-[var(--text)]">Idées créatives</h2>
                 <p className="text-[13px] leading-[20px] text-[var(--text-muted)] mt-1">
                   Showing {results.length} of {seedProps.length} ideas
                 </p>
@@ -493,7 +493,6 @@ function PropCard({ p, saved, onSave, onOpen, onUse }: {
     >
       <div className="flex items-center gap-2 flex-wrap">
         <Chip tone="neon">{p.category}</Chip>
-        <Chip tone={statusTone(p.status)}>{p.status}</Chip>
         <div className="ml-auto flex items-center gap-1">
           <IconBtn label={saved?"Saved":"Save"} onClick={onSave} className={saved?"!text-[var(--neon)] !border-[var(--neon-border)]":""}>
             <Bookmark className={`h-4 w-4 ${saved?"fill-current":""}`}/>
@@ -506,10 +505,8 @@ function PropCard({ p, saved, onSave, onOpen, onUse }: {
 
       <div>
         <h3 className="text-[15px] leading-[22px] font-extrabold text-[var(--text)]">{p.title}</h3>
-        <p className="mt-2 text-[14px] leading-[22px] text-[var(--text-secondary)] line-clamp-2">{p.summary}</p>
+        <p className="mt-2 text-[14px] leading-[22px] text-[var(--text-secondary)] line-clamp-3">{p.description}</p>
       </div>
-
-      <CardMeta p={p}/>
 
       <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
         <div className="min-w-0">
@@ -555,14 +552,9 @@ function ListRow({ p, saved, onSave, onOpen }: { p:Prop; saved:boolean; onSave:(
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap mb-1">
           <Chip tone="neon">{p.category}</Chip>
-          <Chip tone={statusTone(p.status)}>{p.status}</Chip>
         </div>
         <h3 className="text-[15px] leading-[22px] font-extrabold truncate">{p.title}</h3>
-        <p className="text-[13px] leading-[20px] text-[var(--text-secondary)] truncate">{p.summary}</p>
-      </div>
-      <div className="hidden md:block text-right">
-        <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">{p.tone}</div>
-        <div className="text-[13px] font-semibold text-[var(--text-secondary)]">{p.complexity}</div>
+        <p className="text-[13px] leading-[20px] text-[var(--text-secondary)] truncate">{p.description}</p>
       </div>
       <div className="flex items-center gap-1">
         <IconBtn label={saved?"Saved":"Save"} onClick={onSave} className={saved?"!text-[var(--neon)] !border-[var(--neon-border)]":""}>
@@ -600,7 +592,7 @@ function MoodItem({ p, onOpen }: { p:Prop; onOpen:()=>void }) {
       </div>
       <div className="p-3">
         <div className="text-[13px] font-extrabold text-[var(--text)] line-clamp-1">{p.title}</div>
-        <div className="text-[12px] text-[var(--text-muted)] line-clamp-2 mt-1">{p.summary}</div>
+        <div className="text-[12px] text-[var(--text-muted)] line-clamp-2 mt-1">{p.description}</div>
       </div>
     </button>
   );
@@ -614,7 +606,7 @@ function EmptyState({ onReset, onCreate }: { onReset:()=>void; onCreate:()=>void
       <div className="mx-auto h-14 w-14 rounded-[14px] bg-[var(--card)] border border-[var(--border)] grid place-items-center text-[var(--text-muted)] mb-4">
         <Search className="h-6 w-6"/>
       </div>
-      <h3 className="font-display text-[20px] leading-[28px] font-bold">No propositions found</h3>
+      <h3 className="font-display text-[20px] leading-[28px] font-bold">Aucune idée trouvée</h3>
       <p className="mt-2 text-[14px] leading-[22px] text-[var(--text-secondary)]">
         Try adjusting your filters.
       </p>
@@ -760,163 +752,71 @@ function categoryDetail(p: Prop): { title:string; items:[string,string][] } {
 function PropModal({ p, saved, onSave, onClose, onUse }: {
   p: Prop; saved: boolean; onSave: ()=>void; onClose: ()=>void; onUse: ()=>void;
 }) {
-  const detail = categoryDetail(p);
+  const [tab, setTab] = useState<"details" | "comments">("details");
+  const authorName = p.author === "You" ? "Votre profil" : p.author.replace(/—/g, "").trim() || "Créateur CollabManga";
+  const authorBio =
+    p.author === "You"
+      ? "Profil personnel connecté à cette idée."
+      : "Créateur CollabManga partageant des idées, références et concepts exploitables dans des projets manga.";
+
   return (
-    <ModalShell onClose={onClose} label={`${p.category}: ${p.title}`}>
-      {/* Header */}
-      <div className="p-6 border-b border-[var(--border)]">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <Chip tone="neon">{p.category}</Chip>
-              <Chip tone={statusTone(p.status)}>{p.status}</Chip>
-              <Chip>{p.visibility}</Chip>
-            </div>
-            <h2 className="font-display text-[24px] sm:text-[28px] leading-[32px] sm:leading-[36px] font-bold">{p.title}</h2>
-            <div className="mt-2 flex items-center gap-3 text-[13px] text-[var(--text-secondary)]">
-              <span className="inline-flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5"/>{p.author}
-              </span>
-              {p.project && (
-                <span className="inline-flex items-center gap-1.5 text-[var(--text-muted)]">
-                  <Link2 className="h-3.5 w-3.5"/>{p.project}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <SecondaryBtn onClick={onSave} className="!h-10 !px-4">
-              <Bookmark className={`h-4 w-4 ${saved?"fill-[var(--neon)] text-[var(--neon)]":""}`}/>
-              {saved?"Saved":"Save"}
-            </SecondaryBtn>
-            <IconBtn label="Close" onClick={onClose}><X className="h-4 w-4"/></IconBtn>
-          </div>
+    <ModalShell onClose={onClose} maxWidth="1120px" label={`${p.category}: ${p.title}`}>
+      <div className="p-6 border-b border-[var(--border)] flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Chip tone="neon">{p.category}</Chip>
+          <h2 className="mt-3 font-display text-[24px] sm:text-[28px] leading-[32px] sm:leading-[36px] font-bold">
+            {p.title}
+          </h2>
         </div>
+        <IconBtn label="Close" onClick={onClose}><X className="h-4 w-4"/></IconBtn>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6">
-          {/* Left */}
-          <div className="lg:col-span-8 space-y-6">
-            {p.hasImage ? <Thumb hue={p.hue} category={p.category} tall/> : <NoImagePlaceholder/>}
+      <div className="p-6 grid grid-cols-1 lg:grid-cols-[3fr_4fr] gap-6">
+        <div className="space-y-5">
+          {p.hasImage ? <Thumb hue={p.hue} category={p.category} tall/> : <NoImagePlaceholder/>}
 
-            <div>
-              <h3 className="font-display text-[20px] leading-[28px] font-bold mb-2">Overview</h3>
-              <p className="text-[14px] leading-[22px] text-[var(--text-secondary)]">{p.summary}</p>
-            </div>
-
-            <DetailBlock title={detail.title} items={detail.items}/>
-
-            <div className="rounded-[16px] bg-[var(--details)] border border-[var(--border)] p-5">
-              <h4 className="font-display text-[18px] leading-[26px] font-bold mb-2">Inspiration notes</h4>
-              <p className="text-[14px] leading-[22px] text-[var(--text-secondary)]">
-                Placeholder notes from the creator. Explains the tone, references, and the intended
-                emotional beat this proposition should reach when used in a scene.
-              </p>
-            </div>
-
-            {/* Discussion */}
-            <div className="rounded-[16px] bg-[var(--card)] border border-[var(--border)] p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-display text-[18px] leading-[26px] font-bold">Discussion</h4>
-                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                  {p.comments} comments
-                </span>
-              </div>
-              <div className="space-y-3 mb-4">
-                {[1,2].map(i => (
-                  <div key={i} className="flex gap-3">
-                    <div className="h-9 w-9 rounded-full bg-[var(--input-bg)] border border-[var(--border)] shrink-0"/>
-                    <div className="flex-1 rounded-[12px] bg-[var(--input-bg)] border border-[var(--border)] p-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-bold">— placeholder user —</span>
-                        <span className="text-[11px] text-[var(--text-muted)]">placeholder time</span>
-                      </div>
-                      <p className="text-[13px] leading-[20px] text-[var(--text-secondary)] mt-1">
-                        Placeholder comment about how this idea could be developed further in a chapter arc.
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <GhostBtn className="!h-7 !px-2 !text-[12px]">Reply</GhostBtn>
-                        <GhostBtn className="!h-7 !px-2 !text-[12px]"><Flag className="h-3 w-3"/>Report</GhostBtn>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-start gap-2">
-                <TextInput placeholder="Add a comment…"/>
-                <PrimaryBtn className="shrink-0"><Send className="h-4 w-4"/>Send</PrimaryBtn>
-              </div>
-            </div>
-          </div>
-
-          {/* Right */}
-          <aside className="lg:col-span-4 space-y-4">
-            <div className="rounded-[16px] bg-[var(--card)] border border-[var(--border)] p-5">
-              <h4 className="font-display text-[18px] leading-[26px] font-bold mb-4">Key information</h4>
-              <dl className="grid grid-cols-2 gap-3">
-                {[
-                  ["Category", p.category],
-                  ["Genre", p.genres.join(", ")],
-                  ["Tone", p.tone],
-                  ["Usage", p.usage],
-                  ["Complexity", p.complexity],
-                  ["Visibility", p.visibility],
-                  ["Status", p.status],
-                  ["Project", p.project ?? "—"],
-                  ["Created", "— placeholder —"],
-                  ["Updated", "— placeholder —"],
-                ].map(([k,v]) => (
-                  <div key={k} className="col-span-1">
-                    <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">{k}</dt>
-                    <dd className="mt-1 text-[13px] font-semibold text-[var(--text-secondary)] break-words">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-
-            <div className="rounded-[16px] bg-[var(--card)] border border-[var(--border)] p-5">
-              <h4 className="font-display text-[18px] leading-[26px] font-bold mb-3">Signals</h4>
-              <div className="flex flex-wrap gap-2">
-                <Chip tone="neon"><Bookmark className="h-3 w-3"/>{p.saved} saved</Chip>
-                <Chip tone="info"><MessageCircle className="h-3 w-3"/>{p.comments} discussing</Chip>
-                <Chip>{p.format}</Chip>
-              </div>
-            </div>
-          </aside>
         </div>
-      </div>
 
-      {/* Sticky footer */}
-      <div className="p-4 sm:p-5 border-t border-[var(--border)] bg-[var(--panel)] rounded-b-[24px]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <GhostBtn><Copy className="h-4 w-4"/>Copy link</GhostBtn>
-            <GhostBtn><Share2 className="h-4 w-4"/>Share</GhostBtn>
+        <aside className="rounded-[16px] bg-[var(--card)] border border-[var(--border)] p-5 h-fit">
+          <div className="cm-popup-tabs mb-5 w-full" role="tablist" aria-label="Détails de l'idée">
+            <button type="button" role="tab" aria-selected={tab === "details"} data-active={tab === "details"} onClick={() => setTab("details")} className="cm-popup-tab flex-1">Détails</button>
+            <button type="button" role="tab" aria-selected={tab === "comments"} data-active={tab === "comments"} onClick={() => setTab("comments")} className="cm-popup-tab flex-1">Commentaires</button>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {p.mine ? (
-              <>
-                <SecondaryBtn><Edit3 className="h-4 w-4"/>Edit Proposition</SecondaryBtn>
-                <SecondaryBtn>Manage Visibility</SecondaryBtn>
-                <DangerBtn><Archive className="h-4 w-4"/>Archive</DangerBtn>
-              </>
-            ) : (
-              <>
-                <SecondaryBtn onClick={onSave}>
-                  <Bookmark className={`h-4 w-4 ${saved?"fill-[var(--neon)] text-[var(--neon)]":""}`}/>
-                  {saved?"Saved":"Save Proposition"}
-                </SecondaryBtn>
-                <SecondaryBtn>Contact Creator</SecondaryBtn>
-                <PrimaryBtn onClick={onUse}><FolderPlus className="h-4 w-4"/>Use in Project</PrimaryBtn>
-              </>
-            )}
+          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            Créé par
           </div>
-        </div>
+          <div className="mt-4 flex items-center gap-3">
+            <div className="h-12 w-12 rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display font-bold text-[var(--neon)]">
+              {authorName.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="font-display text-[16px] font-bold truncate">{authorName}</div>
+              {p.project && <div className="mt-0.5 text-[12px] text-[var(--text-muted)] truncate">{p.project}</div>}
+            </div>
+          </div>
+          <p className="mt-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">{authorBio}</p>
+          {tab === "details" ? (
+            <div className="mt-5 border-t border-[var(--border)] pt-5">
+              <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Type d'idée</div>
+              <div className="mt-2"><Chip tone="info">{p.category}</Chip></div>
+              <h3 className="mt-5 font-display text-[22px] leading-[30px] font-bold">{p.title}</h3>
+              <p className="mt-3 text-[14px] leading-[22px] text-[var(--text-secondary)]">{p.description}</p>
+            </div>
+          ) : (
+            <div className="mt-5 space-y-3">
+              {["Cette idée peut fonctionner comme point de départ.", "Le concept est clair, il faudrait préciser l'enjeu principal."].map((comment, index) => (
+                <div key={comment} className="rounded-[14px] bg-[var(--input-bg)] border border-[var(--border)] p-4">
+                  <div className="text-[12px] font-bold">Utilisateur {index + 1}</div>
+                  <p className="mt-1 text-[13px] leading-[20px] text-[var(--text-secondary)]">{comment}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </aside>
       </div>
     </ModalShell>
   );
+
 }
 
 /* ---------------- Use in project modal ---------------- */
@@ -971,6 +871,71 @@ function StepDot({ n, active, done, label }: { n:number; active:boolean; done:bo
 }
 
 function CreateModal({ onClose }: { onClose: ()=>void }) {
+  const [ideaImages, setIdeaImages] = useState<string[]>([]);
+  const ideaInputId = "idea-create-images";
+  const activeIdeaImage = ideaImages[0];
+  const addIdeaFiles = (files: FileList | null) => {
+    if (!files?.length) return;
+    const urls = Array.from(files)
+      .filter((file) => file.type.startsWith("image/"))
+      .map((file) => URL.createObjectURL(file));
+    setIdeaImages((current) => [...current, ...urls]);
+  };
+
+  return (
+    <ModalShell onClose={onClose} maxWidth="980px" label="Créer une idée">
+      <div className="p-6 border-b border-[var(--border)] flex items-center justify-between gap-4">
+        <div>
+          <h3 className="font-display text-[24px] leading-[32px] font-bold">Créer une idée</h3>
+          <p className="text-[13px] text-[var(--text-muted)] mt-1">Ajoute une idée avec ses images, son type, son titre et sa description.</p>
+        </div>
+        <IconBtn label="Close" onClick={onClose}><X className="h-4 w-4"/></IconBtn>
+      </div>
+      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto scrollbar-thin">
+        <div className="min-w-0">
+          <label htmlFor={ideaInputId} className="grid aspect-[4/3] cursor-pointer place-items-center overflow-hidden rounded-[18px] border border-dashed border-[var(--border-strong)] bg-[var(--input-bg)]">
+            {activeIdeaImage ? (
+              <img src={activeIdeaImage} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <ImageIcon className="h-8 w-8 text-[var(--neon)]" />
+                <div className="text-[14px] font-bold">Importer des images</div>
+                <div className="text-[12px] text-[var(--text-muted)]">PNG, JPG, WEBP</div>
+              </div>
+            )}
+          </label>
+          <input id={ideaInputId} type="file" accept="image/*" multiple className="hidden" onChange={(event) => addIdeaFiles(event.currentTarget.files)} />
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {ideaImages.length > 0 ? ideaImages.map((src, index) => (
+              <button key={`${src}-${index}`} type="button" onClick={() => setIdeaImages((current) => [current[index], ...current.filter((_, i) => i !== index)])} className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--card)]">
+                <img src={src} alt="" className="h-full w-full object-cover" />
+              </button>
+            )) : (
+              <div className="h-16 w-full rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 text-[12px] font-semibold text-[var(--text-muted)] flex items-center">
+                Les images importées apparaîtront ici.
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="space-y-4">
+          <Field label="Type d'idée">
+            <Select value={CATEGORIES[1]} onChange={() => {}} options={CATEGORIES.filter((c) => c !== "All")} />
+          </Field>
+          <Field label="Titre">
+            <TextInput placeholder="Titre de l'idée" />
+          </Field>
+          <Field label="Description">
+            <TextArea placeholder="Décris l'idée, son intérêt et son usage possible." />
+          </Field>
+        </div>
+      </div>
+      <div className="p-5 border-t border-[var(--border)] flex items-center justify-end gap-2">
+        <SecondaryBtn onClick={onClose}>Annuler</SecondaryBtn>
+        <PrimaryBtn onClick={onClose}><Check className="h-4 w-4"/>Ajouter l'idée</PrimaryBtn>
+      </div>
+    </ModalShell>
+  );
+
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("Character design");

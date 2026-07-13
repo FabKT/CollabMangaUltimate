@@ -11,7 +11,7 @@ import hero1 from "@/assets/haven/hero-1.jpg";
 import hero2 from "@/assets/haven/hero-2.jpg";
 import hero3 from "@/assets/haven/hero-3.jpg";
 
-export type Demographic = "Shonen" | "Seinen" | "Shojo" | "Josei" | "Kodomo" | "Other";
+export type Demographic = "Shonen" | "Seinen" | "Shojo" | "Josei";
 
 export type CatalogManga = {
   id: string;
@@ -69,29 +69,17 @@ export const DEMOGRAPHICS: Demographic[] = [
   "Seinen",
   "Shojo",
   "Josei",
-  "Kodomo",
-  "Other",
 ];
 
 export const SORTS = ["Best rated", "Most chapters", "Title A-Z", "Recently updated"] as const;
 export type SortOption = (typeof SORTS)[number];
-
-function deriveDemographic(genres: string[]): Demographic {
-  const g = genres.map((x) => x.toLowerCase());
-  if (g.some((x) => ["romance", "slice of life", "drama", "music"].includes(x))) return "Shojo";
-  if (g.some((x) => ["horror", "mystery", "psychological", "thriller", "seinen"].includes(x)))
-    return "Seinen";
-  if (g.some((x) => ["action", "adventure", "fantasy", "sport", "sci-fi", "supernatural"].includes(x)))
-    return "Shonen";
-  return "Other";
-}
 
 export const CATALOG_MANGA: CatalogManga[] = MANGA_LIST.map((manga, index) => ({
   id: manga.id,
   title: manga.title,
   creator: manga.creator,
   cover: HAVEN_COVERS[index % HAVEN_COVERS.length],
-  demographic: deriveDemographic(manga.genres),
+  demographic: manga.demographic,
   genres: manga.genres,
   rating: manga.rating,
   chapters: manga.chapterCount,

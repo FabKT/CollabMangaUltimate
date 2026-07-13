@@ -1,9 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { Bookmark, Play, Plus, Star, ArrowLeft, Search } from "lucide-react";
-import { getManga, MANGA_LIST, type Chapter, type Manga } from "@/lib/manga-data";
+import { Bookmark, Play, Star, ArrowLeft, Search } from "lucide-react";
+import { getManga, type Chapter, type Manga } from "@/lib/manga-data";
 import { ChapterRow } from "@/components/manga/ChapterRow";
-import { MangaCard } from "@/components/manga/MangaCard";
 
 export const Route = createFileRoute("/_collab/manga/$id/")({
   loader: ({ params }) => {
@@ -47,7 +46,6 @@ function MangaDetail() {
   const { manga } = Route.useLoaderData() as { manga: Manga };
   const [chapterQuery, setChapterQuery] = useState("");
   const [chapterSort, setChapterSort] = useState("Newest first");
-  const [followed, setFollowed] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const chapters = manga.chapters.filter((c: Chapter) =>
@@ -59,9 +57,6 @@ function MangaDetail() {
   const sorted = chapterSort === "Newest first" ? [...chapters].reverse() : chapters;
 
   const firstChapterId = manga.chapters[0]?.id ?? "ch-1";
-  const latestChapterId = manga.chapters[manga.chapters.length - 1]?.id ?? firstChapterId;
-
-  const related = MANGA_LIST.filter((m) => m.id !== manga.id).slice(0, 4);
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
@@ -91,36 +86,40 @@ function MangaDetail() {
               <span className={manga.status === "Completed" ? "chip-info" : "chip-active"}>{manga.status}</span>
               <span className="chip-neutral">{manga.language}</span>
             </div>
-            <h1 className="mt-3 font-display text-[28px] font-extrabold leading-[36px] md:text-[34px] md:leading-[42px]">
-              {manga.title}
-            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <h1 className="font-display text-[28px] font-extrabold leading-[36px] md:text-[34px] md:leading-[42px]">
+                {manga.title}
+              </h1>
+              <span
+                className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-extrabold"
+                style={{
+                  background: "rgba(255, 184, 77, 0.12)",
+                  border: "1px solid rgba(255, 184, 77, 0.28)",
+                  color: "var(--color-text-primary)",
+                }}
+                aria-label={`Rating ${manga.rating.toFixed(1)} out of 5`}
+              >
+                <Star className="h-4 w-4" style={{ color: "var(--color-star)" }} fill="currentColor" />
+                {manga.rating.toFixed(1)}
+              </span>
+            </div>
             <p className="mt-1 text-[14px] text-[color:var(--color-text-muted)]">
               by <span className="text-[color:var(--color-text-secondary)]">{manga.creator}</span>
             </p>
 
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {manga.genres.map((g: string) => (
-                <span key={g} className="chip-neutral">{g}</span>
-              ))}
-            </div>
+            <p className="mt-4 max-w-3xl text-[15px] leading-[25px] text-[color:var(--color-text-secondary)]">
+              {manga.synopsis}
+            </p>
 
-            <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-              {[
-                { l: "Status", v: manga.status },
-                { l: "Chapters", v: `${manga.chapterCount}` },
-                { l: "Rating", v: "Average rating" },
-                { l: "Language", v: manga.language },
-                { l: "Updated", v: manga.updated },
-                { l: "Creator", v: manga.creator },
-              ].map((m) => (
-                <div key={m.l}>
-                  <dt className="meta-label">{m.l}</dt>
-                  <dd className="mt-1 text-[14px] font-bold text-[color:var(--color-text-primary)] line-clamp-1">
-                    {m.v}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            <div className="mt-5">
+              <p className="meta-label mb-2">Genre & sous-genres</p>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="chip-active">{manga.demographic}</span>
+                {manga.subgenres.map((g: string) => (
+                  <span key={g} className="chip-neutral">{g}</span>
+                ))}
+              </div>
+            </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
               <Link
@@ -130,22 +129,6 @@ function MangaDetail() {
               >
                 <Play className="h-4 w-4" fill="currentColor" /> Start Reading
               </Link>
-              <Link
-                to="/manga/$id/chapter/$chapterId"
-                params={{ id: manga.id, chapterId: latestChapterId }}
-                className="btn-secondary"
-              >
-                Continue Reading
-              </Link>
-              <button
-                type="button"
-                onClick={() => setFollowed((v) => !v)}
-                className="btn-secondary"
-                aria-pressed={followed}
-                style={followed ? { color: "var(--color-neon)", borderColor: "var(--color-neon-border)" } : undefined}
-              >
-                <Plus className="h-4 w-4" /> {followed ? "Following" : "Follow"}
-              </button>
               <button
                 type="button"
                 onClick={() => setSaved((v) => !v)}
@@ -157,13 +140,6 @@ function MangaDetail() {
               </button>
             </div>
           </div>
-        </div>
-
-        <div className="mt-8">
-          <h2 className="font-display text-[20px] font-bold leading-7">Synopsis</h2>
-          <p className="mt-3 max-w-3xl text-[15px] leading-[25px] text-[color:var(--color-text-secondary)]">
-            {manga.synopsis}
-          </p>
         </div>
       </section>
 
@@ -226,7 +202,7 @@ function MangaDetail() {
             </div>
             <div>
               <p className="font-display text-[16px] font-extrabold">{manga.creator}</p>
-              <p className="text-[13px] text-[color:var(--color-text-muted)]">Creator name placeholder</p>
+              <p className="text-[13px] text-[color:var(--color-text-muted)]">Original creator</p>
             </div>
           </div>
           <p className="mt-4 text-[14px] leading-[22px] text-[color:var(--color-text-secondary)]">
@@ -238,8 +214,10 @@ function MangaDetail() {
           <div className="mt-4 flex items-center gap-4">
             <Star className="h-10 w-10" style={{ color: "var(--color-star)" }} fill="currentColor" />
             <div>
-              <p className="font-display text-[22px] font-extrabold">No rating yet</p>
-              <p className="text-[13px] text-[color:var(--color-text-muted)]">Based on reader ratings</p>
+              <p className="font-display text-[22px] font-extrabold">{manga.rating.toFixed(1)} / 5</p>
+              <p className="text-[13px] text-[color:var(--color-text-muted)]">
+                Based on {manga.ratingCount.toLocaleString("en-US")} reader ratings
+              </p>
             </div>
           </div>
           <p className="mt-4 text-[14px] leading-[22px] text-[color:var(--color-text-secondary)]">
@@ -248,14 +226,6 @@ function MangaDetail() {
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-5 font-display text-[20px] font-bold leading-7">Related manga</h2>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {related.map((m) => (
-            <MangaCard key={m.id} manga={m} />
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

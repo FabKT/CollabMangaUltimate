@@ -6,7 +6,14 @@ import {
   X,
   ChevronDown,
   ImageIcon,
+  Search,
+  SlidersHorizontal,
 } from "lucide-react";
+import {
+  respondToProposal,
+  sendAnnouncementSponsoring,
+  sendCollaborationInvitation,
+} from "@/lib/user-workflows";
 
 export const Route = createFileRoute("/_collab/announcements")({
   head: () => ({ meta: [{ title: "Annonces — CollabManga" }] }),
@@ -714,21 +721,10 @@ const ROLES = [
 ];
 
 const GENRES = [
-  "Action",
-  "Adventure",
-  "Fantasy",
-  "Romance",
-  "Comedy",
-  "Drama",
-  "Horror",
-  "Mystery",
-  "Sports",
-  "Slice of life",
-  "Sci-fi",
-  "Supernatural",
-  "Psychological",
-  "Historical",
-  "Other",
+  "Shonen",
+  "Seinen",
+  "Shojo",
+  "Josei",
 ];
 
 const MODES = [
@@ -753,7 +749,7 @@ const AVAILABILITIES = [
 
 // ---------- Filter options ----------
 
-const LANGUES = ["FR", "ENG"];
+const LANGUES = ["FR", "ENG", "ES", "IT", "JP"];
 const STATUTS = ["Dessinateur", "Scénariste"];
 const TYPES_ANNONCE = ["Adhésions", "Invitation"];
 const GENRES_FR = ["Shonen", "Shojo", "Seinen", "Josei"];
@@ -761,8 +757,16 @@ const SOUS_GENRES = ["Action", "Aventure", "Comédie", "Drame", "Fantastique", "
 
 // ---------- Page ----------
 
+const ROLE_FILTERS = ROLES;
+const SEARCH_TARGETS = [
+  { value: "", label: "Tout" },
+  { value: "project", label: "Rechercher un projet" },
+  { value: "collaborator", label: "Rechercher un collaborateur" },
+] as const;
+
 type Filters = {
   search: string;
+  target: "" | "project" | "collaborator";
   langue: string[];
   statut: string;
   typeAnnonce: string;
@@ -772,6 +776,7 @@ type Filters = {
 
 const EMPTY_FILTERS: Filters = {
   search: "",
+  target: "",
   langue: [],
   statut: "",
   typeAnnonce: "",
@@ -819,13 +824,52 @@ function itemLanguageMatches(item: Announcement, selected: string[]) {
   return selected.some((lang) => {
     if (lang === "FR") return language.includes("french") || language.includes("fr");
     if (lang === "ENG") return language.includes("english") || language.includes("eng");
-    return true;
+    if (lang === "ES") return language.includes("spanish") || language.includes("es");
+    if (lang === "IT") return language.includes("italian") || language.includes("it");
+    if (lang === "JP") return language.includes("japanese") || language.includes("jp");
+    return false;
   });
+}
+
+function itemGenre(item: Announcement) {
+  return DEMOGRAPHIC_BY_ID[item.id] ?? "Shonen";
+}
+
+function itemSubGenres(item: Announcement) {
+  return SUB_GENRES_BY_ID[item.id] ?? [];
+}
+
+function itemSearchText(item: Announcement) {
+  const base =
+    item.kind === "project"
+      ? [
+          item.title,
+          item.projectName,
+          item.description,
+          item.roleNeeded,
+          itemGenre(item),
+          ...itemSubGenres(item),
+          item.status,
+          item.language,
+        ]
+      : [
+          item.title,
+          item.userName,
+          item.description,
+          item.roleOffered,
+          item.mainSkill,
+          itemGenre(item),
+          ...itemSubGenres(item),
+          item.language,
+        ];
+  return base.join(" ").toLowerCase();
 }
 
 function AnnouncementsPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [detailsFor, setDetailsFor] = useState<Announcement | null>(null);
+  const [workflowModal, setWorkflowModal] = useState<null | { kind: "apply" | "invite" | "sponsor"; item: Announcement }>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -834,14 +878,16 @@ function AnnouncementsPage() {
   }, []);
 
   const data: Announcement[] =
-    filters.typeAnnonce === TYPES_ANNONCE[0]
+    filters.target === "project"
       ? USERS
-      : filters.typeAnnonce === TYPES_ANNONCE[1]
+      : filters.target === "collaborator"
         ? PROJECTS
         : [...PROJECTS, ...USERS];
 
   const filtered = useMemo(() => {
     return data.filter((a) => {
+      const query = filters.search.trim().toLowerCase();
+      if (query && !itemSearchText(a).includes(query)) return false;
       if (!itemLanguageMatches(a, filters.langue)) return false;
       if (filters.statut && itemRole(a) !== filters.statut) return false;
       if (filters.genres.length > 0 && !filters.genres.includes(DEMOGRAPHIC_BY_ID[a.id])) return false;
@@ -907,7 +953,7 @@ function AnnouncementsPage() {
           </div>
         </header>
 
-        <AnnouncementFilters filters={filters} setFilters={setFilters} />
+        <AnnouncementFilterBar filters={filters} setFilters={setFilters} />
 
         {/* Grid */}
         {loading ? (
@@ -926,9 +972,15 @@ function AnnouncementsPage() {
                   key={a.id}
                   item={a}
                   onView={() => setDetailsFor(a)}
+                  onApply={() => setWorkflowModal({ kind: "apply", item: a })}
                 />
               ) : (
-                <UserCard key={a.id} item={a} onView={() => setDetailsFor(a)} />
+                <UserCard
+                  key={a.id}
+                  item={a}
+                  onView={() => setDetailsFor(a)}
+                  onInvite={() => setWorkflowModal({ kind: "invite", item: a })}
+                />
               ),
             )}
           </CardGrid>
@@ -936,8 +988,27 @@ function AnnouncementsPage() {
       </div>
 
       {detailsFor && (
-        <DetailsModal item={detailsFor} onClose={() => setDetailsFor(null)} />
+        <DetailsModal
+          item={detailsFor}
+          onClose={() => setDetailsFor(null)}
+          onApply={() => setWorkflowModal({ kind: "apply", item: detailsFor })}
+          onInvite={() => setWorkflowModal({ kind: "invite", item: detailsFor })}
+          onSponsor={() => setWorkflowModal({ kind: "sponsor", item: detailsFor })}
+        />
       )}
+      {workflowModal && (
+        <AnnouncementWorkflowModal
+          action={workflowModal.kind}
+          item={workflowModal.item}
+          onClose={() => setWorkflowModal(null)}
+          onDone={(message) => {
+            setWorkflowModal(null);
+            setFeedback(message);
+            window.setTimeout(() => setFeedback(null), 3200);
+          }}
+        />
+      )}
+      {feedback && <WorkflowToast>{feedback}</WorkflowToast>}
 
       <style>{`
         .cm-page { padding: 32px; }
@@ -946,6 +1017,88 @@ function AnnouncementsPage() {
         body { background: ${C.bg}; }
       `}</style>
     </div>
+  );
+}
+
+function AnnouncementFilterBar({
+  filters,
+  setFilters,
+}: {
+  filters: Filters;
+  setFilters: React.Dispatch<React.SetStateAction<Filters>>;
+}) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedCount =
+    filters.langue.length + filters.genres.length + filters.sousGenres.length;
+  const setRole = (role: string) => setFilters((f) => ({ ...f, statut: role }));
+  const setTarget = (target: Filters["target"]) => setFilters((f) => ({ ...f, target }));
+
+  return (
+    <section
+      style={{
+        background: C.panel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 22,
+        padding: 20,
+        marginBottom: 24,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
+        <TextInput
+          value={filters.search}
+          onChange={(value) => setFilters((f) => ({ ...f, search: value }))}
+          placeholder="Rechercher une annonce, un projet, un role..."
+          ariaLabel="Rechercher une annonce"
+          leftIcon={<Search size={16} />}
+        />
+        <SecondaryButton
+          onClick={() => setAdvancedOpen(true)}
+          leftIcon={<SlidersHorizontal size={16} />}
+        >
+          Filtres avancés{advancedCount > 0 ? ` (${advancedCount})` : ""}
+        </SecondaryButton>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <FilterChipRow label="Je veux">
+          {SEARCH_TARGETS.map((target) => (
+            <FilterChip
+              key={target.value || "all"}
+              label={target.label}
+              active={filters.target === target.value}
+              onClick={() => setTarget(target.value)}
+            />
+          ))}
+        </FilterChipRow>
+      </div>
+
+      <FilterChipRow label="Rôle">
+        <FilterChip label="Tout" active={filters.statut === ""} onClick={() => setRole("")} />
+        {ROLE_FILTERS.map((role) => (
+          <FilterChip
+            key={role}
+            label={role}
+            active={filters.statut === role}
+            onClick={() => setRole(role)}
+          />
+        ))}
+      </FilterChipRow>
+
+      {advancedOpen && (
+        <AnnouncementAdvancedFiltersModal
+          filters={filters}
+          setFilters={setFilters}
+          onClose={() => setAdvancedOpen(false)}
+        />
+      )}
+    </section>
   );
 }
 
@@ -1321,65 +1474,117 @@ function CardFooter({
   );
 }
 
+function RoleSpotlight({
+  label,
+  role,
+}: {
+  label: string;
+  role: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        marginTop: 16,
+        padding: "12px 14px",
+        borderRadius: 14,
+        background: C.neonSoftFill,
+        border: `1px solid ${C.neonSoftBorder}`,
+      }}
+    >
+      <span
+        style={{
+          ...manrope,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: C.neon,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          ...sora,
+          fontSize: 15,
+          fontWeight: 800,
+          color: C.text,
+          textAlign: "right",
+        }}
+      >
+        {role}
+      </span>
+    </div>
+  );
+}
+
 function ProjectCard({
   item,
   onView,
+  onApply,
 }: {
   item: ProjectAnnouncement;
   onView: () => void;
+  onApply: () => void;
 }) {
   const [saved, setSaved] = useState(false);
   return (
     <CardShell>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", flex: 1 }}>
         <CoverArt title={item.projectName} />
+        <RoleSpotlight label="Rôle recherché" role={item.roleNeeded} />
         <CardHeader
           title={item.title}
           subtitle={item.projectName}
-          category="Project looking for partners"
+          category="Recherche collaborateur"
           description={item.description}
           saved={saved}
           onSave={() => setSaved((s) => !s)}
         />
         <MetaGrid
           items={[
-            { label: "Role needed", value: item.roleNeeded },
-            { label: "Genre", value: item.genre },
-            { label: "Mode", value: item.mode },
+            { label: "Genre", value: itemGenre(item) },
+            { label: "Sous-genres", value: itemSubGenres(item).join(", ") },
             { label: "Status", value: item.status },
+            { label: "Language", value: item.language },
           ]}
         />
         <div style={{ flex: 1 }} />
-        <CardFooter primaryLabel="Apply" onPrimary={() => {}} onView={onView} />
+        <CardFooter primaryLabel="Apply" onPrimary={onApply} onView={onView} />
       </div>
     </CardShell>
   );
 }
 
-function UserCard({ item, onView }: { item: UserAnnouncement; onView: () => void }) {
+function UserCard({ item, onView, onInvite }: { item: UserAnnouncement; onView: () => void; onInvite: () => void }) {
   const [saved, setSaved] = useState(false);
   return (
     <CardShell>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", flex: 1 }}>
         <AvatarBlock initials={item.avatarInitials} title={item.userName} />
+        <RoleSpotlight label="Rôle proposé" role={item.roleOffered} />
         <CardHeader
           title={item.title}
           subtitle={item.userName}
-          category="User looking for project"
+          category="Recherche projet"
           description={item.description}
           saved={saved}
           onSave={() => setSaved((s) => !s)}
         />
         <MetaGrid
           items={[
-            { label: "Role offered", value: item.roleOffered },
+            { label: "Genre", value: itemGenre(item) },
+            { label: "Sous-genres", value: itemSubGenres(item).join(", ") },
             { label: "Main skill", value: item.mainSkill },
-            { label: "Preferred genre", value: item.genre },
             { label: "Availability", value: item.availability },
           ]}
         />
         <div style={{ flex: 1 }} />
-        <CardFooter primaryLabel="Contact" onPrimary={() => {}} onView={onView} />
+        <CardFooter primaryLabel="Invite" onPrimary={onInvite} onView={onView} />
       </div>
     </CardShell>
   );
@@ -1631,23 +1836,192 @@ function ModalHeader({
 function DetailsModal({
   item,
   onClose,
+  onApply,
+  onInvite,
+  onSponsor,
 }: {
   item: Announcement;
   onClose: () => void;
+  onApply: () => void;
+  onInvite: () => void;
+  onSponsor: () => void;
 }) {
+  const [tab, setTab] = useState<"comments" | "interested">("comments");
+  const isProject = item.kind === "project";
+  const entityTitle = isProject ? item.projectName : item.userName;
+  const entitySubtitle = isProject ? "Projet recruteur" : itemRole(item);
+  const entityDescription = isProject ? item.fullDescription : item.fullDescription;
+  const comments = isProject
+    ? [
+        "Brief clair, le role recherche est facile a comprendre.",
+        "Le projet semble deja assez structure pour rejoindre l'equipe.",
+      ]
+    : [
+        "Profil interessant, les competences annoncees correspondent bien au besoin.",
+        "Portfolio a demander avant invitation, mais la disponibilite est claire.",
+      ];
+  const interested = isProject
+    ? ["Aiko M.", "Kenji O.", "Sam T."]
+    : ["Kurogane Requiem", "Emberline", "Orbital Silence"];
+
   return (
-    <ModalShell onClose={onClose} maxWidth={1000} label="Announcement details">
+    <ModalShell onClose={onClose} maxWidth={1280} label="Announcement details">
       <ModalHeader
         title={item.title}
-        subtitle={item.kind === "project" ? item.projectName : item.userName}
+        subtitle={entityTitle}
         onClose={onClose}
       />
-      <div style={{ overflow: "auto", padding: 24, background: C.details }}>
-        {item.kind === "project" ? (
-          <ProjectDetails item={item} />
-        ) : (
-          <UserDetails item={item} />
-        )}
+      <div
+        style={{
+          overflow: "auto",
+          background: C.details,
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr) minmax(280px, 2fr)",
+            minWidth: 980,
+          }}
+        >
+          <aside style={{ padding: 24, borderRight: `1px solid ${C.border}` }}>
+            {isProject ? (
+              <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                <CoverArt title={item.projectName} />
+              </div>
+            ) : (
+              <div
+                style={{
+                  width: 96,
+                  height: 96,
+                  borderRadius: "50%",
+                  background: C.card,
+                  border: `1px solid ${C.borderStrong}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  ...sora,
+                  fontSize: 30,
+                  fontWeight: 700,
+                  color: C.text,
+                }}
+              >
+                {item.avatarInitials}
+              </div>
+            )}
+
+            <div style={{ marginTop: 16 }}>
+              <CategoryChip>{entitySubtitle}</CategoryChip>
+              <h3 style={{ ...sora, marginTop: 10, fontSize: 22, lineHeight: "30px", fontWeight: 700, color: C.text }}>
+                {entityTitle}
+              </h3>
+              <p style={{ ...manrope, marginTop: 10, fontSize: 14, lineHeight: "22px", fontWeight: 500, color: C.sec }}>
+                {entityDescription}
+              </p>
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <MetaLabel>Genre</MetaLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <Chip>{itemGenre(item)}</Chip>
+                {itemSubGenres(item).map((genre) => (
+                  <Chip key={genre}>{genre}</Chip>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <section style={{ padding: 24 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <CategoryChip>{itemRole(item)}</CategoryChip>
+              <CategoryChip>{isProject ? item.status : item.availability}</CategoryChip>
+            </div>
+            <h2 style={{ ...sora, marginTop: 14, fontSize: 28, lineHeight: "36px", fontWeight: 800, color: C.text }}>
+              {item.title}
+            </h2>
+            <p style={{ ...manrope, marginTop: 12, fontSize: 15, lineHeight: "24px", fontWeight: 500, color: C.sec }}>
+              {item.description}
+            </p>
+
+            <DetailMeta
+              items={[
+                { label: isProject ? "Role recherche" : "Role propose", value: itemRole(item) },
+                { label: "Disponibilite", value: item.availability },
+                { label: "Langue", value: item.language },
+                { label: "Experience", value: item.experience },
+              ]}
+            />
+
+            {isProject ? (
+              <>
+                <DetailSection title="Description complete">{item.fullDescription}</DetailSection>
+                <DetailSection title="Profil attendu">{item.requirements}</DetailSection>
+                <DetailSection title="Contribution attendue">{item.contribution}</DetailSection>
+                <DetailSection title="Equipe">{item.team}</DetailSection>
+                <DetailSection title="Instructions de candidature">{item.application}</DetailSection>
+                <DetailSection title="Competences demandees">
+                  <SkillList items={item.requiredSkills} />
+                </DetailSection>
+              </>
+            ) : (
+              <>
+                <DetailSection title="Description complete">{item.fullDescription}</DetailSection>
+                <DetailSection title="Recherche">{item.lookingFor}</DetailSection>
+                <DetailSection title="Instructions de contact">{item.contact}</DetailSection>
+                <DetailSection title="Competences principales">
+                  <SkillList items={item.mainSkills} />
+                </DetailSection>
+              </>
+            )}
+          </section>
+
+          <aside style={{ padding: 24, borderLeft: `1px solid ${C.border}` }}>
+            <div className="cm-popup-tabs" role="tablist" aria-label="Activité de l'annonce" style={{ width: "100%" }}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "comments"}
+                data-active={tab === "comments"}
+                onClick={() => setTab("comments")}
+                className="cm-popup-tab"
+                style={{ flex: 1 }}
+              >
+                Commentaires
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "interested"}
+                data-active={tab === "interested"}
+                onClick={() => setTab("interested")}
+                className="cm-popup-tab"
+                style={{ flex: 1 }}
+              >
+                Interessés
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+              {tab === "comments"
+                ? comments.map((comment, index) => (
+                    <div key={comment} style={{ padding: 14, borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
+                      <p style={{ ...manrope, color: C.text, fontSize: 12, fontWeight: 800 }}>Utilisateur {index + 1}</p>
+                      <p style={{ ...manrope, marginTop: 6, color: C.sec, fontSize: 13, fontWeight: 500, lineHeight: "20px" }}>
+                        {comment}
+                      </p>
+                    </div>
+                  ))
+                : interested.map((name) => (
+                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: C.input, color: C.neon, ...sora, fontSize: 12, fontWeight: 800 }}>
+                        {name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <span style={{ ...manrope, color: C.text, fontSize: 13, fontWeight: 800 }}>{name}</span>
+                    </div>
+                  ))}
+            </div>
+          </aside>
+        </div>
       </div>
       <div
         style={{
@@ -1661,19 +2035,206 @@ function DetailsModal({
         }}
       >
         <GhostButton>Save</GhostButton>
+        <SecondaryButton onClick={onSponsor}>Sponsoriser</SecondaryButton>
         {item.kind === "project" ? (
           <>
             <SecondaryButton>Contact Project</SecondaryButton>
-            <PrimaryButton>Apply to Project</PrimaryButton>
+            <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>
           </>
         ) : (
           <>
             <SecondaryButton>Contact User</SecondaryButton>
-            <PrimaryButton>Invite to Project</PrimaryButton>
+            <PrimaryButton onClick={onInvite}>Invite to Project</PrimaryButton>
           </>
         )}
       </div>
     </ModalShell>
+  );
+}
+
+const selectStyle = {
+  ...manrope,
+  width: "100%",
+  height: 44,
+  borderRadius: 14,
+  border: `1px solid rgba(133,154,206,0.20)`,
+  background: C.input,
+  color: C.text,
+  padding: "0 14px",
+  fontSize: 14,
+  fontWeight: 700,
+  outline: "none",
+};
+
+const textareaStyle = {
+  ...manrope,
+  width: "100%",
+  minHeight: 120,
+  borderRadius: 14,
+  border: `1px solid rgba(133,154,206,0.20)`,
+  background: C.input,
+  color: C.text,
+  padding: 14,
+  fontSize: 14,
+  fontWeight: 500,
+  lineHeight: "22px",
+  resize: "vertical" as const,
+  outline: "none",
+};
+
+function AnnouncementWorkflowModal({
+  action,
+  item,
+  onClose,
+  onDone,
+}: {
+  action: "apply" | "invite" | "sponsor";
+  item: Announcement;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [message, setMessage] = useState("");
+  const [projectTitle, setProjectTitle] = useState(item.kind === "project" ? item.projectName : "Neon Ronin");
+  const [role, setRole] = useState(item.kind === "project" ? item.roleNeeded : item.roleOffered);
+  const [duration, setDuration] = useState("14 jours");
+  const [level, setLevel] = useState("Standard");
+  const [error, setError] = useState("");
+
+  const title =
+    action === "apply"
+      ? "Répondre à l'annonce"
+      : action === "invite"
+        ? "Inviter au projet"
+        : "Sponsoriser l'annonce";
+
+  const submit = () => {
+    setError("");
+    if (action === "apply") {
+      if (!message.trim()) {
+        setError("Ajoute un court message de réponse.");
+        return;
+      }
+      const owner = item.kind === "project" ? `${item.projectName} team` : item.userName;
+      respondToProposal({
+        proposalTitle: item.title,
+        accepted: true,
+        message,
+        recipient: owner,
+      });
+      onDone("Réponse envoyée. Une notification a été créée pour l'auteur de l'annonce.");
+      return;
+    }
+    if (action === "invite") {
+      if (!projectTitle.trim()) {
+        setError("Choisis ou indique le projet concerné.");
+        return;
+      }
+      if (item.kind !== "user") {
+        setError("Sélectionne une annonce utilisateur pour inviter un collaborateur.");
+        return;
+      }
+      sendCollaborationInvitation({
+        recipient: item.userName,
+        projectTitle,
+        role,
+        message,
+      });
+      onDone("Invitation envoyée. Elle apparaît maintenant dans les workflows et notifications.");
+      return;
+    }
+    if (!duration.trim() || !level.trim()) {
+      setError("La durée et le niveau de mise en avant sont obligatoires.");
+      return;
+    }
+    sendAnnouncementSponsoring({
+      announcementTitle: item.title,
+      owner: item.kind === "project" ? `${item.projectName} team` : item.userName,
+      duration,
+      level,
+      message,
+    });
+    onDone("Demande de sponsoring envoyée. Une notification de confirmation est prête.");
+  };
+
+  return (
+    <ModalShell onClose={onClose} maxWidth={720} label={title}>
+      <ModalHeader title={title} subtitle={item.title} onClose={onClose} />
+      <div style={{ display: "grid", gap: 16, padding: 24, background: C.details }}>
+        {action === "invite" && (
+          <>
+            <FieldLabel>Projet concerné</FieldLabel>
+            <TextInput value={projectTitle} onChange={setProjectTitle} placeholder="Titre du projet" ariaLabel="Projet concerné" />
+            <FieldLabel>Rôle proposé</FieldLabel>
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+              style={selectStyle}
+            >
+              {["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"].map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </>
+        )}
+        {action === "sponsor" && (
+          <>
+            <FieldLabel>Durée du sponsoring</FieldLabel>
+            <TextInput value={duration} onChange={setDuration} placeholder="Ex : 14 jours" ariaLabel="Durée du sponsoring" />
+            <FieldLabel>Niveau de mise en avant</FieldLabel>
+            <select
+              value={level}
+              onChange={(event) => setLevel(event.target.value)}
+              style={selectStyle}
+            >
+              {["Standard", "Premium", "Top"].map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </>
+        )}
+        <FieldLabel>{action === "apply" ? "Message de réponse" : "Message personnalisé"}</FieldLabel>
+        <textarea
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          placeholder={
+            action === "apply"
+              ? "Présente ton profil, tes disponibilités et pourquoi tu réponds à cette annonce."
+              : "Ajoute un contexte utile pour le destinataire."
+          }
+          style={textareaStyle}
+        />
+        {error && <div style={{ ...manrope, color: C.danger, fontSize: 13, fontWeight: 700 }}>{error}</div>}
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, padding: "16px 24px", borderTop: `1px solid ${C.border}`, background: C.panel }}>
+        <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
+        <PrimaryButton onClick={submit}>{action === "sponsor" ? "Envoyer la demande" : "Confirmer"}</PrimaryButton>
+      </div>
+    </ModalShell>
+  );
+}
+
+function WorkflowToast({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        right: 24,
+        bottom: 24,
+        zIndex: 70,
+        maxWidth: 420,
+        padding: "14px 16px",
+        borderRadius: 16,
+        background: C.card,
+        border: `1px solid ${C.neonSoftBorder}`,
+        color: C.text,
+        boxShadow: "0 18px 44px rgba(0,0,0,0.45)",
+        ...manrope,
+        fontSize: 14,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -1784,9 +2345,9 @@ function ProjectDetails({ item }: { item: ProjectAnnouncement }) {
       <DetailMeta
         items={[
           { label: "Role needed", value: item.roleNeeded },
-          { label: "Project genre", value: item.genre },
+          { label: "Project genre", value: itemGenre(item) },
+          { label: "Sub-genres", value: itemSubGenres(item).join(", ") },
           { label: "Project status", value: item.status },
-          { label: "Collaboration mode", value: item.mode },
           { label: "Availability", value: item.availability },
           { label: "Language", value: item.language },
           { label: "Experience level", value: item.experience },
@@ -1845,8 +2406,9 @@ function UserDetails({ item }: { item: UserAnnouncement }) {
       <DetailMeta
         items={[
           { label: "Role offered", value: item.roleOffered },
+          { label: "Genre", value: itemGenre(item) },
+          { label: "Sub-genres", value: itemSubGenres(item).join(", ") },
           { label: "Availability", value: item.availability },
-          { label: "Collaboration mode", value: item.mode },
           { label: "Language", value: item.language },
           { label: "Experience level", value: item.experience },
         ]}
@@ -1854,7 +2416,7 @@ function UserDetails({ item }: { item: UserAnnouncement }) {
       <DetailSection title="Main skills">
         <SkillList items={item.mainSkills} />
       </DetailSection>
-      <DetailSection title="Preferred genres">
+      <DetailSection title="Preferred sub-genres">
         <SkillList items={item.preferredGenres} />
       </DetailSection>
       <DetailSection title="Portfolio">Portfolio link — placeholder.</DetailSection>
@@ -1934,6 +2496,83 @@ function FilterChipRow({ label, children }: { label: string; children: ReactNode
       <FieldLabel>{label}</FieldLabel>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>{children}</div>
     </div>
+  );
+}
+
+function AnnouncementAdvancedFiltersModal({
+  filters,
+  setFilters,
+  onClose,
+}: {
+  filters: Filters;
+  setFilters: React.Dispatch<React.SetStateAction<Filters>>;
+  onClose: () => void;
+}) {
+  const toggleArr = (key: "langue" | "genres" | "sousGenres", val: string) =>
+    setFilters((f) => {
+      const arr = f[key];
+      return { ...f, [key]: arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val] };
+    });
+
+  const clearAdvanced = () =>
+    setFilters((f) => ({
+      ...f,
+      langue: [],
+      genres: [],
+      sousGenres: [],
+    }));
+
+  return (
+    <ModalShell onClose={onClose} maxWidth={820} label="Filtres avancés">
+      <ModalHeader title="Filtres avancés" subtitle="Affinez par langue, genre et sous-genre." onClose={onClose} />
+      <div style={{ overflow: "auto", padding: 24, background: C.details }}>
+        <FilterChipRow label="Langage">
+          {LANGUES.map((language) => (
+            <FilterChip
+              key={language}
+              label={language}
+              active={filters.langue.includes(language)}
+              onClick={() => toggleArr("langue", language)}
+            />
+          ))}
+        </FilterChipRow>
+
+        <FilterChipRow label="Genre">
+          {GENRES_FR.map((genre) => (
+            <FilterChip
+              key={genre}
+              label={genre}
+              active={filters.genres.includes(genre)}
+              onClick={() => toggleArr("genres", genre)}
+            />
+          ))}
+        </FilterChipRow>
+
+        <FilterChipRow label="Sous-genre">
+          {SOUS_GENRES.map((subGenre) => (
+            <FilterChip
+              key={subGenre}
+              label={subGenre}
+              active={filters.sousGenres.includes(subGenre)}
+              onClick={() => toggleArr("sousGenres", subGenre)}
+            />
+          ))}
+        </FilterChipRow>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 12,
+          padding: "16px 24px",
+          borderTop: `1px solid ${C.border}`,
+          background: C.panel,
+        }}
+      >
+        <SecondaryButton onClick={clearAdvanced}>Réinitialiser</SecondaryButton>
+        <PrimaryButton onClick={onClose}>Appliquer</PrimaryButton>
+      </div>
+    </ModalShell>
   );
 }
 

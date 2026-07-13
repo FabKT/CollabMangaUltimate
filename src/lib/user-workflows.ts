@@ -1,0 +1,634 @@
+export type WorkflowCategory = "project" | "sponsorship" | "friend" | "manga" | "system";
+
+export type WorkflowRecordKind =
+  | "collaboration_invitation"
+  | "collaboration_removed"
+  | "collaboration_role_updated"
+  | "proposal"
+  | "proposal_response"
+  | "subscription"
+  | "friend_request"
+  | "friend_response"
+  | "patronage_request"
+  | "patronage_response"
+  | "announcement"
+  | "announcement_sponsoring"
+  | "sponsorship_contact"
+  | "project_note"
+  | "project_note_update"
+  | "project_created";
+
+export type WorkflowStatus = "pending" | "accepted" | "declined" | "active" | "sent" | "created" | "removed" | "updated";
+
+export type WorkflowActionKind = "primary" | "secondary" | "ghost" | "danger";
+
+export type WorkflowNotificationAction = {
+  label: string;
+  kind: WorkflowActionKind;
+};
+
+export type WorkflowNotification = {
+  id: string;
+  recordId: string;
+  category: WorkflowCategory;
+  type: string;
+  title: string;
+  content: string;
+  recipient: string;
+  actor: string;
+  read: boolean;
+  createdAt: string;
+  entityType: string;
+  entityTitle: string;
+  entitySubtitle?: string;
+  entityStatus?: string;
+  actions: WorkflowNotificationAction[];
+  secondaryActions?: WorkflowNotificationAction[];
+  meta?: Array<{ label: string; value: string }>;
+};
+
+export type WorkflowRecord = {
+  id: string;
+  kind: WorkflowRecordKind;
+  status: WorkflowStatus;
+  createdAt: string;
+  initiator: string;
+  recipient?: string;
+  title: string;
+  entityType: string;
+  entityTitle: string;
+  payload: Record<string, unknown>;
+};
+
+export type WorkflowState = {
+  records: WorkflowRecord[];
+  notifications: WorkflowNotification[];
+};
+
+type CreateRecordInput = Omit<WorkflowRecord, "id" | "createdAt"> & {
+  notification?: Omit<WorkflowNotification, "id" | "recordId" | "createdAt" | "read">;
+};
+
+const STORE_KEY = "collabmanga.userWorkflows.v1";
+const EVENT_NAME = "collabmanga:user-workflows";
+const CURRENT_USER = "Current user";
+
+const nowIso = () => new Date().toISOString();
+const newId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+function emptyState(): WorkflowState {
+  return { records: [], notifications: [] };
+}
+
+function canUseStorage() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function readState(): WorkflowState {
+  if (!canUseStorage()) return emptyState();
+  try {
+    const raw = window.localStorage.getItem(STORE_KEY);
+    if (!raw) return emptyState();
+    const parsed = JSON.parse(raw) as Partial<WorkflowState>;
+    return {
+      records: Array.isArray(parsed.records) ? parsed.records : [],
+      notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+    };
+  } catch {
+    return emptyState();
+  }
+}
+
+function writeState(state: WorkflowState) {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  window.dispatchEvent(new CustomEvent(EVENT_NAME));
+}
+
+export function loadWorkflowState(): WorkflowState {
+  return readState();
+}
+
+export function subscribeWorkflowState(listener: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === STORE_KEY) listener();
+  };
+  window.addEventListener(EVENT_NAME, listener);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(EVENT_NAME, listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+export function createWorkflowRecord(input: CreateRecordInput): WorkflowRecord {
+  const state = readState();
+  const record: WorkflowRecord = {
+    id: newId("wf"),
+    createdAt: nowIso(),
+    kind: input.kind,
+    status: input.status,
+    initiator: input.initiator,
+    recipient: input.recipient,
+    title: input.title,
+    entityType: input.entityType,
+    entityTitle: input.entityTitle,
+    payload: input.payload,
+  };
+  const notifications = [...state.notifications];
+  if (input.notification) {
+    notifications.unshift({
+      ...input.notification,
+      id: newId("notif"),
+      recordId: record.id,
+      createdAt: record.createdAt,
+      read: false,
+    });
+  }
+  writeState({ records: [record, ...state.records], notifications });
+  return record;
+}
+
+export function setWorkflowNotificationRead(id: string, read = true) {
+  const state = readState();
+  writeState({
+    ...state,
+    notifications: state.notifications.map((n) => (n.id === id ? { ...n, read } : n)),
+  });
+}
+
+export function markAllWorkflowNotificationsRead() {
+  const state = readState();
+  writeState({
+    ...state,
+    notifications: state.notifications.map((n) => ({ ...n, read: true })),
+  });
+}
+
+export function sendCollaborationInvitation(input: {
+  recipient: string;
+  projectTitle: string;
+  role?: string;
+  message?: string;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "collaboration_invitation",
+    status: "pending",
+    initiator: actor,
+    recipient: input.recipient,
+    title: `Invitation collaboration - ${input.projectTitle}`,
+    entityType: "Propositions",
+    entityTitle: input.projectTitle,
+    payload: input,
+    notification: {
+      category: "project",
+      type: "invitation_collab",
+      title: `${actor} t'invite à collaborer sur ${input.projectTitle}`,
+      content: input.message || "Invitation à rejoindre un projet manga.",
+      recipient: input.recipient,
+      actor,
+      entityType: "project",
+      entityTitle: input.projectTitle,
+      entitySubtitle: input.role ? `Rôle proposé : ${input.role}` : "Invitation projet",
+      entityStatus: "En attente",
+      actions: [
+        { label: "Accepter", kind: "primary" },
+        { label: "Refuser", kind: "danger" },
+      ],
+      secondaryActions: [{ label: "Voir le projet", kind: "secondary" }],
+      meta: [
+        { label: "Rôle proposé", value: input.role || "Non renseigné" },
+        { label: "Projet", value: input.projectTitle },
+      ],
+    },
+  });
+}
+
+export function updateCollaboratorRole(input: {
+  collaborator: string;
+  projectTitle: string;
+  role: string;
+  initiator?: string;
+}) {
+  return createWorkflowRecord({
+    kind: "collaboration_role_updated",
+    status: "updated",
+    initiator: input.initiator ?? CURRENT_USER,
+    recipient: input.collaborator,
+    title: `Rôle collaborateur modifié - ${input.projectTitle}`,
+    entityType: "Projet",
+    entityTitle: input.projectTitle,
+    payload: input,
+  });
+}
+
+export function removeCollaborator(input: {
+  collaborator: string;
+  projectTitle: string;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "collaboration_removed",
+    status: "removed",
+    initiator: actor,
+    recipient: input.collaborator,
+    title: `Retrait collaborateur - ${input.projectTitle}`,
+    entityType: "Projet",
+    entityTitle: input.projectTitle,
+    payload: input,
+    notification: {
+      category: "project",
+      type: "retrait_collab",
+      title: `Tu as été retiré du projet ${input.projectTitle}`,
+      content: "Cette notification est informative et ne demande aucune action.",
+      recipient: input.collaborator,
+      actor,
+      entityType: "project",
+      entityTitle: input.projectTitle,
+      entityStatus: "Retiré",
+      actions: [{ label: "Voir le projet", kind: "secondary" }],
+    },
+  });
+}
+
+export function sendProposal(input: {
+  title: string;
+  description: string;
+  skills: string[];
+  projectTitle?: string;
+  recipient?: string;
+  deadline?: string;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "proposal",
+    status: "pending",
+    initiator: actor,
+    recipient: input.recipient,
+    title: input.title,
+    entityType: "Propositions",
+    entityTitle: input.projectTitle || input.title,
+    payload: input,
+    notification: input.recipient
+      ? {
+          category: "project",
+          type: "proposition",
+          title: `${actor} t'a envoyé une proposition de collaboration`,
+          content: input.description,
+          recipient: input.recipient,
+          actor,
+          entityType: "proposal",
+          entityTitle: input.title,
+          entitySubtitle: input.projectTitle,
+          entityStatus: "En attente",
+          actions: [
+            { label: "Accepter", kind: "primary" },
+            { label: "Refuser", kind: "danger" },
+            { label: "Voir la proposition", kind: "secondary" },
+          ],
+          meta: [
+            { label: "Compétences", value: input.skills.join(", ") },
+            { label: "Projet associé", value: input.projectTitle || "Aucun" },
+          ],
+        }
+      : undefined,
+  });
+}
+
+export function respondToProposal(input: {
+  proposalTitle: string;
+  accepted: boolean;
+  message?: string;
+  recipient: string;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "proposal_response",
+    status: input.accepted ? "accepted" : "declined",
+    initiator: actor,
+    recipient: input.recipient,
+    title: `Réponse proposition - ${input.proposalTitle}`,
+    entityType: "Réponses",
+    entityTitle: input.proposalTitle,
+    payload: input,
+    notification: {
+      category: "project",
+      type: "reponse_proposition",
+      title: `${actor} a ${input.accepted ? "accepté" : "refusé"} ta proposition de collaboration`,
+      content: input.message || "Réponse envoyée depuis une annonce.",
+      recipient: input.recipient,
+      actor,
+      entityType: "proposal_response",
+      entityTitle: input.proposalTitle,
+      entityStatus: input.accepted ? "Acceptée" : "Refusée",
+      actions: [{ label: "Voir le profil", kind: "secondary" }],
+      meta: [{ label: "Décision", value: input.accepted ? "Acceptée" : "Refusée" }],
+    },
+  });
+}
+
+export function followCreator(input: { creatorName: string; initiator?: string }) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "subscription",
+    status: "active",
+    initiator: actor,
+    recipient: input.creatorName,
+    title: `Abonnement - ${input.creatorName}`,
+    entityType: "Abonnés",
+    entityTitle: input.creatorName,
+    payload: input,
+    notification: {
+      category: "friend",
+      type: "abonnement",
+      title: `${actor} s'est abonné à toi`,
+      content: "Un nouveau lecteur suit ton activité.",
+      recipient: input.creatorName,
+      actor,
+      entityType: "profile",
+      entityTitle: input.creatorName,
+      entityStatus: "Nouvel abonné",
+      actions: [
+        { label: "Voir le profil", kind: "secondary" },
+        { label: "S'abonner en retour", kind: "ghost" },
+      ],
+    },
+  });
+}
+
+export function sendFriendRequest(input: { recipient: string; initiator?: string }) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "friend_request",
+    status: "pending",
+    initiator: actor,
+    recipient: input.recipient,
+    title: `Demande d'ami - ${input.recipient}`,
+    entityType: "Friends",
+    entityTitle: input.recipient,
+    payload: input,
+    notification: {
+      category: "friend",
+      type: "demande_ami",
+      title: `${actor} souhaite devenir ton ami`,
+      content: "Demande d'amitié en attente de réponse.",
+      recipient: input.recipient,
+      actor,
+      entityType: "profile",
+      entityTitle: actor,
+      entityStatus: "En attente",
+      actions: [
+        { label: "Accepter", kind: "primary" },
+        { label: "Refuser", kind: "danger" },
+      ],
+    },
+  });
+}
+
+export function respondToFriendRequest(input: {
+  requester: string;
+  accepted: boolean;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "friend_response",
+    status: input.accepted ? "accepted" : "declined",
+    initiator: actor,
+    recipient: input.accepted ? input.requester : undefined,
+    title: `Réponse amitié - ${input.requester}`,
+    entityType: "Friends",
+    entityTitle: input.requester,
+    payload: input,
+    notification: input.accepted
+      ? {
+          category: "friend",
+          type: "ami_accepte",
+          title: `${actor} a accepté ta demande d'amitié`,
+          content: "Vous êtes maintenant amis sur CollabManga.",
+          recipient: input.requester,
+          actor,
+          entityType: "profile",
+          entityTitle: actor,
+          entityStatus: "Ami accepté",
+          actions: [{ label: "Voir le profil", kind: "secondary" }],
+        }
+      : undefined,
+  });
+}
+
+export function sendPatronageRequest(input: {
+  recipient: string;
+  level: string;
+  message?: string;
+  startDate?: string;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "patronage_request",
+    status: "pending",
+    initiator: actor,
+    recipient: input.recipient,
+    title: `Parrainage - ${input.recipient}`,
+    entityType: "Parrainage-Collaboration",
+    entityTitle: input.level,
+    payload: input,
+    notification: {
+      category: "sponsorship",
+      type: "parrainage",
+      title: `${actor} souhaite te parrainer - ${input.level}`,
+      content: input.message || "Demande de parrainage en attente.",
+      recipient: input.recipient,
+      actor,
+      entityType: "patronage",
+      entityTitle: input.level,
+      entityStatus: "En attente",
+      actions: [
+        { label: "Accepter le parrainage", kind: "primary" },
+        { label: "Refuser", kind: "danger" },
+      ],
+      meta: [
+        { label: "Niveau", value: input.level },
+        { label: "Début souhaité", value: input.startDate || "Non renseigné" },
+      ],
+    },
+  });
+}
+
+export function sendAnnouncementSponsoring(input: {
+  announcementTitle: string;
+  owner: string;
+  duration: string;
+  level: string;
+  message?: string;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  return createWorkflowRecord({
+    kind: "announcement_sponsoring",
+    status: "pending",
+    initiator: actor,
+    recipient: input.owner,
+    title: `Sponsoring annonce - ${input.announcementTitle}`,
+    entityType: "Sponso_annonce",
+    entityTitle: input.announcementTitle,
+    payload: input,
+    notification: {
+      category: "sponsorship",
+      type: "sponsoring",
+      title: `${actor} souhaite sponsoriser ton annonce : ${input.announcementTitle}`,
+      content: input.message || "Demande de sponsoring d'annonce.",
+      recipient: input.owner,
+      actor,
+      entityType: "announcement",
+      entityTitle: input.announcementTitle,
+      entityStatus: "En attente de confirmation",
+      actions: [
+        { label: "Accepter", kind: "primary" },
+        { label: "Refuser", kind: "danger" },
+        { label: "Voir l'annonce", kind: "secondary" },
+      ],
+      meta: [
+        { label: "Niveau", value: input.level },
+        { label: "Durée", value: input.duration },
+      ],
+    },
+  });
+}
+
+export function sendSponsorshipContact(input: {
+  announcementTitle: string;
+  announcementMode: "creator" | "project";
+  owner: string;
+  linked: string;
+  budgetOrPrice: string;
+  sponsorshipType: string;
+  message: string;
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  const isProjectAnnouncement = input.announcementMode === "project";
+  return createWorkflowRecord({
+    kind: "sponsorship_contact",
+    status: "pending",
+    initiator: actor,
+    recipient: input.owner,
+    title: `${isProjectAnnouncement ? "Candidature parrainage" : "Contact parrainage"} - ${input.announcementTitle}`,
+    entityType: "Parrainage",
+    entityTitle: input.announcementTitle,
+    payload: input,
+    notification: {
+      category: "sponsorship",
+      type: isProjectAnnouncement ? "candidature_parrainage" : "contact_parrainage",
+      title: isProjectAnnouncement
+        ? `${actor} souhaite promouvoir ton projet : ${input.announcementTitle}`
+        : `${actor} veut contacter ton offre de parrainage : ${input.announcementTitle}`,
+      content: input.message || "Nouveau contact depuis une annonce de parrainage.",
+      recipient: input.owner,
+      actor,
+      entityType: "sponsorship",
+      entityTitle: input.announcementTitle,
+      entitySubtitle: input.linked,
+      entityStatus: "En attente de réponse",
+      actions: [
+        { label: "Accepter", kind: "primary" },
+        { label: "Refuser", kind: "danger" },
+        { label: "Ouvrir la discussion parrainage", kind: "secondary" },
+      ],
+      secondaryActions: [{ label: "Voir le profil", kind: "ghost" }],
+      meta: [
+        { label: isProjectAnnouncement ? "Budget" : "Prix", value: input.budgetOrPrice || "A définir" },
+        { label: "Type", value: input.sponsorshipType },
+        { label: isProjectAnnouncement ? "Projet" : "Profil lié", value: input.linked },
+      ],
+    },
+  });
+}
+
+export function createAnnouncementWorkflow(input: {
+  title: string;
+  category: string;
+  description: string;
+  projectTitle?: string;
+  initiator?: string;
+}) {
+  return createWorkflowRecord({
+    kind: "announcement",
+    status: "created",
+    initiator: input.initiator ?? CURRENT_USER,
+    title: input.title,
+    entityType: "Annonces",
+    entityTitle: input.projectTitle || input.title,
+    payload: input,
+  });
+}
+
+export function createProjectNote(input: {
+  projectTitle: string;
+  content: string;
+  collaborators?: string[];
+  initiator?: string;
+}) {
+  const actor = input.initiator ?? CURRENT_USER;
+  const recipient = input.collaborators?.find((name) => name !== actor);
+  return createWorkflowRecord({
+    kind: "project_note",
+    status: "created",
+    initiator: actor,
+    recipient,
+    title: `Note projet - ${input.projectTitle}`,
+    entityType: "Notes",
+    entityTitle: input.projectTitle,
+    payload: input,
+    notification: recipient
+      ? {
+          category: "project",
+          type: "note_projet",
+          title: `${actor} a ajouté une note sur ${input.projectTitle}`,
+          content: input.content.slice(0, 180),
+          recipient,
+          actor,
+          entityType: "note",
+          entityTitle: input.projectTitle,
+          entityStatus: "Nouvelle note",
+          actions: [{ label: "Voir la note", kind: "secondary" }],
+        }
+      : undefined,
+  });
+}
+
+export function updateProjectNote(input: { projectTitle: string; content: string; initiator?: string }) {
+  return createWorkflowRecord({
+    kind: "project_note_update",
+    status: "updated",
+    initiator: input.initiator ?? CURRENT_USER,
+    title: `Note projet modifiée - ${input.projectTitle}`,
+    entityType: "Notes",
+    entityTitle: input.projectTitle,
+    payload: input,
+  });
+}
+
+export function createProjectWorkflow(input: {
+  title: string;
+  synopsis: string;
+  genres: string[];
+  initiator?: string;
+}) {
+  return createWorkflowRecord({
+    kind: "project_created",
+    status: "created",
+    initiator: input.initiator ?? CURRENT_USER,
+    title: input.title,
+    entityType: "Projets",
+    entityTitle: input.title,
+    payload: input,
+  });
+}

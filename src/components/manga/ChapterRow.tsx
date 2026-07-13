@@ -26,7 +26,7 @@ export function ChapterRow({
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[13px] font-extrabold"
           style={{
             background: latest ? "var(--color-neon-fill)" : "var(--color-input-bg)",
-            color: latest ? "var(--color-neon)" : "var(--color-text-secondary)",
+            color: latest ? "var(--color-primary-foreground)" : "var(--color-text-secondary)",
             border: latest ? "1px solid var(--color-neon-border)" : "1px solid var(--color-border-default)",
           }}
         >
