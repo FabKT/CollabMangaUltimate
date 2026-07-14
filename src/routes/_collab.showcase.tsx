@@ -248,6 +248,17 @@ type Art = {
   imageUrl?: string; description?: string;
 };
 
+const ART_TITLES = [
+  "Ronin sous la pluie", "Alliage nocturne", "Cité fantôme", "Serment silencieux", "Éclat de lame",
+  "Jardin des cendres", "Toits de Kyoto", "Regard d'orage", "Fleur d'encre", "Duel au crépuscule",
+  "Voile écarlate", "Sentinelle de fer", "Aube brisée", "Marée d'ombres",
+];
+const ART_ARTISTS = [
+  "Aiko Tanaka", "Léo Vasseur", "Mika Ito", "Hana Kimura", "Ren Sato",
+  "Yui Nakamura", "Sora Fujimoto", "Kenji Watanabe", "Emma Laurent", "Nao Ishida",
+  "Théo Marchand", "Rina Abe", "Louis Bernard", "Chloé Girard",
+];
+
 const ARTS: Art[] = Array.from({ length: 14 }).map((_, i) => {
   const ratios: Ratio[] = ["portrait", "square", "page", "landscape", "cover", "portrait", "square", "page"];
   const styles = ["Shonen","Seinen","Dark manga","Fantasy manga","Webtoon","Semi-realistic","Action manga","Shojo"];
@@ -255,7 +266,7 @@ const ARTS: Art[] = Array.from({ length: 14 }).map((_, i) => {
   const availOpts: Art["availability"][] = ["Available now","Open to projects","Available now","Limited","Open to projects","Available now","Limited","Open to projects"];
   const skillSets = [["Illustration"],["Manga page"],["Cover art"],["Character design"],["Visual style"],["Line work"],["Portfolio"],["Manga art"]];
   return {
-    id: `art-${i}`, title: "Artwork title", artist: "Artist name", role: "Artist",
+    id: `art-${i}`, title: ART_TITLES[i % ART_TITLES.length], artist: ART_ARTISTS[i % ART_ARTISTS.length], role: "Artist",
     style: styles[i % styles.length], type: types[i % types.length],
     skills: skillSets[i % skillSets.length], availability: availOpts[i % availOpts.length],
     ratio: ratios[i % ratios.length], seed: i + 3, views: 0, saves: 0,

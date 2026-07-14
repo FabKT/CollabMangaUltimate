@@ -104,9 +104,8 @@ function SponsorshipPage() {
       if (filters.videoTypes.length && (!a.videoType || !filters.videoTypes.includes(a.videoType))) return false;
       if (filters.durations.length && (!a.duration || !filters.durations.includes(a.duration))) return false;
 
-      // projet : genre + chapitres
+      // projet : genre (démographie) + chapitres — les annonces n'ont pas de sous-genre
       if (filters.genres.length && !filters.genres.includes(a.category)) return false;
-      if (filters.subGenres.length && !filters.subGenres.includes(a.category)) return false;
       if (minC > 0 && (a.chapters ?? 0) < minC) return false;
       if (maxC > 0 && (a.chapters ?? Infinity) > maxC) return false;
 

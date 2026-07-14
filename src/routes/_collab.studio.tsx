@@ -330,7 +330,7 @@ type RealizedParrainage = { id: string; creator: string; platform: string; statu
 const PROJECT_REALIZED_PARRAINAGES: Record<string, RealizedParrainage[]> = {
   "prj-1": [
     { id: "rp1", creator: "@mangareviews", platform: "Youtube", status: "Terminé", price: "20 €" },
-    { id: "rp2", creator: "@shorts_manga", platform: "Tiktok", status: "En cours", price: "10 €" },
+    { id: "rp2", creator: "@mangatiktok", platform: "Tiktok", status: "En cours", price: "10 €" },
   ],
 };
 

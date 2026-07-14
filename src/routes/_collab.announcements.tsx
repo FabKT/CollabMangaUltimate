@@ -869,11 +869,13 @@ function itemLanguageMatches(item: Announcement, selected: string[]) {
 }
 
 function itemGenre(item: Announcement) {
-  return DEMOGRAPHIC_BY_ID[item.id] ?? "Shonen";
+  // priorité aux maps des exemples, sinon au genre réel de l'annonce (DB)
+  return DEMOGRAPHIC_BY_ID[item.id] ?? item.genre ?? "Shonen";
 }
 
-function itemSubGenres(item: Announcement) {
-  return SUB_GENRES_BY_ID[item.id] ?? [];
+function itemSubGenres(item: Announcement): string[] {
+  if (SUB_GENRES_BY_ID[item.id]) return SUB_GENRES_BY_ID[item.id];
+  return item.kind === "project" ? item.requiredSkills : item.preferredGenres;
 }
 
 function itemSearchText(item: Announcement) {
@@ -996,8 +998,8 @@ function AnnouncementsPage() {
       if (filters.statut && itemRole(a) !== filters.statut) return false;
       if (filters.remunerationOnly && !a.remuneration) return false;
       if (filters.engagement && a.engagement !== filters.engagement) return false;
-      if (filters.genres.length > 0 && !filters.genres.includes(DEMOGRAPHIC_BY_ID[a.id])) return false;
-      if (filters.sousGenres.length > 0 && !filters.sousGenres.some((sg) => SUB_GENRES_BY_ID[a.id]?.includes(sg))) return false;
+      if (filters.genres.length > 0 && !filters.genres.includes(itemGenre(a))) return false;
+      if (filters.sousGenres.length > 0 && !filters.sousGenres.some((sg) => itemSubGenres(a).includes(sg))) return false;
       return true;
     });
   }, [data, filters]);

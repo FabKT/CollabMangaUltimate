@@ -43,7 +43,7 @@ export function AnnouncementCard({
       }}
       className="group flex flex-col overflow-hidden rounded-[18px] border border-[rgba(133,154,206,0.18)] bg-cm-card shadow-[0_8px_22px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(133,154,206,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cm-neon/40"
     >
-      <Thumb accent={a.accent} label={a.category} className="aspect-video" platforms={a.platforms} />
+      <Thumb accent={a.accent} label={a.category || a.sponsorshipType} className="aspect-video" platforms={a.platforms} />
 
       <div className="flex flex-1 flex-col gap-4 p-5">
         {/* identity */}

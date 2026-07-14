@@ -1290,10 +1290,10 @@ function IllustrationCard({ mode, onDetails }: { mode: ViewMode; onDetails: () =
       </div>
       <div className="mt-3">
         <h3 className="truncate text-[15px] font-extrabold" style={{ color: "#F7FAFF" }}>
-          Artwork title
+          Ronin sous la pluie
         </h3>
         <p className="mt-0.5 text-[12px] font-semibold" style={{ color: "#7F8CB3" }}>
-          @artist_username
+          Illustration · encre
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Chip>Ink</Chip>

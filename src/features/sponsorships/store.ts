@@ -64,7 +64,7 @@ let state: Sponsorship[] = [
     conditions: "Deliverables must go live within 10 days of asset handoff. No mention of competing titles.",
     createdAt: "2026-07-01",
     participants: [
-      { id: "p1", name: "Kaira Yumi", role: "creator", meta: "218k · YouTube · Manga reviews", initials: "KY" },
+      { id: "p1", name: "Kaira Yumi", role: "creator", meta: "218k abonnés · YouTube", initials: "KY" },
       { id: "p2", name: "Studio Ronin", role: "owner", meta: "Publisher · 12 titles", initials: "SR" },
       { id: "p3", name: "Aiko Hara", role: "manager", meta: "Talent management", initials: "AH" },
     ],
