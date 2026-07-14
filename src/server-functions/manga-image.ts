@@ -113,7 +113,6 @@ export type MangaBackendStatusResult = {
     creditCost?: number;
     referenceImagesEnabled?: boolean;
     referenceImageAspectGuard?: boolean;
-    maxReferenceImages?: number;
     generationEndpoint?: string;
   };
   error?: string;

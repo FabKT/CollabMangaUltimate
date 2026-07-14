@@ -609,7 +609,7 @@ function CollabMangaAIPage() {
     try {
       const role = forcedRole ?? uploadRole;
       const imported = await Promise.all(
-        imageFiles.slice(0, 8).map(async (file) => {
+        imageFiles.map(async (file) => {
           const image = await readImageAsDataUrl(file);
           return {
             id: createId("asset"),

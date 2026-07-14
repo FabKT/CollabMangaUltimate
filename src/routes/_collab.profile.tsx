@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { addAnnouncement, addIllustration } from "@/lib/db";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -13,7 +14,6 @@ import {
   Eye,
   Globe2,
   Image as ImageIcon,
-  Layers,
   Link2,
   MessageSquare,
   Palette,
@@ -214,7 +214,7 @@ function ProfilePage({
             { id: "projects", label: "Projects Promoted" },
             { id: "propositions", label: "Idées" },
           ];
-    if (mode === "own") base.push({ id: "account", label: "Account" });
+    if (mode === "own") base.push({ id: "favorites", label: "Favoris" }, { id: "account", label: "Account" });
     return base;
   }, [profileType, mode]);
 
@@ -311,9 +311,14 @@ function ProfilePage({
                 />
               </Tabs.Content>
               {mode === "own" && (
-                <Tabs.Content value="account">
-                  <AccountTab profileType={profileType} />
-                </Tabs.Content>
+                <>
+                  <Tabs.Content value="favorites">
+                    <FavoritesTab onDetails={(t, k) => setDetailsOpen({ title: t, kind: k })} />
+                  </Tabs.Content>
+                  <Tabs.Content value="account">
+                    <AccountTab profileType={profileType} />
+                  </Tabs.Content>
+                </>
               )}
             </div>
           </Tabs.Root>
@@ -1337,8 +1342,67 @@ function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails
               {mode === "own" ? (
                 <PrimaryButton icon={<Edit3 size={16} />}>Edit</PrimaryButton>
               ) : (
-                <PrimaryButton icon={<Layers size={16} />}>Use in Project</PrimaryButton>
+                <PrimaryButton icon={<Check size={16} />}>Save</PrimaryButton>
               )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function FavoritesTab({ onDetails }: { onDetails: (title: string, kind: string) => void }) {
+  const groups = [
+    {
+      title: "Annonces",
+      kind: "Announcement",
+      items: ["Dessinateur pour manga shonen", "Scenariste pour one-shot seinen"],
+    },
+    {
+      title: "Idées",
+      kind: "Idée",
+      items: ["Systeme de pouvoir lie aux contrats", "Arc narratif du tournoi souterrain"],
+    },
+    {
+      title: "Illustrations",
+      kind: "Illustration",
+      items: ["Character sheet sombre", "Illustration action urbaine"],
+    },
+    {
+      title: "Parrainages",
+      kind: "Sponsorship option",
+      items: ["Short review manga", "Video analyse chapitre 1"],
+    },
+  ];
+
+  return (
+    <Panel>
+      <SectionTitle
+        title="Favoris"
+        subtitle="Elements sauvegardes, separes par categorie pour les retrouver rapidement."
+      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {groups.map((group) => (
+          <Card key={group.title}>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>{group.title}</h3>
+              <Chip tone="info">{group.items.length}</Chip>
+            </div>
+            <div className="mt-4 space-y-3">
+              {group.items.map((item) => (
+                <div
+                  key={item}
+                  className="flex items-center justify-between gap-3 rounded-[14px] border px-3 py-3"
+                  style={{ borderColor: "rgba(133,154,206,0.18)", background: "#0E193A" }}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{item}</p>
+                    <p className="mt-0.5 text-[12px] font-semibold" style={{ color: "#7F8CB3" }}>{group.kind}</p>
+                  </div>
+                  <SecondaryButton onClick={() => onDetails(item, group.kind)}>Details</SecondaryButton>
+                </div>
+              ))}
             </div>
           </Card>
         ))}
@@ -1349,9 +1413,9 @@ function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails
 
 function AnnouncementsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
   const items = [
-    { kind: "project" as const, title: "Manga project looking for dessinateur" },
-    { kind: "user" as const, title: "Scénariste looking for a serialized project" },
-    { kind: "project" as const, title: "Seinen project seeking a reader" },
+    { kind: "project" as const, title: "Manga project looking for dessinateur", remuneration: true, engagement: "Long terme" },
+    { kind: "user" as const, title: "Scénariste looking for a serialized project", remuneration: false, engagement: "Ponctuel" },
+    { kind: "project" as const, title: "Seinen project seeking a reader", remuneration: true, engagement: "Ponctuel" },
   ];
   return (
     <Panel>
@@ -1367,7 +1431,10 @@ function AnnouncementsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetail
               <Chip tone={it.kind === "project" ? "info" : "active"}>
                 {it.kind === "project" ? "Project seeks partner" : "User seeks project"}
               </Chip>
-              <Chip tone="warning">Recruiting</Chip>
+              <div className="flex items-center gap-1.5">
+                {it.remuneration && <Chip tone="active">€</Chip>}
+                <Chip tone="warning">Recruiting</Chip>
+              </div>
             </div>
             <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
               {it.title}
@@ -1377,8 +1444,9 @@ function AnnouncementsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetail
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               <Chip>{it.kind === "project" ? "Role · Dessinateur" : "Offering · Scénariste"}</Chip>
+              <Chip>{it.engagement}</Chip>
+              <Chip>{it.remuneration ? "Rémunération" : "Sans rémunération"}</Chip>
               <Chip>Shonen</Chip>
-              <Chip>Remote</Chip>
             </div>
             <div className="mt-4 flex items-center gap-2">
               <SecondaryButton onClick={() => onDetails(it.title)}>View Details</SecondaryButton>
@@ -1781,23 +1849,27 @@ function ChoiceRow({
   options,
   multi = false,
   defaultValue,
+  onChange,
 }: {
   label: string;
   options: string[];
   multi?: boolean;
   defaultValue?: string;
+  onChange?: (selected: string[]) => void;
 }) {
   const [sel, setSel] = useState<string[]>(defaultValue ? [defaultValue] : []);
   const toggle = (o: string) =>
-    setSel((prev) =>
-      multi
+    setSel((prev) => {
+      const next = multi
         ? prev.includes(o)
           ? prev.filter((x) => x !== o)
           : [...prev, o]
         : prev[0] === o
           ? []
-          : [o],
-    );
+          : [o];
+      onChange?.(next);
+      return next;
+    });
   return (
     <div>
       <div className="mb-2 text-[12px] font-bold" style={{ color: "#B8C4E5" }}>{label}</div>
@@ -1839,19 +1911,23 @@ function Dropzone() {
 function ClassicImageUploader({
   multiple = true,
   label = "Importer une image",
+  onFiles,
 }: {
   multiple?: boolean;
   label?: string;
+  onFiles?: (files: File[]) => void;
 }) {
   const [images, setImages] = useState<string[]>([]);
+  const filesRef = useRef<File[]>([]);
   const inputId = useMemo(() => `classic-upload-${Math.random().toString(36).slice(2)}`, []);
   const activeImage = images[0];
 
   const addFiles = (fileList: FileList | null) => {
     if (!fileList?.length) return;
-    const urls = Array.from(fileList)
-      .filter((file) => file.type.startsWith("image/"))
-      .map((file) => URL.createObjectURL(file));
+    const incoming = Array.from(fileList).filter((file) => file.type.startsWith("image/"));
+    const urls = incoming.map((file) => URL.createObjectURL(file));
+    filesRef.current = multiple ? [...filesRef.current, ...incoming] : incoming.slice(0, 1);
+    onFiles?.(filesRef.current);
     setImages((current) => (multiple ? [...current, ...urls] : urls.slice(0, 1)));
   };
 
@@ -1953,6 +2029,47 @@ function AddSponsorshipModal({ open, onClose }: { open: boolean; onClose: () => 
 }
 
 function AddAnnouncementModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [language, setLanguage] = useState("FR");
+  const [title, setTitle] = useState("");
+  const [hook, setHook] = useState("");
+  const [description, setDescription] = useState("");
+  const [statusSought, setStatusSought] = useState("Scénariste");
+  const [genres, setGenres] = useState<string[]>([]);
+  const [subgenres, setSubgenres] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const submit = async () => {
+    setError(null);
+    if (!title.trim()) {
+      setError("Donne un titre à ton annonce.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await addAnnouncement({
+        mode: "collaborator",
+        title: title.trim(),
+        hook: hook.trim(),
+        description: description.trim(),
+        language,
+        status_sought: statusSought,
+        genres,
+        subgenres,
+      });
+      setDone(true);
+      setTimeout(() => {
+        setDone(false);
+        onClose();
+      }, 1200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Publication impossible.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalShell
       open={open}
@@ -1962,51 +2079,134 @@ function AddAnnouncementModal({ open, onClose }: { open: boolean; onClose: () =>
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={onClose}>Confirmer</PrimaryButton>
+          <PrimaryButton onClick={submit}>
+            {saving ? "Publication…" : done ? "Publiée ✓" : "Confirmer"}
+          </PrimaryButton>
         </>
       }
     >
       <div className="space-y-6">
-        <ChoiceRow label="Langage" options={["FR", "ENG"]} defaultValue="FR" />
-        <Field label="Titre"><input className="cm-input" placeholder="Titre" /></Field>
-        <Field label="Accroche"><input className="cm-input" placeholder="Accroche" /></Field>
-        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" /></Field>
-        <ChoiceRow label="Statut recherché" options={["Scénariste", "Dessinateur"]} defaultValue="Scénariste" />
+        <ChoiceRow label="Langage" options={["FR", "ENG"]} defaultValue="FR" onChange={(s) => setLanguage(s[0] ?? "FR")} />
+        <Field label="Titre">
+          <input className="cm-input" placeholder="Titre" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <Field label="Accroche">
+          <input className="cm-input" placeholder="Accroche" value={hook} onChange={(e) => setHook(e.target.value)} />
+        </Field>
+        <Field label="Description">
+          <textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+        <ChoiceRow label="Statut recherché" options={["Scénariste", "Dessinateur"]} defaultValue="Scénariste" onChange={(s) => setStatusSought(s[0] ?? "")} />
+        <ToggleRow label="Rémunération" />
+        <ChoiceRow label="Engagement" options={["Long terme", "Ponctuel"]} defaultValue="Long terme" />
         <div>
           <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Type de projet favori</div>
           <div className="space-y-4">
-            <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} />
+            <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
             <ChoiceRow
               multi
               label="Sous-genre"
               options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
+              onChange={setSubgenres}
             />
           </div>
         </div>
+        {error && (
+          <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
+            {error}
+          </div>
+        )}
+        {done && (
+          <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.4)", color: "#39FF88" }}>
+            Annonce publiée ! Elle est visible dans la page Annonces.
+          </div>
+        )}
       </div>
     </ModalShell>
   );
 }
 
 function AddIllustrationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const reset = () => {
+    setTitle("");
+    setDescription("");
+    setFiles([]);
+    setError(null);
+    setDone(false);
+  };
+
+  const submit = async () => {
+    setError(null);
+    if (files.length === 0) {
+      setError("Importe au moins une image.");
+      return;
+    }
+    if (!title.trim()) {
+      setError("Donne un titre à ton illustration.");
+      return;
+    }
+    setSaving(true);
+    try {
+      // une entrée par image importée
+      for (const file of files) {
+        await addIllustration({ title: title.trim(), description: description.trim(), file });
+      }
+      setDone(true);
+      setTimeout(() => {
+        reset();
+        onClose();
+      }, 1200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Publication impossible.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalShell
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        reset();
+        onClose();
+      }}
       title="Ajouter illustration"
       width={980}
       footer={
         <>
-          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={onClose}>Confirmer</PrimaryButton>
+          <SecondaryButton onClick={() => { reset(); onClose(); }}>Annuler</SecondaryButton>
+          <PrimaryButton onClick={submit}>
+            {saving ? "Publication…" : done ? "Publiée ✓" : "Confirmer"}
+          </PrimaryButton>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ClassicImageUploader multiple label="Importer des illustrations" />
+        <ClassicImageUploader multiple label="Importer des illustrations" onFiles={setFiles} />
         <div className="space-y-4">
-          <Field label="Titre"><input className="cm-input" placeholder="Titre" /></Field>
-          <Field label="Description"><textarea className="cm-textarea" placeholder="Description" /></Field>
+          <Field label="Titre">
+            <input className="cm-input" placeholder="Titre" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
+          <Field label="Description">
+            <textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </Field>
+          {error && (
+            <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
+              {error}
+            </div>
+          )}
+          {done && (
+            <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.4)", color: "#39FF88" }}>
+              Illustration publiée ! Elle est maintenant visible dans la page Illustration.
+            </div>
+          )}
         </div>
       </div>
     </ModalShell>
@@ -2297,3 +2497,5 @@ function DetailsModal({
     </ModalShell>
   );
 }
+
+

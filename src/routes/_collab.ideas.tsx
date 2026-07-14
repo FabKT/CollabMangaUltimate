@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect, type ReactNode } from "react";
+import { addIdea, listIdeas } from "@/lib/db";
 import {
-  Search, X, Plus, Bookmark, MessageCircle, Copy, MoreHorizontal,
+  Search, X, Plus, Bookmark, MessageCircle, Copy,
   Sparkles, LayoutGrid, List, Images, ChevronDown, Filter, Check,
-  ArrowUpRight, FolderPlus, Link2, Edit3, Archive, Trash2, Share2,
+  ArrowUpRight, Link2, Trash2, Share2,
   Flag, RotateCcw, User, Send, ImageIcon, Wand2,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ type Prop = {
   saved: number;
   comments: number;
   mine?: boolean;
+  imageUrl?: string;
 };
 
 const seedProps: Prop[] = [
@@ -294,8 +296,39 @@ function PropositionsPage() {
   const [saved, setSaved] = useState<Set<string>>(new Set(["p3"]));
   const [open, setOpen] = useState<Prop | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [useInProject, setUseInProject] = useState<Prop | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [dbProps, setDbProps] = useState<Prop[]>([]);
+
+  // Idées réelles (Supabase), affichées avant les exemples
+  const refreshIdeas = () => {
+    listIdeas()
+      .then((rows) =>
+        setDbProps(
+          rows.map((r) => ({
+            id: r.id,
+            title: r.title,
+            category: r.category,
+            status: "Published",
+            visibility: "Public",
+            genres: [] as string[],
+            tone: "—",
+            usage: "—",
+            complexity: "—",
+            format: r.image_url ? "Image included" : "Text only",
+            author: r.author?.display_name || r.author?.username || "Utilisateur",
+            summary: r.description.slice(0, 160),
+            description: r.description,
+            hasImage: !!r.image_url,
+            hue: 150,
+            saved: 0,
+            comments: 0,
+            imageUrl: r.image_url ?? undefined,
+          })),
+        ),
+      )
+      .catch(() => setDbProps([]));
+  };
+  useEffect(refreshIdeas, []);
 
   const activeFilters = useMemo(() => {
     const arr: { label:string; clear:()=>void }[] = [];
@@ -312,7 +345,7 @@ function PropositionsPage() {
   }, [category,genre,tone,usage,complexity,format,visibility,status,search]);
 
   const results = useMemo(() => {
-    return seedProps.filter(p => {
+    return [...dbProps, ...seedProps].filter(p => {
       if (category!=="All" && p.category!==category) return false;
       if (genre!=="All" && !p.genres.includes(genre)) return false;
       if (tone!=="All" && p.tone!==tone) return false;
@@ -324,7 +357,7 @@ function PropositionsPage() {
       if (search && !`${p.title} ${p.summary} ${p.description}`.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [category,genre,tone,usage,complexity,format,visibility,status,search]);
+  }, [dbProps,category,genre,tone,usage,complexity,format,visibility,status,search]);
 
   const resetFilters = () => {
     setSearch(""); setCategory("All"); setGenre("All"); setTone("All"); setUsage("All");
@@ -431,7 +464,7 @@ function PropositionsPage() {
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {results.map(p => (
                   <PropCard key={p.id} p={p} saved={saved.has(p.id)} onSave={()=>toggleSave(p.id)}
-                    onOpen={()=>setOpen(p)} onUse={()=>setUseInProject(p)} />
+                    onOpen={()=>setOpen(p)} />
                 ))}
               </div>
             ) : view === "list" ? (
@@ -458,13 +491,9 @@ function PropositionsPage() {
           saved={saved.has(open.id)}
           onSave={()=>toggleSave(open.id)}
           onClose={()=>setOpen(null)}
-          onUse={()=>setUseInProject(open)}
         />
       )}
-      {showCreate && <CreateModal onClose={()=>setShowCreate(false)}/>}
-      {useInProject && (
-        <UseInProjectModal p={useInProject} onClose={()=>setUseInProject(null)}/>
-      )}
+      {showCreate && <CreateModal onClose={()=>setShowCreate(false)} onCreated={refreshIdeas}/>}
     </div>
   );
 }
@@ -482,8 +511,8 @@ function CardMeta({ p }: { p: Prop }) {
   );
 }
 
-function PropCard({ p, saved, onSave, onOpen, onUse }: {
-  p: Prop; saved: boolean; onSave: ()=>void; onOpen: ()=>void; onUse: ()=>void;
+function PropCard({ p, saved, onSave, onOpen }: {
+  p: Prop; saved: boolean; onSave: ()=>void; onOpen: ()=>void;
 }) {
   return (
     <article
@@ -497,37 +526,36 @@ function PropCard({ p, saved, onSave, onOpen, onUse }: {
           <IconBtn label={saved?"Saved":"Save"} onClick={onSave} className={saved?"!text-[var(--neon)] !border-[var(--neon-border)]":""}>
             <Bookmark className={`h-4 w-4 ${saved?"fill-current":""}`}/>
           </IconBtn>
-          <IconBtn label="More"><MoreHorizontal className="h-4 w-4"/></IconBtn>
         </div>
       </div>
 
-      {p.hasImage ? <Thumb hue={p.hue} category={p.category}/> : <NoImagePlaceholder/>}
+      {p.imageUrl ? (
+        <div className="aspect-[16/10] overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--input-bg)]">
+          <img src={p.imageUrl} alt={p.title} className="h-full w-full object-cover" />
+        </div>
+      ) : p.hasImage ? <Thumb hue={p.hue} category={p.category}/> : <NoImagePlaceholder/>}
 
       <div>
         <h3 className="text-[15px] leading-[22px] font-extrabold text-[var(--text)]">{p.title}</h3>
         <p className="mt-2 text-[14px] leading-[22px] text-[var(--text-secondary)] line-clamp-3">{p.description}</p>
       </div>
 
-      <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
-        <div className="min-w-0">
-          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Author</div>
+      <div className="flex items-center justify-between gap-3 pt-3 border-t border-[var(--border)]">
+        <div className="min-w-0 flex items-center gap-3">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display text-[12px] font-bold text-[var(--neon)]">
+            {p.author.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Profil</div>
           <div className="text-[13px] font-semibold text-[var(--text-secondary)] truncate">
             {p.author}{p.project && <span className="text-[var(--text-muted)]"> · {p.project}</span>}
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="hidden sm:inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--text-muted)] mr-2">
-            <Bookmark className="h-3.5 w-3.5"/>{p.saved}
-            <MessageCircle className="h-3.5 w-3.5 ml-2"/>{p.comments}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--text-muted)]">
+            <MessageCircle className="h-3.5 w-3.5"/>{p.comments}
           </span>
-          {p.mine ? (
-            <>
-              <IconBtn label="Edit"><Edit3 className="h-4 w-4"/></IconBtn>
-              <IconBtn label="Archive"><Archive className="h-4 w-4"/></IconBtn>
-            </>
-          ) : (
-            <IconBtn label="Use in project" onClick={onUse}><FolderPlus className="h-4 w-4"/></IconBtn>
-          )}
           <PrimaryBtn className="!h-9 !px-3 !text-[13px]" onClick={onOpen}>View Details</PrimaryBtn>
         </div>
       </div>
@@ -749,8 +777,8 @@ function categoryDetail(p: Prop): { title:string; items:[string,string][] } {
   }
 }
 
-function PropModal({ p, saved, onSave, onClose, onUse }: {
-  p: Prop; saved: boolean; onSave: ()=>void; onClose: ()=>void; onUse: ()=>void;
+function PropModal({ p, saved, onSave, onClose }: {
+  p: Prop; saved: boolean; onSave: ()=>void; onClose: ()=>void;
 }) {
   const [tab, setTab] = useState<"details" | "comments">("details");
   const authorName = p.author === "You" ? "Votre profil" : p.author.replace(/—/g, "").trim() || "Créateur CollabManga";
@@ -773,7 +801,11 @@ function PropModal({ p, saved, onSave, onClose, onUse }: {
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-[3fr_4fr] gap-6">
         <div className="space-y-5">
-          {p.hasImage ? <Thumb hue={p.hue} category={p.category} tall/> : <NoImagePlaceholder/>}
+          {p.imageUrl ? (
+            <div className="max-h-[60vh] overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--input-bg)]">
+              <img src={p.imageUrl} alt={p.title} className="h-full w-full object-contain" />
+            </div>
+          ) : p.hasImage ? <Thumb hue={p.hue} category={p.category} tall/> : <NoImagePlaceholder/>}
 
         </div>
 
@@ -819,16 +851,16 @@ function PropModal({ p, saved, onSave, onClose, onUse }: {
 
 }
 
-/* ---------------- Use in project modal ---------------- */
+/* ---------------- Legacy project attach modal ---------------- */
 
-function UseInProjectModal({ p, onClose }: { p: Prop; onClose: ()=>void }) {
+function LegacyProjectAttachModal({ p, onClose }: { p: Prop; onClose: ()=>void }) {
   const [project, setProject] = useState("Select a project…");
   const [target, setTarget] = useState("Project notes");
   return (
-    <ModalShell onClose={onClose} maxWidth="560px" label="Use in project">
+    <ModalShell onClose={onClose} maxWidth="560px" label="Legacy project attach">
       <div className="p-6 border-b border-[var(--border)] flex items-start justify-between gap-4">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--neon)] mb-1">Use in Project</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--neon)] mb-1">Legacy project attach</div>
           <h3 className="font-display text-[20px] leading-[28px] font-bold">{p.title}</h3>
           <p className="text-[13px] text-[var(--text-muted)] mt-1">{p.category} · {p.tone}</p>
         </div>
@@ -870,16 +902,43 @@ function StepDot({ n, active, done, label }: { n:number; active:boolean; done:bo
   );
 }
 
-function CreateModal({ onClose }: { onClose: ()=>void }) {
+function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()=>void }) {
   const [ideaImages, setIdeaImages] = useState<string[]>([]);
+  const [ideaFiles, setIdeaFiles] = useState<File[]>([]);
+  const [ideaCategory, setIdeaCategory] = useState(CATEGORIES[1]);
+  const [ideaTitle, setIdeaTitle] = useState("");
+  const [ideaDescription, setIdeaDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const ideaInputId = "idea-create-images";
   const activeIdeaImage = ideaImages[0];
   const addIdeaFiles = (files: FileList | null) => {
     if (!files?.length) return;
-    const urls = Array.from(files)
-      .filter((file) => file.type.startsWith("image/"))
-      .map((file) => URL.createObjectURL(file));
+    const incoming = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    const urls = incoming.map((file) => URL.createObjectURL(file));
+    setIdeaFiles((current) => [...current, ...incoming]);
     setIdeaImages((current) => [...current, ...urls]);
+  };
+
+  const submitIdea = async () => {
+    setCreateError(null);
+    if (!ideaTitle.trim()) { setCreateError("Donne un titre à ton idée."); return; }
+    if (!ideaDescription.trim()) { setCreateError("Ajoute une description."); return; }
+    setSaving(true);
+    try {
+      await addIdea({
+        title: ideaTitle.trim(),
+        category: ideaCategory,
+        description: ideaDescription.trim(),
+        file: ideaFiles[0] ?? null,
+      });
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Publication impossible.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -919,19 +978,24 @@ function CreateModal({ onClose }: { onClose: ()=>void }) {
         </div>
         <div className="space-y-4">
           <Field label="Type d'idée">
-            <Select value={CATEGORIES[1]} onChange={() => {}} options={CATEGORIES.filter((c) => c !== "All")} />
+            <Select value={ideaCategory} onChange={setIdeaCategory} options={CATEGORIES.filter((c) => c !== "All")} />
           </Field>
           <Field label="Titre">
-            <TextInput placeholder="Titre de l'idée" />
+            <TextInput placeholder="Titre de l'idée" value={ideaTitle} onChange={(e)=>setIdeaTitle(e.target.value)} />
           </Field>
           <Field label="Description">
-            <TextArea placeholder="Décris l'idée, son intérêt et son usage possible." />
+            <TextArea placeholder="Décris l'idée, son intérêt et son usage possible." value={ideaDescription} onChange={(e)=>setIdeaDescription(e.target.value)} />
           </Field>
+          {createError && (
+            <div className="rounded-[12px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-4 py-3 text-[13px] font-semibold text-[var(--danger)]">
+              {createError}
+            </div>
+          )}
         </div>
       </div>
       <div className="p-5 border-t border-[var(--border)] flex items-center justify-end gap-2">
         <SecondaryBtn onClick={onClose}>Annuler</SecondaryBtn>
-        <PrimaryBtn onClick={onClose}><Check className="h-4 w-4"/>Ajouter l'idée</PrimaryBtn>
+        <PrimaryBtn onClick={submitIdea}><Check className="h-4 w-4"/>{saving ? "Publication…" : "Ajouter l'idée"}</PrimaryBtn>
       </div>
     </ModalShell>
   );

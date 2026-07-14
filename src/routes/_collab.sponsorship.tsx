@@ -81,12 +81,47 @@ function SponsorshipPage() {
     return chips;
   }, [search, filters]);
 
+  // normalisation plateforme ("Youtube" ≈ "YouTube", "Twitter" ≈ "Twitter / X")
+  const normPlatform = (p: string) => p.toLowerCase().replace(/[^a-z]/g, "");
+
   const results = useMemo(() => {
+    const minP = Number(filters.minPrice) || 0;
+    const maxP = Number(filters.maxPrice) || 0;
+    const minC = Number(filters.minChapters) || 0;
+    const maxC = Number(filters.maxChapters) || 0;
+    const minS = Number(filters.minSubs) || 0;
+    const maxS = Number(filters.maxSubs) || 0;
+
     return ANNOUNCEMENTS.filter((a) => a.mode === mode).filter((a) => {
-      if (search && !a.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !`${a.title} ${a.ownerName} ${a.shortDescription}`.toLowerCase().includes(search.toLowerCase())) return false;
+
+      // prix (bornes de l'annonce vs bornes du filtre)
+      if (minP > 0 && (a.priceMax ?? 0) < minP) return false;
+      if (maxP > 0 && (a.priceMin ?? Infinity) > maxP) return false;
+
+      // type de parrainage / type de vidéo / durée
+      if (filters.sponsorTypes.length && !filters.sponsorTypes.includes(a.sponsorshipType)) return false;
+      if (filters.videoTypes.length && (!a.videoType || !filters.videoTypes.includes(a.videoType))) return false;
+      if (filters.durations.length && (!a.duration || !filters.durations.includes(a.duration))) return false;
+
+      // projet : genre + chapitres
+      if (filters.genres.length && !filters.genres.includes(a.category)) return false;
+      if (filters.subGenres.length && !filters.subGenres.includes(a.category)) return false;
+      if (minC > 0 && (a.chapters ?? 0) < minC) return false;
+      if (maxC > 0 && (a.chapters ?? Infinity) > maxC) return false;
+
+      // créateur : plateformes + mode de paiement + abonnés
+      if (filters.platforms.length) {
+        const have = a.platforms.map(normPlatform);
+        if (!filters.platforms.some((p) => have.some((h) => h.startsWith(normPlatform(p))))) return false;
+      }
+      if (filters.paymentModes.length && !filters.paymentModes.includes(a.paymentMode)) return false;
+      if (minS > 0 && (a.subscribers ?? 0) < minS) return false;
+      if (maxS > 0 && (a.subscribers ?? Infinity) > maxS) return false;
+
       return true;
     });
-  }, [mode, search]);
+  }, [mode, search, filters]);
 
   return (
     <div className="min-h-screen bg-cm-bg font-manrope text-cm-text">

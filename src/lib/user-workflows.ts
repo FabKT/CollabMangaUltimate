@@ -274,7 +274,9 @@ export function sendProposal(input: {
     entityType: "Propositions",
     entityTitle: input.projectTitle || input.title,
     payload: input,
-    notification: input.recipient
+    notification: undefined,
+    /*
+    input.recipient
       ? {
           category: "project",
           type: "proposition",
@@ -297,6 +299,7 @@ export function sendProposal(input: {
           ],
         }
       : undefined,
+    */
   });
 }
 
@@ -317,7 +320,9 @@ export function respondToProposal(input: {
     entityType: "Réponses",
     entityTitle: input.proposalTitle,
     payload: input,
-    notification: {
+    notification: undefined,
+    /*
+    {
       category: "project",
       type: "reponse_proposition",
       title: `${actor} a ${input.accepted ? "accepté" : "refusé"} ta proposition de collaboration`,
@@ -330,6 +335,7 @@ export function respondToProposal(input: {
       actions: [{ label: "Voir le profil", kind: "secondary" }],
       meta: [{ label: "Décision", value: input.accepted ? "Acceptée" : "Refusée" }],
     },
+    */
   });
 }
 
@@ -630,5 +636,115 @@ export function createProjectWorkflow(input: {
     entityType: "Projets",
     entityTitle: input.title,
     payload: input,
+  });
+}
+
+/** Vide entièrement le store local (records + notifications). */
+export function clearWorkflowState() {
+  writeState(emptyState());
+}
+
+/**
+ * DÉMO — génère un exemplaire de CHAQUE type de notification que le système
+ * peut produire (12 types), adressé à l'utilisateur courant, pour valider le
+ * rendu de la page Notifications. Repart d'un store vide.
+ */
+export function seedDemoWorkflowNotifications() {
+  clearWorkflowState();
+
+  // 1. invitation_collab — invitation à collaborer sur un projet
+  sendCollaborationInvitation({
+    recipient: CURRENT_USER,
+    projectTitle: "Neon Ronin",
+    role: "Dessinateur",
+    message: "Ton style colle parfaitement à notre univers cyberpunk, rejoins l'équipe pour l'arc 2 !",
+    initiator: "Aiko Tanaka",
+  });
+
+  // 2. retrait_collab — retiré d'un projet
+  removeCollaborator({
+    collaborator: CURRENT_USER,
+    projectTitle: "Hollow Sky",
+    initiator: "Ren Sato",
+  });
+
+  // 3. proposition — proposition de collaboration reçue
+  sendProposal({
+    title: "Refonte du chara-design du protagoniste",
+    description: "Je te propose une passe complète sur le design du héros : silhouette, expressions et tenue alternative.",
+    skills: ["Character design", "Encrage"],
+    projectTitle: "Ashen Verdict",
+    recipient: CURRENT_USER,
+    deadline: "2026-08-01",
+    initiator: "Mika Ito",
+  });
+
+  // 4. reponse_proposition — réponse à ta proposition
+  respondToProposal({
+    proposalTitle: "Pages d'action chapitre 5",
+    accepted: true,
+    message: "Ta proposition est exactement ce qu'on cherchait, on démarre lundi.",
+    recipient: CURRENT_USER,
+    initiator: "Hana Kimura",
+  });
+
+  // 5. abonnement — nouvel abonné
+  followCreator({ creatorName: CURRENT_USER, initiator: "Yui Nakamura" });
+
+  // 6. demande_ami
+  sendFriendRequest({ recipient: CURRENT_USER, initiator: "Kenji Watanabe" });
+
+  // 7. ami_accepte — demande d'ami acceptée
+  respondToFriendRequest({ requester: CURRENT_USER, accepted: true, initiator: "Sora Fujimoto" });
+
+  // 8. parrainage — demande de parrainage
+  sendPatronageRequest({
+    recipient: CURRENT_USER,
+    level: "Vidéo longue dédiée",
+    message: "Je veux mettre en avant ton manga sur ma chaîne, 4 vidéos sur le mois.",
+    startDate: "2026-08-15",
+    initiator: "@panelpulse",
+  });
+
+  // 9. sponsoring — sponsoring d'une de tes annonces
+  sendAnnouncementSponsoring({
+    announcementTitle: "Recherche coloriste — Kurogane Requiem",
+    owner: CURRENT_USER,
+    duration: "6 semaines",
+    level: "Post communautaire",
+    message: "Je sponsorise ton annonce pour lui donner plus de visibilité auprès de ma communauté.",
+    initiator: "Orion Ink",
+  });
+
+  // 10. candidature_parrainage — un créateur candidate à ton annonce projet
+  sendSponsorshipContact({
+    announcementTitle: "Lancement shonen — Neon Ronin",
+    announcementMode: "project",
+    owner: CURRENT_USER,
+    linked: "Neon Ronin",
+    budgetOrPrice: "300–800 €",
+    sponsorshipType: "Vidéo longue dédiée",
+    message: "Ma chaîne (48k abonnés) est spécialisée shonen, je propose une présentation complète du projet.",
+    initiator: "@midori_talks",
+  });
+
+  // 11. contact_parrainage — un porteur de projet contacte ton offre créateur
+  sendSponsorshipContact({
+    announcementTitle: "Review dédiée sur ma chaîne",
+    announcementMode: "creator",
+    owner: CURRENT_USER,
+    linked: "@toi",
+    budgetOrPrice: "260 €",
+    sponsorshipType: "Review",
+    message: "Notre seinen sort son tome 2, ta review serait parfaite pour le lancement.",
+    initiator: "Studio Kuro",
+  });
+
+  // 12. note_projet — note ajoutée sur un projet partagé
+  createProjectNote({
+    projectTitle: "Neon Ronin",
+    content: "J'ai déposé les références de décors pour les toits du chapitre 3 — regarde avant de commencer les planches.",
+    collaborators: [CURRENT_USER, "Aiko Tanaka"],
+    initiator: "Aiko Tanaka",
   });
 }

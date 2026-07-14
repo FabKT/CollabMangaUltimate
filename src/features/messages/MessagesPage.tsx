@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  currentUserId,
+  listConversations,
+  listMessages as dbListMessages,
+  sendMessage as dbSendMessage,
+  startConversationWith,
+  searchProfiles,
+  subscribeMessages,
+  type DbProfile,
+} from "@/lib/db";
+import {
   Bell,
   Check,
   FileText,
@@ -258,7 +268,7 @@ function normalizeKind(value: unknown): ConversationKind {
 function normalizeAttachment(value: unknown): ChatMessage["attachment"] | undefined {
   if (!isRecord(value)) return undefined;
   const rawIcon = asString(value.icon, asString(value.kind));
-  const icon: ChatMessage["attachment"]["icon"] =
+  const icon: NonNullable<ChatMessage["attachment"]>["icon"] =
     rawIcon === "project" || rawIcon === "sponsorship" || rawIcon === "file" || rawIcon === "image"
       ? rawIcon
       : rawIcon === "gif" || rawIcon === "link"
@@ -371,13 +381,57 @@ export default function MessagesPage() {
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [pendingAttachment, setPendingAttachment] = useState<ChatMessage["attachment"] | null>(null);
 
+  // ----- conversations réelles (Supabase) -----
+  const [myUid, setMyUid] = useState<string | null>(null);
+  const [dbConvs, setDbConvs] = useState<Conversation[]>([]);
+  const [dbMessages, setDbMessages] = useState<Record<string, ChatMessage[]>>({});
+  const isDbId = (id: string) => id.startsWith("db-");
+  const realId = (id: string) => id.slice(3);
+
+  const refreshDbConversations = async () => {
+    const uid = await currentUserId();
+    setMyUid(uid);
+    if (!uid) {
+      setDbConvs([]);
+      return;
+    }
+    try {
+      const rows = await listConversations();
+      setDbConvs(
+        rows.map((c) => {
+          const other = c.others[0];
+          const name = other?.display_name || other?.username || "Conversation";
+          return {
+            id: `db-${c.id}`,
+            kind: "friend" as ConversationKind,
+            title: name,
+            subtitle: c.lastMessage?.content?.slice(0, 60) || "Conversation privée",
+            initials: name.slice(0, 2).toUpperCase(),
+            participants: ["Vous", name],
+            linkedLabel: "Message direct",
+            unread: 0,
+            updatedAt: c.lastMessage?.created_at ?? c.created_at,
+          };
+        }),
+      );
+    } catch {
+      setDbConvs([]);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDbConversations();
+  }, []);
+
   useEffect(() => {
     saveState(store);
   }, [store]);
 
+  const allConversations = useMemo(() => [...dbConvs, ...store.conversations], [dbConvs, store.conversations]);
+
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return store.conversations
+    return allConversations
       .filter((conversation) => conversation.kind === tab)
       .filter((conversation) => {
         if (!term) return true;
@@ -389,10 +443,41 @@ export default function MessagesPage() {
         ].join(" ").toLowerCase().includes(term);
       })
       .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || +new Date(b.updatedAt) - +new Date(a.updatedAt));
-  }, [query, store.conversations, tab]);
+  }, [query, allConversations, tab]);
 
-  const selected = store.conversations.find((conversation) => conversation.id === selectedId) ?? filtered[0] ?? null;
-  const messages = selected ? store.messages[selected.id] ?? [] : [];
+  const selected = allConversations.find((conversation) => conversation.id === selectedId) ?? filtered[0] ?? null;
+  const messages = selected
+    ? isDbId(selected.id)
+      ? dbMessages[selected.id] ?? []
+      : store.messages[selected.id] ?? []
+    : [];
+
+  // Chargement + Realtime de la conversation réelle sélectionnée
+  useEffect(() => {
+    if (!selected || !isDbId(selected.id) || !myUid) return;
+    const uiId = selected.id;
+    const otherName = selected.title;
+    const mapRow = (m: { id: string; sender_id: string; content: string; created_at: string }): ChatMessage => ({
+      id: m.id,
+      conversationId: uiId,
+      author: m.sender_id === myUid ? "me" : "them",
+      name: m.sender_id === myUid ? "Vous" : otherName,
+      initials: m.sender_id === myUid ? "VO" : otherName.slice(0, 2).toUpperCase(),
+      body: m.content,
+      createdAt: m.created_at,
+    });
+    dbListMessages(realId(uiId))
+      .then((rows) => setDbMessages((cur) => ({ ...cur, [uiId]: rows.map(mapRow) })))
+      .catch(() => {});
+    const unsubscribe = subscribeMessages(realId(uiId), (m) => {
+      setDbMessages((cur) => {
+        const existing = cur[uiId] ?? [];
+        if (existing.some((x) => x.id === m.id)) return cur;
+        return { ...cur, [uiId]: [...existing, mapRow(m)] };
+      });
+    });
+    return unsubscribe;
+  }, [selected?.id, myUid]);
 
   useEffect(() => {
     if (!selected && filtered[0]) setSelectedId(filtered[0].id);
@@ -411,7 +496,7 @@ export default function MessagesPage() {
   const selectTab = (kind: ConversationKind) => {
     setTab(kind);
     setQuery("");
-    const first = store.conversations
+    const first = allConversations
       .filter((conversation) => conversation.kind === kind)
       .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt))[0];
     setSelectedId(first?.id ?? "");
@@ -421,6 +506,34 @@ export default function MessagesPage() {
     if (!selected) return;
     const text = draft.trim();
     if (!text && !pendingAttachment) return;
+
+    // Conversation réelle → envoi Supabase (le Realtime ajoutera le message)
+    if (isDbId(selected.id)) {
+      if (!text) return;
+      const uiId = selected.id;
+      setDraft("");
+      setPendingAttachment(null);
+      dbSendMessage(realId(uiId), text)
+        .then((m) => {
+          setDbMessages((cur) => {
+            const existing = cur[uiId] ?? [];
+            if (existing.some((x) => x.id === m.id)) return cur;
+            return {
+              ...cur,
+              [uiId]: [
+                ...existing,
+                { id: m.id, conversationId: uiId, author: "me", name: "Vous", initials: "VO", body: m.content, createdAt: m.created_at },
+              ],
+            };
+          });
+          setDbConvs((cur) =>
+            cur.map((c) => (c.id === uiId ? { ...c, subtitle: text.slice(0, 60), updatedAt: m.created_at } : c)),
+          );
+        })
+        .catch(() => {});
+      return;
+    }
+
     const createdAt = nowIso();
     const message: ChatMessage = {
       id: uid("msg"),
@@ -627,6 +740,14 @@ export default function MessagesPage() {
           initialKind={tab}
           onClose={() => setNewOpen(false)}
           onCreate={createConversation}
+          onCreateReal={async (profile, firstMessage) => {
+            const convId = await startConversationWith(profile.id);
+            await dbSendMessage(convId, firstMessage);
+            await refreshDbConversations();
+            setTab("friend");
+            setSelectedId(`db-${convId}`);
+            setNewOpen(false);
+          }}
         />
       )}
     </main>
@@ -873,16 +994,37 @@ function NewConversationDialog({
   initialKind,
   onClose,
   onCreate,
+  onCreateReal,
 }: {
   initialKind: ConversationKind;
   onClose: () => void;
   onCreate: (input: { kind: ConversationKind; title: string; subtitle: string; firstMessage: string; linkedLabel?: string }) => void;
+  onCreateReal?: (profile: DbProfile, firstMessage: string) => Promise<void>;
 }) {
   const [kind, setKind] = useState<ConversationKind>(initialKind);
   const [title, setTitle] = useState("");
   const [linked, setLinked] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [results, setResults] = useState<DbProfile[]>([]);
+  const [picked, setPicked] = useState<DbProfile | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Recherche de profils réels quand on démarre une conversation « Amis »
+  useEffect(() => {
+    if (kind !== "friend") return;
+    const q = title.trim();
+    if (picked && q === picked.username) return;
+    setPicked(null);
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      searchProfiles(q).then(setResults).catch(() => setResults([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [title, kind]);
 
   const submit = () => {
     setError("");
@@ -892,6 +1034,19 @@ function NewConversationDialog({
     }
     if (!message.trim()) {
       setError("Ecris un premier message.");
+      return;
+    }
+    // « Amis » = vraie conversation Supabase avec un profil existant
+    if (kind === "friend" && onCreateReal) {
+      if (!picked) {
+        setError("Choisis un profil existant dans la liste (tape au moins 2 lettres du pseudo).");
+        return;
+      }
+      setBusy(true);
+      onCreateReal(picked, message.trim()).catch((err) => {
+        setBusy(false);
+        setError(err instanceof Error ? err.message : "Création impossible.");
+      });
       return;
     }
     const subtitle = kind === "project" ? "Conversation de projet" : kind === "sponsorship" ? "Conversation de parrainage" : "Message prive";
@@ -947,8 +1102,37 @@ function NewConversationDialog({
             label={kind === "friend" ? "Ami ou profil" : kind === "project" ? "Nom du projet" : "Nom du parrainage"}
             value={title}
             onChange={setTitle}
-            placeholder={kind === "friend" ? "Aiko Tanaka" : kind === "project" ? "Nightfall Chronicles" : "Campagne Volume 2"}
+            placeholder={kind === "friend" ? "Tape un pseudo (2 lettres min)…" : kind === "project" ? "Nightfall Chronicles" : "Campagne Volume 2"}
           />
+          {kind === "friend" && results.length > 0 && !picked && (
+            <div className="overflow-hidden rounded-[14px] border border-border-default bg-input-bg">
+              {results.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setPicked(p);
+                    setTitle(p.username);
+                    setResults([]);
+                  }}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-surface"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neon-soft text-[11px] font-bold text-neon">
+                    {(p.display_name || p.username).slice(0, 2).toUpperCase()}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-bold text-text-primary">{p.username}</span>
+                    {p.display_name && <span className="block truncate text-[11px] text-text-muted">{p.display_name}</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {kind === "friend" && picked && (
+            <div className="flex items-center gap-2 rounded-[14px] border border-[rgba(57,255,136,0.4)] bg-[rgba(57,255,136,0.08)] px-3 py-2 text-[13px] font-bold text-neon">
+              Destinataire : {picked.username}
+            </div>
+          )}
           <TextField
             label="Lien optionnel"
             value={linked}
@@ -982,9 +1166,10 @@ function NewConversationDialog({
           <button
             type="button"
             onClick={submit}
-            className="h-11 rounded-[14px] bg-neon px-4 text-[14px] font-bold text-[#04111E] transition hover:bg-neon-hover"
+            disabled={busy}
+            className="h-11 rounded-[14px] bg-neon px-4 text-[14px] font-bold text-[#04111E] transition hover:bg-neon-hover disabled:opacity-60"
           >
-            Creer la discussion
+            {busy ? "Création…" : "Creer la discussion"}
           </button>
         </div>
       </div>

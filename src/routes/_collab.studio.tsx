@@ -749,19 +749,27 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
 /* ----- Sponsorship tab ----- */
 
 function AnnonceCard({
-  title, status, statusTone, description, metas,
+  title, status, statusTone, description, metas, remunerated = false,
 }: {
   title: string;
   status: string;
   statusTone: "neutral" | "neon" | "warn" | "danger" | "info";
   description: string;
   metas: { label: string; value: string }[];
+  remunerated?: boolean;
 }) {
   return (
     <div className="flex flex-col rounded-[22px] border border-[var(--border-default)] bg-[var(--elevated)] p-5 shadow-[var(--shadow-card)]">
       <div className="flex items-start justify-between gap-3">
         <h3 className="min-w-0 flex-1 truncate font-display text-[16px] font-extrabold leading-[22px]">{title}</h3>
-        <StatusChip label={status} tone={statusTone} />
+        <div className="flex shrink-0 items-center gap-2">
+          {remunerated && (
+            <span className="grid h-8 w-8 place-items-center rounded-full border border-[rgba(57,255,136,0.45)] bg-[rgba(57,255,136,0.12)] font-display text-[14px] font-black text-[var(--neon)]">
+              €
+            </span>
+          )}
+          <StatusChip label={status} tone={statusTone} />
+        </div>
       </div>
       <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[var(--text-secondary)]">{description}</p>
       <div className="mt-4 grid grid-cols-3 gap-3">
@@ -784,8 +792,8 @@ function AnnonceCard({
 
 function RecrutementTab({ onAddRecruit }: { onAddRecruit: () => void }) {
   const recruit = [
-    { id: "r1", role: "Dessinateur", status: "Ouverte", description: "Recherche un dessinateur pour les planches des prochains chapitres.", commitment: "Long terme", compensation: "Revenue share", created: "Cette semaine" },
-    { id: "r2", role: "Scénariste", status: "Brouillon", description: "Besoin d'un scénariste pour renforcer le rythme et les dialogues du projet.", commitment: "Ponctuel", compensation: "À définir", created: "Aujourd'hui" },
+    { id: "r1", role: "Dessinateur", status: "Ouverte", description: "Recherche un dessinateur pour les planches des prochains chapitres.", commitment: "Long terme", compensation: "Revenue share", remunerated: true, created: "Cette semaine" },
+    { id: "r2", role: "Scénariste", status: "Brouillon", description: "Besoin d'un scénariste pour renforcer le rythme et les dialogues du projet.", commitment: "Ponctuel", compensation: "À définir", remunerated: false, created: "Aujourd'hui" },
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -809,6 +817,7 @@ function RecrutementTab({ onAddRecruit }: { onAddRecruit: () => void }) {
               { label: "Rémunération", value: r.compensation },
               { label: "Créée", value: r.created },
             ]}
+            remunerated={r.remunerated}
           />
         ))}
       </div>
@@ -1116,6 +1125,7 @@ function AddParrainageModal({ onClose }: { onClose: () => void }) {
 }
 
 function AddRecruitModal({ onClose }: { onClose: () => void }) {
+  const [remuneration, setRemuneration] = useState(false);
   return (
     <StudioModal
       title="Nouvelle annonce de recrutement"
@@ -1128,6 +1138,26 @@ function AddRecruitModal({ onClose }: { onClose: () => void }) {
         <ModalField label="Accroche"><TextInput placeholder="Accroche" /></ModalField>
         <ModalField label="Description"><textarea placeholder="Description" className={modalTextarea} /></ModalField>
         <ChoiceRow label="Statut recherché" defaultValue="Scénariste" options={COLLAB_ROLES} />
+        <button
+          type="button"
+          role="switch"
+          aria-checked={remuneration}
+          onClick={() => setRemuneration((value) => !value)}
+          className="flex items-center justify-between rounded-[14px] border px-4 py-3 text-left"
+          style={{
+            borderColor: remuneration ? "rgba(57,255,136,0.45)" : "var(--border-default)",
+            background: remuneration ? "rgba(57,255,136,0.12)" : "var(--input-bg)",
+          }}
+        >
+          <span className="text-[13px] font-bold text-[var(--text-primary)]">Rémunération</span>
+          <span className="relative h-6 w-11 rounded-full border border-[var(--border-default)] bg-[var(--elevated)]">
+            <span
+              className="absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all"
+              style={{ left: remuneration ? 22 : 2, background: remuneration ? "var(--neon)" : "var(--text-secondary)" }}
+            />
+          </span>
+        </button>
+        <ChoiceRow label="Engagement" defaultValue="Long terme" options={["Long terme", "Ponctuel"]} />
         <div>
           <div className="mb-3 font-display text-[15px] font-bold">Type de projet favori</div>
           <div className="flex flex-col gap-4">

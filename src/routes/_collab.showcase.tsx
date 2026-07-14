@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
+import { listIllustrations } from "@/lib/db";
 import {
   X, Upload, Bookmark, BookmarkCheck, MessageSquare, Send, ChevronRight, ChevronLeft,
   LayoutGrid, Rows3, Columns3, Sparkles, Eye, Heart, Plus, Image as ImageIcon,
@@ -244,6 +245,7 @@ type Art = {
   id: string; title: string; artist: string; role: string; style: string; type: string;
   skills: string[]; availability: "Available now" | "Open to projects" | "Limited" | "Not available";
   ratio: Ratio; seed: number; views: number; saves: number;
+  imageUrl?: string; description?: string;
 };
 
 const ARTS: Art[] = Array.from({ length: 14 }).map((_, i) => {
@@ -269,6 +271,35 @@ function IllustrationsPage() {
   const [contact, setContact] = useState<Art | null>(null);
   const [upload, setUpload] = useState(false);
   const [portfolio, setPortfolio] = useState<Art | null>(null);
+  const [realArts, setRealArts] = useState<Art[]>([]);
+
+  // Illustrations réelles (Supabase) affichées en tête de galerie
+  useEffect(() => {
+    listIllustrations()
+      .then((rows) =>
+        setRealArts(
+          rows.map((r, i) => ({
+            id: r.id,
+            title: r.title,
+            artist: r.author?.display_name || r.author?.username || "Artiste",
+            role: "Artist",
+            style: "—",
+            type: "Illustration",
+            skills: [],
+            availability: "Available now" as const,
+            ratio: "portrait" as Ratio,
+            seed: i + 100,
+            views: 0,
+            saves: 0,
+            imageUrl: r.image_url,
+            description: r.description,
+          })),
+        ),
+      )
+      .catch(() => setRealArts([]));
+  }, []);
+
+  const gallery = [...realArts, ...ARTS];
 
   function toggleSave(id: string) {
     setSaved((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -324,7 +355,7 @@ function IllustrationsPage() {
             }
             className="cm-gallery"
           >
-            {ARTS.map((a) => (
+            {gallery.map((a) => (
               <ArtCard
                 key={a.id} art={a} masonry={view === "masonry"} compact={view === "compact"}
                 liked={saved.has(a.id)} onLike={() => toggleSave(a.id)}
@@ -396,7 +427,13 @@ function ArtCard({
       onClick={onOpen}
     >
       {/* Fixed-size image frame in cards; the original ratio is shown in the detail view. */}
-      <ArtworkPlaceholder seed={art.seed} ratio="portrait" />
+      {art.imageUrl ? (
+        <div style={{ aspectRatio: ratioMap.portrait, width: "100%", borderRadius: 14, overflow: "hidden", background: C.stage }}>
+          <img src={art.imageUrl} alt={art.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+      ) : (
+        <ArtworkPlaceholder seed={art.seed} ratio="portrait" />
+      )}
 
       {!compact && (
         <div style={{ padding: "2px 4px 4px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -503,7 +540,11 @@ function DetailModal({
           </div>
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
             <div style={{ width: "100%", maxWidth: 560 }}>
-              <ArtworkPlaceholder seed={art.seed} ratio={art.ratio} />
+              {art.imageUrl ? (
+                <img src={art.imageUrl} alt={art.title} style={{ width: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: 14 }} />
+              ) : (
+                <ArtworkPlaceholder seed={art.seed} ratio={art.ratio} />
+              )}
             </div>
           </div>
         </div>
@@ -589,16 +630,6 @@ function DetailModal({
             <p style={{ ...manrope, fontSize: 14, color: C.text2, lineHeight: "22px", margin: 0 }}>
               Full artwork description placeholder. Artists can share the intent behind the piece, the manga context it belongs to, the tools used, and how it demonstrates a specific illustration skill for potential collaborators.
             </p>
-          </Section>
-
-
-          <Section title="Portfolio completeness">
-            <div style={{ height: 8, borderRadius: 999, background: C.input, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-              <div style={{ width: "72%", height: "100%", background: C.neon, borderRadius: 999 }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", ...manrope, fontSize: 12, color: C.muted, marginTop: 8 }}>
-              <span>Completeness indicator</span><span>Placeholder</span>
-            </div>
           </Section>
 
           <Section title="More from this artist">

@@ -1,22 +1,23 @@
 export type Platform = "YouTube" | "TikTok" | "Instagram" | "Twitter / X" | "Twitch" | "Other";
 
+/** Vocabulaire aligné sur les filtres du site (AdvancedFiltersDialog). */
 export type SponsorshipType =
-  | "Short dedicated video"
-  | "Long dedicated video"
-  | "Community post"
-  | "Placement in a video"
+  | "Vidéo courte dédiée"
+  | "Vidéo longue dédiée"
+  | "Post communautaire"
+  | "Placement dans une vidéo"
   | "Story";
 
-export type VideoType = "Analysis" | "Review" | "Reaction" | "Presentation";
+export type VideoType = "Analyse profonde" | "Review" | "Reaction" | "Présentation";
 
 export type Duration =
-  | "0–30s"
-  | "30–60s"
-  | "60–120s"
-  | "2–5 min"
+  | "0–30 s"
+  | "30–60 s"
+  | "60–120 s"
+  | "2–3 min"
+  | "3–5 min"
   | "5–10 min"
-  | "10+ min"
-  | "To define";
+  | "10+ min";
 
 export type AnnouncementMode = "creator" | "project";
 
@@ -32,11 +33,18 @@ export interface Announcement {
   fullDescription: string;
   price: string | null;
   priceLabel: "Price" | "Budget";
+  /** bornes numériques pour les filtres prix */
+  priceMin?: number;
+  priceMax?: number;
   platforms: Platform[];
   sponsorshipType: SponsorshipType;
   videoType?: VideoType;
   duration?: Duration;
   paymentMode: string;
+  /** créateurs : nombre d'abonnés (filtres min/max) */
+  subscribers?: number;
+  /** projets : nombre de chapitres (filtres min/max) */
+  chapters?: number;
   status: StatusKind;
   availability: string;
   deadline: string;
@@ -58,33 +66,30 @@ export const PLATFORMS: Platform[] = [
 ];
 
 export const SPONSORSHIP_TYPES: SponsorshipType[] = [
-  "Short dedicated video",
-  "Long dedicated video",
-  "Community post",
-  "Placement in a video",
+  "Vidéo courte dédiée",
+  "Vidéo longue dédiée",
+  "Post communautaire",
+  "Placement dans une vidéo",
   "Story",
 ];
 
-export const VIDEO_TYPES: VideoType[] = ["Analysis", "Review", "Reaction", "Presentation"];
+export const VIDEO_TYPES: VideoType[] = ["Analyse profonde", "Review", "Reaction", "Présentation"];
 
 export const DURATIONS: Duration[] = [
-  "0–30s",
-  "30–60s",
-  "60–120s",
-  "2–5 min",
+  "0–30 s",
+  "30–60 s",
+  "60–120 s",
+  "2–3 min",
+  "3–5 min",
   "5–10 min",
   "10+ min",
-  "To define",
 ];
 
 export const PROJECT_GENRES = [
   "Shonen",
   "Seinen",
   "Shojo",
-  "Isekai",
-  "Slice of life",
-  "Fantasy",
-  "Horror",
+  "Josei",
 ];
 
 export const STATUS_LABEL: Record<StatusKind, string> = {
@@ -94,169 +99,183 @@ export const STATUS_LABEL: Record<StatusKind, string> = {
 };
 
 const durationForType = (t: SponsorshipType): boolean =>
-  t === "Short dedicated video" || t === "Long dedicated video" || t === "Placement in a video";
+  t === "Vidéo courte dédiée" || t === "Vidéo longue dédiée" || t === "Placement dans une vidéo";
 
 export const ANNOUNCEMENTS: Announcement[] = [
   {
     id: "a1",
     mode: "creator",
-    title: "Dedicated review video for your manga",
-    ownerName: "Creator placeholder · @channel",
-    category: "Manga reviews",
+    title: "Review dédiée de ton manga",
+    ownerName: "Hana Kimura · @hanadraws",
+    category: "",
     shortDescription:
-      "Long-form dedicated review covering art, story and pacing for manga and webtoon projects.",
+      "Review longue et détaillée couvrant le dessin, l'histoire et le rythme de ton manga ou webtoon.",
     fullDescription:
-      "Placeholder full description. A dedicated long-form review that walks the audience through the premise, art direction and narrative hooks of your project, with honest commentary and a clear call to action.",
-    price: "$420",
+      "Une review complète qui présente à mon audience l'univers, la direction artistique et les points forts narratifs de ton projet, avec un avis honnête et un appel à la lecture clair.",
+    price: "420 €",
     priceLabel: "Price",
+    priceMin: 420,
+    priceMax: 420,
     platforms: ["YouTube", "Twitter / X"],
-    sponsorshipType: "Long dedicated video",
+    sponsorshipType: "Vidéo longue dédiée",
     videoType: "Review",
     duration: "10+ min",
-    paymentMode: "Fixed fee",
+    paymentMode: "Paiement unique",
+    subscribers: 48000,
     status: "open",
-    availability: "Available placeholder date",
-    deadline: "Deadline placeholder",
+    availability: "Disponible dès maintenant",
+    deadline: "Créneau sous 2 semaines",
     requirements: [
-      "Provide project synopsis and key art",
-      "Share preview chapters or pages",
-      "Approve script before recording",
+      "Fournir le synopsis et les visuels clés",
+      "Partager des chapitres en avant-première",
+      "Valider le script avant enregistrement",
     ],
-    deliverables: ["One long-form YouTube video", "Pinned comment with your links", "Community post teaser"],
-    targetAudience: "Manga and anime enthusiasts, audience placeholder size",
-    contactInstructions: "Use the Contact button to send your project brief and preferred timeline.",
-    linked: "Linked creator profile placeholder",
+    deliverables: ["Une vidéo YouTube longue", "Commentaire épinglé avec tes liens", "Teaser en post communautaire"],
+    targetAudience: "Passionnés de manga et d'anime",
+    contactInstructions: "Utilise le bouton Contact pour envoyer ton brief et ton planning.",
+    linked: "Profil créateur lié",
     accent: "#39ff88",
   },
   {
     id: "a2",
     mode: "creator",
-    title: "Short punchy TikTok placement",
-    ownerName: "Creator placeholder · @shorts",
-    category: "Short-form",
+    title: "Placement TikTok percutant",
+    ownerName: "Léo Vasseur · @leo.shorts",
+    category: "",
     shortDescription:
-      "Native short-form placement inside trending manga content to drive quick discovery.",
+      "Placement natif dans un format court tendance pour faire découvrir ton manga rapidement.",
     fullDescription:
-      "Placeholder full description. A native short-form integration designed to feel organic within existing viral formats, highlighting one strong hook from your project.",
-    price: "$120",
+      "Une intégration courte pensée pour paraître naturelle dans mes formats viraux, en mettant en avant l'accroche la plus forte de ton projet.",
+    price: "120 €",
     priceLabel: "Price",
+    priceMin: 120,
+    priceMax: 120,
     platforms: ["TikTok", "Instagram"],
-    sponsorshipType: "Placement in a video",
-    videoType: "Presentation",
-    duration: "0–30s",
-    paymentMode: "Fixed fee",
+    sponsorshipType: "Placement dans une vidéo",
+    videoType: "Présentation",
+    duration: "0–30 s",
+    paymentMode: "Paiement unique",
+    subscribers: 21000,
     status: "urgent",
-    availability: "Available placeholder date",
-    deadline: "Deadline placeholder",
-    requirements: ["Provide a 5s hook line", "Share vertical-friendly key art"],
-    deliverables: ["One TikTok short", "One Instagram Reels cross-post"],
-    targetAudience: "Gen-Z manga readers, audience placeholder size",
-    contactInstructions: "Use the Contact button to lock a slot in this week's batch.",
-    linked: "Linked creator profile placeholder",
+    availability: "Créneaux cette semaine",
+    deadline: "Batch en cours de remplissage",
+    requirements: ["Fournir une accroche de 5 secondes", "Partager un visuel vertical"],
+    deliverables: ["Un TikTok court", "Un repost Instagram Reels"],
+    targetAudience: "Lecteurs manga Gen-Z",
+    contactInstructions: "Utilise le bouton Contact pour réserver un créneau.",
+    linked: "Profil créateur lié",
     accent: "#75a7ff",
   },
   {
     id: "a3",
     mode: "creator",
-    title: "Community post shout-out bundle",
-    ownerName: "Creator placeholder · @community",
-    category: "Community",
+    title: "Pack de posts communautaires",
+    ownerName: "Mika Ito · @mika.ink",
+    category: "",
     shortDescription:
-      "Cross-platform community posts to announce a launch or chapter drop to an engaged base.",
+      "Posts communautaires multi-plateformes pour annoncer une sortie ou un nouveau chapitre.",
     fullDescription:
-      "Placeholder full description. A bundle of community posts across platforms, timed around your launch window to maximise reach without a full video production.",
+      "Un pack de posts communautaires publiés autour de ta fenêtre de sortie pour maximiser la visibilité sans production vidéo lourde.",
     price: null,
     priceLabel: "Price",
     platforms: ["Twitter / X", "Instagram", "YouTube", "TikTok"],
-    sponsorshipType: "Community post",
-    paymentMode: "Custom price",
+    sponsorshipType: "Post communautaire",
+    paymentMode: "Abonnement",
+    subscribers: 12500,
     status: "open",
-    availability: "Available placeholder date",
-    deadline: "Deadline placeholder",
-    requirements: ["Provide announcement copy", "Provide launch date"],
-    deliverables: ["Three community posts", "One story mention"],
-    targetAudience: "Highly engaged niche community, audience placeholder size",
-    contactInstructions: "Use the Contact button to request a custom quote.",
-    linked: "Linked creator profile placeholder",
+    availability: "Planning flexible",
+    deadline: "À convenir",
+    requirements: ["Fournir le texte d'annonce", "Fournir la date de sortie"],
+    deliverables: ["Trois posts communautaires", "Une mention en story"],
+    targetAudience: "Communauté de niche très engagée",
+    contactInstructions: "Utilise le bouton Contact pour demander un devis.",
+    linked: "Profil créateur lié",
     accent: "#ffb84d",
   },
   {
     id: "p1",
     mode: "project",
-    title: "Seeking creators for shonen launch",
-    ownerName: "Project placeholder · Studio name",
+    title: "Cherche créateurs pour lancement shonen",
+    ownerName: "Studio Kuro",
     category: "Shonen",
     shortDescription:
-      "New shonen title looking for content creators to build visibility ahead of chapter one.",
+      "Nouveau shonen cherche des créateurs de contenu pour construire sa visibilité avant le chapitre 1.",
     fullDescription:
-      "Placeholder full description. We are launching a new shonen project and want to partner with creators who can present the world, characters and stakes to a passionate audience.",
-    price: "$300–$800",
+      "Nous lançons un nouveau projet shonen et cherchons des créateurs capables de présenter l'univers, les personnages et les enjeux à une audience passionnée.",
+    price: "300–800 €",
     priceLabel: "Budget",
+    priceMin: 300,
+    priceMax: 800,
     platforms: ["YouTube", "TikTok", "Twitter / X"],
-    sponsorshipType: "Long dedicated video",
-    videoType: "Presentation",
+    sponsorshipType: "Vidéo longue dédiée",
+    videoType: "Présentation",
     duration: "5–10 min",
-    paymentMode: "Negotiable budget",
+    paymentMode: "Paiement unique",
+    chapters: 4,
     status: "open",
-    availability: "Campaign window placeholder",
-    deadline: "Deadline placeholder",
-    requirements: ["Share channel stats", "Propose a content angle"],
-    deliverables: ["One dedicated presentation video", "Ongoing launch-week posts"],
-    targetAudience: "Action manga readers, target reach placeholder",
-    contactInstructions: "Use the Apply button to send your proposal and rate card.",
-    linked: "Linked manga project placeholder",
+    availability: "Campagne de lancement",
+    deadline: "Avant fin du mois",
+    requirements: ["Partager les stats de ta chaîne", "Proposer un angle de contenu"],
+    deliverables: ["Une vidéo de présentation dédiée", "Posts pendant la semaine de lancement"],
+    targetAudience: "Lecteurs de manga d'action",
+    contactInstructions: "Utilise le bouton Apply pour envoyer ta proposition et tes tarifs.",
+    linked: "Projet manga lié",
     accent: "#39ff88",
   },
   {
     id: "p2",
     mode: "project",
-    title: "Isekai webtoon promotion push",
-    ownerName: "Project placeholder · Indie team",
-    category: "Isekai",
+    title: "Promotion webtoon isekai",
+    ownerName: "Collectif Hollow",
+    category: "Seinen",
     shortDescription:
-      "Isekai webtoon seeking short-form creators to drive reads on launch platforms.",
+      "Webtoon isekai cherche des créateurs de formats courts pour booster les lectures au lancement.",
     fullDescription:
-      "Placeholder full description. Our isekai webtoon needs a burst of short-form visibility to convert curious viewers into readers during the launch window.",
-    price: "$150–$400",
+      "Notre webtoon isekai a besoin d'un coup de projecteur en format court pour convertir les curieux en lecteurs pendant la fenêtre de lancement.",
+    price: "150–400 €",
     priceLabel: "Budget",
+    priceMin: 150,
+    priceMax: 400,
     platforms: ["TikTok", "Instagram"],
-    sponsorshipType: "Short dedicated video",
+    sponsorshipType: "Vidéo courte dédiée",
     videoType: "Reaction",
-    duration: "30–60s",
-    paymentMode: "Fixed budget",
+    duration: "30–60 s",
+    paymentMode: "Paiement unique",
+    chapters: 12,
     status: "closing",
-    availability: "Campaign window placeholder",
-    deadline: "Deadline placeholder",
-    requirements: ["Provide audience demographics", "Confirm posting schedule"],
-    deliverables: ["Two short dedicated videos", "One story series"],
-    targetAudience: "Fantasy and isekai fans, target reach placeholder",
-    contactInstructions: "Use the Apply button before the closing date.",
-    linked: "Linked manga project placeholder",
+    availability: "Campagne en cours",
+    deadline: "Clôture imminente",
+    requirements: ["Fournir la démographie de ton audience", "Confirmer le planning de publication"],
+    deliverables: ["Deux vidéos courtes dédiées", "Une série de stories"],
+    targetAudience: "Fans de fantasy et d'isekai",
+    contactInstructions: "Utilise le bouton Apply avant la clôture.",
+    linked: "Projet manga lié",
     accent: "#ff5f7e",
   },
   {
     id: "p3",
     mode: "project",
-    title: "Seinen anthology visibility campaign",
-    ownerName: "Project placeholder · Collective",
-    category: "Seinen",
+    title: "Campagne de visibilité anthologie seinen",
+    ownerName: "Éditions Nocturne",
+    category: "Josei",
     shortDescription:
-      "Mature seinen anthology looking for analysis-style coverage to reach a discerning audience.",
+      "Anthologie mature cherche une couverture de type analyse pour toucher un lectorat exigeant.",
     fullDescription:
-      "Placeholder full description. We publish a seinen anthology and are looking for thoughtful, analysis-driven coverage that respects the tone and themes of the work.",
+      "Nous publions une anthologie et cherchons une couverture analytique et réfléchie, respectueuse du ton et des thèmes de l'œuvre.",
     price: null,
     priceLabel: "Budget",
     platforms: ["YouTube", "Twitter / X", "Twitch"],
-    sponsorshipType: "Community post",
-    paymentMode: "Collaboration",
+    sponsorshipType: "Post communautaire",
+    paymentMode: "Abonnement",
+    chapters: 24,
     status: "open",
-    availability: "Campaign window placeholder",
-    deadline: "Deadline placeholder",
-    requirements: ["Share previous analysis work", "Outline your angle"],
-    deliverables: ["One analysis thread", "One community post"],
-    targetAudience: "Mature manga readers, target reach placeholder",
-    contactInstructions: "Use the Apply button to discuss a collaboration.",
-    linked: "Linked manga project placeholder",
+    availability: "Fenêtre flexible",
+    deadline: "À convenir",
+    requirements: ["Partager tes analyses précédentes", "Décrire ton angle"],
+    deliverables: ["Un thread d'analyse", "Un post communautaire"],
+    targetAudience: "Lecteurs de manga adultes",
+    contactInstructions: "Utilise le bouton Apply pour discuter d'une collaboration.",
+    linked: "Projet manga lié",
     accent: "#75a7ff",
   },
 ];

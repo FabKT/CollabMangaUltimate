@@ -20,7 +20,9 @@ import {
   Twitch,
   ChevronRight,
   Handshake,
+  FolderKanban,
 } from "lucide-react";
+import { sendFriendRequest } from "@/lib/user-workflows";
 
 export const Route = createFileRoute("/_collab/discover")({
   head: () => ({
@@ -537,6 +539,7 @@ function UsersPage() {
   const [creatorFilterOpen, setCreatorFilterOpen] = useState(false);
   const [creatorFilters, setCreatorFilters] = useState<CreatorAdvancedFilters>(EMPTY_CREATOR_FILTERS);
   const [sponsorshipProfile, setSponsorshipProfile] = useState<Profile | null>(null);
+  const [friendTarget, setFriendTarget] = useState<Profile | null>(null);
 
   const activeFilters: { key: string; label: string; onRemove: () => void }[] = useMemo(() => {
     const list: { key: string; label: string; onRemove: () => void }[] = [];
@@ -831,13 +834,13 @@ function UsersPage() {
           ) : view === "grid" ? (
             <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {results.map((p) => (
-                <UserCard key={p.id} profile={p} onSponsorshipOptions={setSponsorshipProfile} />
+                <UserCard key={p.id} profile={p} onSponsorshipOptions={setSponsorshipProfile} onAddFriend={setFriendTarget} />
               ))}
             </div>
           ) : (
             <div className="mt-4 flex flex-col gap-3">
               {results.map((p) => (
-                <UserRow key={p.id} profile={p} onSponsorshipOptions={setSponsorshipProfile} />
+                <UserRow key={p.id} profile={p} onSponsorshipOptions={setSponsorshipProfile} onAddFriend={setFriendTarget} />
               ))}
             </div>
           )}
@@ -876,6 +879,9 @@ function UsersPage() {
         onReset={() => setCreatorFilters(EMPTY_CREATOR_FILTERS)}
       />
 
+      {friendTarget && (
+        <FriendRequestModal profile={friendTarget} onClose={() => setFriendTarget(null)} />
+      )}
       {sponsorshipProfile && (
         <CreatorSponsorshipOptionsModal
           profile={sponsorshipProfile}
@@ -900,7 +906,8 @@ function Avatar({ initials, size = 48 }: { initials: string; size?: number }) {
 }
 
 function AvailabilityBadge({ value }: { value: string }) {
-  const positive = /available|open/i.test(value);
+  // Disponibilité binaire : Available / Unavailable, rien d'autre.
+  const positive = !/busy|not available|unavailable/i.test(value);
   return (
     <span
       className={classNames(
@@ -916,8 +923,68 @@ function AvailabilityBadge({ value }: { value: string }) {
           positive ? "bg-[color:var(--cm-accent)]" : "bg-[color:var(--cm-text-3)]",
         )}
       />
-      {value}
+      {positive ? "Available" : "Unavailable"}
     </span>
+  );
+}
+
+/* Drapeaux SVG (les emojis drapeaux ne s'affichent pas sous Windows). */
+function LangFlag({ lang }: { lang: string }) {
+  const flags: Record<string, React.ReactNode> = {
+    "Français": (
+      <>
+        <rect width="6" height="12" fill="#0055A4" /><rect x="6" width="6" height="12" fill="#fff" /><rect x="12" width="6" height="12" fill="#EF4135" />
+      </>
+    ),
+    "English": (
+      <>
+        <rect width="18" height="12" fill="#012169" />
+        <path d="M0 0 L18 12 M18 0 L0 12" stroke="#fff" strokeWidth="2.6" />
+        <path d="M0 0 L18 12 M18 0 L0 12" stroke="#C8102E" strokeWidth="1.1" />
+        <path d="M9 0 V12 M0 6 H18" stroke="#fff" strokeWidth="4" />
+        <path d="M9 0 V12 M0 6 H18" stroke="#C8102E" strokeWidth="2.2" />
+      </>
+    ),
+    "Español": (
+      <>
+        <rect width="18" height="12" fill="#AA151B" /><rect y="3" width="18" height="6" fill="#F1BF00" />
+      </>
+    ),
+    "Italiano": (
+      <>
+        <rect width="6" height="12" fill="#009246" /><rect x="6" width="6" height="12" fill="#fff" /><rect x="12" width="6" height="12" fill="#CE2B37" />
+      </>
+    ),
+    "日本語": (
+      <>
+        <rect width="18" height="12" fill="#fff" /><circle cx="9" cy="6" r="3.4" fill="#BC002D" />
+      </>
+    ),
+    "Deutsch": (
+      <>
+        <rect width="18" height="4" fill="#000" /><rect y="4" width="18" height="4" fill="#DD0000" /><rect y="8" width="18" height="4" fill="#FFCE00" />
+      </>
+    ),
+    "Nederlands": (
+      <>
+        <rect width="18" height="4" fill="#AE1C28" /><rect y="4" width="18" height="4" fill="#fff" /><rect y="8" width="18" height="4" fill="#21468B" />
+      </>
+    ),
+  };
+  const shape = flags[lang];
+  if (!shape) return <span className="text-[10px] font-bold text-[color:var(--cm-text-2)]">{lang}</span>;
+  return (
+    <svg
+      width="18"
+      height="12"
+      viewBox="0 0 18 12"
+      role="img"
+      aria-label={lang}
+      className="rounded-[2px] border border-[color:var(--cm-border)]"
+    >
+      <title>{lang}</title>
+      {shape}
+    </svg>
   );
 }
 
@@ -943,13 +1010,17 @@ function PortfolioStrip() {
 function UserCard({
   profile,
   onSponsorshipOptions,
+  onAddFriend,
 }: {
   profile: Profile;
   onSponsorshipOptions: (profile: Profile) => void;
+  onAddFriend: (profile: Profile) => void;
 }) {
   const isCreator = profile.role === "Content creator";
   const isArtist = profile.role === "Artist" || profile.role === "Illustrator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
+  const mainGenres = profile.genres.filter((g) => GENRES.includes(g));
+  const subGenres = profile.genres.filter((g) => !GENRES.includes(g)).slice(0, 3);
   return (
     <article
       className="group flex h-full flex-col rounded-[18px] border border-[color:var(--cm-border)] bg-[color:var(--cm-card)] p-[18px] transition hover:border-[color:var(--cm-border-hover)]"
@@ -957,20 +1028,10 @@ function UserCard({
       <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
         <Avatar initials={profile.initials} />
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <h3 className="truncate font-display text-[15px] font-semibold text-[color:var(--cm-text)]">
-              {profile.username}
-            </h3>
-            {profile.verified && (
-              <BadgeCheck size={14} className="shrink-0 text-[color:var(--cm-accent)]" />
-            )}
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[color:var(--cm-text-3)]">
-            <span className="font-semibold text-[color:var(--cm-text-2)]">{profile.role}</span>
-            {profile.secondary.length > 0 && (
-              <span>· {profile.secondary.join(" · ")}</span>
-            )}
-          </div>
+          <h3 className="truncate font-display text-[15px] font-semibold text-[color:var(--cm-text)]">
+            {profile.username}
+          </h3>
+          <div className="mt-0.5 text-[11px] font-semibold text-[color:var(--cm-text-2)]">{profile.role}</div>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             <div className="flex items-center gap-1">
               <Stars value={profile.rating} />
@@ -978,9 +1039,9 @@ function UserCard({
                 {profile.rating.toFixed(1)}
               </span>
             </div>
-            <div className="flex items-center gap-0.5 text-sm" aria-label="Languages">
-              {profile.languages.map((l, i) => (
-                <span key={i}>{l}</span>
+            <div className="flex items-center gap-1" aria-label="Languages">
+              {profile.languages.map((l) => (
+                <LangFlag key={l} lang={l} />
               ))}
             </div>
           </div>
@@ -992,8 +1053,17 @@ function UserCard({
         {profile.bio}
       </p>
 
+      {/* genres favoris (accent) + sous-genres favoris (neutres) */}
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {profile.genres.slice(0, 3).map((g) => (
+        {mainGenres.map((g) => (
+          <span
+            key={g}
+            className="rounded-md border border-[color:var(--cm-accent)]/40 bg-[color:var(--cm-accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--cm-accent)]"
+          >
+            {g}
+          </span>
+        ))}
+        {subGenres.map((g) => (
           <span
             key={g}
             className="rounded-md border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--cm-text-2)]"
@@ -1036,11 +1106,10 @@ function UserCard({
         </button>
       ) : null}
 
-      <div className="mt-auto flex items-center justify-between border-t border-[color:var(--cm-border)] pt-3 text-[11px] text-[color:var(--cm-text-3)]">
+      <div className="mt-auto flex items-center border-t border-[color:var(--cm-border)] pt-3 text-[11px] text-[color:var(--cm-text-3)]">
         <span className="inline-flex items-center gap-1">
-          <MapPin size={11} /> {profile.projects} projects
+          <FolderKanban size={11} /> {profile.projects} projets créés
         </span>
-        <span>Recently active</span>
       </div>
 
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
@@ -1051,14 +1120,18 @@ function UserCard({
         >
           View profile <ChevronRight size={14} />
         </Link>
-        <button
-          aria-label="Message"
+        <Link
+          to="/messages"
+          aria-label="Contacter"
+          title="Contacter"
           className="grid h-10 w-10 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] transition hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)]"
         >
           <MessageSquare size={14} />
-        </button>
+        </Link>
         <button
-          aria-label="Invite to project"
+          aria-label="Ajouter en ami"
+          title="Ajouter en ami"
+          onClick={() => onAddFriend(profile)}
           className="grid h-10 w-10 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] transition hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)]"
         >
           <UserPlus size={14} />
@@ -1071,9 +1144,11 @@ function UserCard({
 function UserRow({
   profile,
   onSponsorshipOptions,
+  onAddFriend,
 }: {
   profile: Profile;
   onSponsorshipOptions: (profile: Profile) => void;
+  onAddFriend: (profile: Profile) => void;
 }) {
   const isCreator = profile.role === "Content creator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
@@ -1083,14 +1158,17 @@ function UserRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h3 className="truncate font-display text-[15px] font-semibold">{profile.username}</h3>
-          {profile.verified && <BadgeCheck size={14} className="text-[color:var(--cm-accent)]" />}
           <span className="text-[11px] text-[color:var(--cm-text-3)]">·</span>
           <span className="text-[11px] font-semibold text-[color:var(--cm-text-2)]">{profile.role}</span>
           <div className="flex items-center gap-1 pl-1">
             <Stars value={profile.rating} size={12} />
             <span className="text-[11px] text-[color:var(--cm-text-2)]">{profile.rating.toFixed(1)}</span>
           </div>
-          <span className="text-sm">{profile.languages.join(" ")}</span>
+          <span className="flex items-center gap-1">
+            {profile.languages.map((l) => (
+              <LangFlag key={l} lang={l} />
+            ))}
+          </span>
           <AvailabilityBadge value={profile.availability} />
         </div>
         <p className="mt-1 truncate text-[12px] text-[color:var(--cm-text-2)]">{profile.bio}</p>
@@ -1109,14 +1187,18 @@ function UserRow({
         ) : null}
       </div>
       <div className="flex items-center gap-2">
-        <button
-          aria-label="Message"
+        <Link
+          to="/messages"
+          aria-label="Contacter"
+          title="Contacter"
           className="hidden h-9 w-9 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] md:grid"
         >
           <MessageSquare size={14} />
-        </button>
+        </Link>
         <button
-          aria-label="Invite"
+          aria-label="Ajouter en ami"
+          title="Ajouter en ami"
+          onClick={() => onAddFriend(profile)}
           className="hidden h-9 w-9 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] md:grid"
         >
           <UserPlus size={14} />
@@ -1329,6 +1411,83 @@ function CreatorNumberField({
         className="h-11 w-full rounded-[14px] border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-3 text-[14px] text-[color:var(--cm-text)] outline-none transition focus:border-[color:var(--cm-accent)] focus:ring-2 focus:ring-[color:var(--cm-accent-soft)]"
       />
     </label>
+  );
+}
+
+function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: () => void }) {
+  const [sent, setSent] = useState(false);
+  const confirm = () => {
+    sendFriendRequest({ recipient: profile.username });
+    setSent(true);
+  };
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Demande d'ami"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[400px] rounded-2xl border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] p-6 shadow-2xl"
+      >
+        {sent ? (
+          <>
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[color:var(--cm-accent-soft)] text-[color:var(--cm-accent)]">
+              <UserPlus size={20} />
+            </div>
+            <h3 className="mt-4 text-center font-display text-[17px] font-bold text-[color:var(--cm-text)]">
+              Demande envoyée !
+            </h3>
+            <p className="mt-1.5 text-center text-[13px] text-[color:var(--cm-text-2)]">
+              {profile.username} recevra une notification et pourra accepter ta demande.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-5 h-11 w-full rounded-lg bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)]"
+            >
+              Fermer
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <Avatar initials={profile.initials} size={44} />
+              <div className="min-w-0">
+                <h3 className="truncate font-display text-[16px] font-bold text-[color:var(--cm-text)]">
+                  Ajouter en ami ?
+                </h3>
+                <p className="truncate text-[12px] text-[color:var(--cm-text-3)]">
+                  {profile.username} · {profile.role}
+                </p>
+              </div>
+            </div>
+            <p className="mt-4 text-[13px] leading-relaxed text-[color:var(--cm-text-2)]">
+              Envoyer une demande d'ami à <span className="font-bold text-[color:var(--cm-text)]">{profile.username}</span> ?
+              Il pourra l'accepter ou la refuser depuis ses notifications.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-11 rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[13px] font-bold text-[color:var(--cm-text-2)] transition hover:text-[color:var(--cm-text)]"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirm}
+                className="h-11 rounded-lg bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)]"
+              >
+                Envoyer la demande
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

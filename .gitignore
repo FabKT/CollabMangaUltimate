@@ -30,3 +30,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets d'environnement (ne jamais committer)
+.env
+.env.local
+.env.*.local
+
+# Fichiers parasites (dev servers / outils locaux)
+.codex-*

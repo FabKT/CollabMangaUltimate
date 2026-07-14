@@ -65,10 +65,6 @@ export function AnnouncementCard({
               <Bookmark className="h-5 w-5" fill={saved ? "currentColor" : "none"} />
             </button>
           </div>
-          <p className="mt-1 font-manrope text-[13px] font-medium text-cm-muted">{a.ownerName}</p>
-          <div className="mt-2.5">
-            <Chip>{a.category}</Chip>
-          </div>
           <p className="mt-2.5 line-clamp-2 font-manrope text-[14px] font-medium leading-[22px] text-cm-text2">
             {a.shortDescription}
           </p>

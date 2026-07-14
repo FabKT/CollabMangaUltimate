@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { listAnnouncements } from "@/lib/db";
 import {
   Bookmark,
   Plus,
@@ -52,6 +53,8 @@ type ProjectAnnouncement = {
   cover?: string;
   description: string;
   roleNeeded: string;
+  remuneration: boolean;
+  engagement: "Long terme" | "Ponctuel";
   genre: string;
   mode: string;
   availability: string;
@@ -75,6 +78,8 @@ type UserAnnouncement = {
   portfolioImage?: string;
   description: string;
   roleOffered: string;
+  remuneration: boolean;
+  engagement: "Long terme" | "Ponctuel";
   mainSkill: string;
   genre: string;
   availability: string;
@@ -99,6 +104,8 @@ const PROJECTS: ProjectAnnouncement[] = [
     description:
       "Dark fantasy series in production. Looking for a dessinateur to reinforce the atmosphere of our night scenes.",
     roleNeeded: "Dessinateur",
+    remuneration: true,
+    engagement: "Long terme",
     genre: "Fantasy",
     mode: "Revenue share",
     availability: "Part-time",
@@ -123,6 +130,8 @@ const PROJECTS: ProjectAnnouncement[] = [
     description:
       "Short romantic oneshot, 30 pages. Looking for a scénariste to co-develop the emotional beats.",
     roleNeeded: "Scénariste",
+    remuneration: false,
+    engagement: "Ponctuel",
     genre: "Slice of life",
     mode: "Portfolio collaboration",
     availability: "Flexible",
@@ -145,6 +154,8 @@ const PROJECTS: ProjectAnnouncement[] = [
     description:
       "Action shonen, chapter 12 in progress. Need a reliable dessinateur for long-term collaboration.",
     roleNeeded: "Dessinateur",
+    remuneration: true,
+    engagement: "Long terme",
     genre: "Action",
     mode: "Paid",
     availability: "Long-term",
@@ -167,6 +178,8 @@ const PROJECTS: ProjectAnnouncement[] = [
     description:
       "Space-station drama. We need a dessinateur comfortable with mechanical detail.",
     roleNeeded: "Dessinateur",
+    remuneration: true,
+    engagement: "Ponctuel",
     genre: "Sci-fi",
     mode: "Revenue share",
     availability: "Weekends only",
@@ -189,6 +202,8 @@ const PROJECTS: ProjectAnnouncement[] = [
     description:
       "Pre-production. Looking for a dessinateur to shape our main cast of six.",
     roleNeeded: "Dessinateur",
+    remuneration: false,
+    engagement: "Ponctuel",
     genre: "Fantasy",
     mode: "Volunteer",
     availability: "Flexible",
@@ -211,6 +226,8 @@ const PROJECTS: ProjectAnnouncement[] = [
     description:
       "Established indie manga preparing a release pass. Need a careful reader for feedback.",
     roleNeeded: "Lecteur",
+    remuneration: true,
+    engagement: "Ponctuel",
     genre: "Drama",
     mode: "Paid",
     availability: "Short-term",
@@ -237,6 +254,8 @@ const USERS: UserAnnouncement[] = [
     description:
       "Three years of experience drawing shonen and seinen chapters. Looking for a serious ongoing series.",
     roleOffered: "Dessinateur",
+    remuneration: true,
+    engagement: "Long terme",
     mainSkill: "Manga page drawing",
     genre: "Action",
     availability: "Part-time",
@@ -260,6 +279,8 @@ const USERS: UserAnnouncement[] = [
     description:
       "Scénariste specializing in character-driven drama. Open to genre mixes.",
     roleOffered: "Scénariste",
+    remuneration: false,
+    engagement: "Ponctuel",
     mainSkill: "Story structure",
     genre: "Drama",
     availability: "Flexible",
@@ -283,6 +304,8 @@ const USERS: UserAnnouncement[] = [
     description:
       "Dessinateur with a focus on costume detail and cultural fusion.",
     roleOffered: "Dessinateur",
+    remuneration: false,
+    engagement: "Ponctuel",
     mainSkill: "Character drawing",
     genre: "Fantasy",
     availability: "Weekends only",
@@ -306,6 +329,8 @@ const USERS: UserAnnouncement[] = [
     description:
       "Content creator with 40+ manga videos shipped. Available for short-term promotion missions.",
     roleOffered: "Créateur de contenu",
+    remuneration: true,
+    engagement: "Ponctuel",
     mainSkill: "Manga promotion",
     genre: "Action",
     availability: "Short-term",
@@ -326,6 +351,8 @@ const USERS: UserAnnouncement[] = [
     avatarInitials: "PS",
     description: "Reader offering structural feedback and continuity notes.",
     roleOffered: "Lecteur",
+    remuneration: false,
+    engagement: "Ponctuel",
     mainSkill: "Story feedback",
     genre: "Romance",
     availability: "Available now",
@@ -348,6 +375,8 @@ const USERS: UserAnnouncement[] = [
     description:
       "Dessinateur specialized in urban and interior environments.",
     roleOffered: "Dessinateur",
+    remuneration: true,
+    engagement: "Long terme",
     mainSkill: "Perspective",
     genre: "Slice of life",
     availability: "Long-term",
@@ -772,6 +801,8 @@ type Filters = {
   typeAnnonce: string;
   genres: string[];
   sousGenres: string[];
+  remunerationOnly: boolean;
+  engagement: "" | "Long terme" | "Ponctuel";
 };
 
 const EMPTY_FILTERS: Filters = {
@@ -782,6 +813,8 @@ const EMPTY_FILTERS: Filters = {
   typeAnnonce: "",
   genres: [],
   sousGenres: [],
+  remunerationOnly: false,
+  engagement: "",
 };
 
 const DEMOGRAPHIC_BY_ID: Record<string, string> = {
@@ -816,6 +849,10 @@ const SUB_GENRES_BY_ID: Record<string, string[]> = {
 
 function itemRole(item: Announcement) {
   return item.kind === "project" ? item.roleNeeded : item.roleOffered;
+}
+
+function remunerationLabel(item: Announcement) {
+  return item.remuneration ? "Rémunération active" : "Sans rémunération";
 }
 
 function itemLanguageMatches(item: Announcement, selected: string[]) {
@@ -871,18 +908,85 @@ function AnnouncementsPage() {
   const [workflowModal, setWorkflowModal] = useState<null | { kind: "apply" | "invite" | "sponsor"; item: Announcement }>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dbUsers, setDbUsers] = useState<UserAnnouncement[]>([]);
+  const [dbProjects, setDbProjects] = useState<ProjectAnnouncement[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 600);
     return () => clearTimeout(t);
   }, []);
 
+  // Annonces réelles (Supabase), affichées avant les exemples
+  useEffect(() => {
+    listAnnouncements()
+      .then((rows) => {
+        const users: UserAnnouncement[] = [];
+        const projects: ProjectAnnouncement[] = [];
+        for (const r of rows) {
+          const author = r.author?.display_name || r.author?.username || "Utilisateur";
+          if (r.mode === "project") {
+            projects.push({
+              kind: "project",
+              id: r.id,
+              title: r.title,
+              projectName: r.project_title || r.title,
+              description: r.hook || r.description.slice(0, 160),
+              roleNeeded: r.status_sought || "—",
+              genre: r.genres[0] ?? "—",
+              mode: "À définir",
+              availability: "À définir",
+              status: "Open",
+              language: r.language,
+              experience: "—",
+              remuneration: false,
+              engagement: "Long terme",
+              requiredSkills: r.subgenres.slice(0, 3),
+              fullDescription: r.description,
+              requirements: "",
+              contribution: "",
+              team: "",
+              application: "",
+            });
+          } else {
+            users.push({
+              kind: "user",
+              id: r.id,
+              title: r.title,
+              userName: author,
+              avatarInitials: author.slice(0, 2).toUpperCase(),
+              description: r.hook || r.description.slice(0, 160),
+              roleOffered: r.status_sought || "—",
+              remuneration: false,
+              engagement: "Long terme",
+              mainSkill: r.status_sought || "—",
+              genre: r.genres[0] ?? "—",
+              availability: "À définir",
+              language: r.language,
+              experience: "—",
+              mainSkills: r.status_sought ? [r.status_sought] : [],
+              preferredGenres: [...r.genres, ...r.subgenres].slice(0, 5),
+              mode: "À définir",
+              fullDescription: r.description,
+              lookingFor: r.hook,
+              contact: "",
+            });
+          }
+        }
+        setDbUsers(users);
+        setDbProjects(projects);
+      })
+      .catch(() => {
+        setDbUsers([]);
+        setDbProjects([]);
+      });
+  }, []);
+
   const data: Announcement[] =
     filters.target === "project"
-      ? USERS
+      ? [...dbUsers, ...USERS]
       : filters.target === "collaborator"
-        ? PROJECTS
-        : [...PROJECTS, ...USERS];
+        ? [...dbProjects, ...PROJECTS]
+        : [...dbProjects, ...dbUsers, ...PROJECTS, ...USERS];
 
   const filtered = useMemo(() => {
     return data.filter((a) => {
@@ -890,6 +994,8 @@ function AnnouncementsPage() {
       if (query && !itemSearchText(a).includes(query)) return false;
       if (!itemLanguageMatches(a, filters.langue)) return false;
       if (filters.statut && itemRole(a) !== filters.statut) return false;
+      if (filters.remunerationOnly && !a.remuneration) return false;
+      if (filters.engagement && a.engagement !== filters.engagement) return false;
       if (filters.genres.length > 0 && !filters.genres.includes(DEMOGRAPHIC_BY_ID[a.id])) return false;
       if (filters.sousGenres.length > 0 && !filters.sousGenres.some((sg) => SUB_GENRES_BY_ID[a.id]?.includes(sg))) return false;
       return true;
@@ -992,8 +1098,6 @@ function AnnouncementsPage() {
           item={detailsFor}
           onClose={() => setDetailsFor(null)}
           onApply={() => setWorkflowModal({ kind: "apply", item: detailsFor })}
-          onInvite={() => setWorkflowModal({ kind: "invite", item: detailsFor })}
-          onSponsor={() => setWorkflowModal({ kind: "sponsor", item: detailsFor })}
         />
       )}
       {workflowModal && (
@@ -1029,7 +1133,11 @@ function AnnouncementFilterBar({
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const advancedCount =
-    filters.langue.length + filters.genres.length + filters.sousGenres.length;
+    filters.langue.length +
+    filters.genres.length +
+    filters.sousGenres.length +
+    (filters.remunerationOnly ? 1 : 0) +
+    (filters.engagement ? 1 : 0);
   const setRole = (role: string) => setFilters((f) => ({ ...f, statut: role }));
   const setTarget = (target: Filters["target"]) => setFilters((f) => ({ ...f, target }));
 
@@ -1234,6 +1342,31 @@ function CategoryChip({ children }: { children: ReactNode }) {
   );
 }
 
+function RemunerationBadge() {
+  return (
+    <span
+      aria-label="Rémunération active"
+      title="Rémunération active"
+      style={{
+        ...sora,
+        width: 34,
+        height: 34,
+        borderRadius: "50%",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: C.neonSoftFill,
+        border: `1px solid ${C.neonSoftBorder}`,
+        color: C.neon,
+        fontSize: 15,
+        fontWeight: 900,
+      }}
+    >
+      €
+    </span>
+  );
+}
+
 function CoverArt({ title }: { title: string }) {
   // Deterministic hue per title for visual variety without real images
   const hue = Array.from(title).reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
@@ -1366,6 +1499,7 @@ function CardHeader({
   description,
   saved,
   onSave,
+  remuneration,
 }: {
   title: string;
   subtitle: string;
@@ -1373,6 +1507,7 @@ function CardHeader({
   description: string;
   saved: boolean;
   onSave: () => void;
+  remuneration?: boolean;
 }) {
   return (
     <div style={{ marginTop: 16 }}>
@@ -1412,16 +1547,19 @@ function CardHeader({
             {subtitle}
           </div>
         </div>
-        <IconButton
-          ariaLabel={saved ? "Remove bookmark" : "Save announcement"}
-          onClick={onSave}
-        >
-          <Bookmark
-            size={16}
-            style={{ color: saved ? C.neon : C.sec }}
-            fill={saved ? C.neon : "none"}
-          />
-        </IconButton>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {remuneration && <RemunerationBadge />}
+          <IconButton
+            ariaLabel={saved ? "Remove bookmark" : "Save announcement"}
+            onClick={onSave}
+          >
+            <Bookmark
+              size={16}
+              style={{ color: saved ? C.neon : C.sec }}
+              fill={saved ? C.neon : "none"}
+            />
+          </IconButton>
+        </div>
       </div>
       <div style={{ marginTop: 10 }}>
         <CategoryChip>{category}</CategoryChip>
@@ -1544,13 +1682,14 @@ function ProjectCard({
           description={item.description}
           saved={saved}
           onSave={() => setSaved((s) => !s)}
+          remuneration={item.remuneration}
         />
         <MetaGrid
           items={[
             { label: "Genre", value: itemGenre(item) },
             { label: "Sous-genres", value: itemSubGenres(item).join(", ") },
-            { label: "Status", value: item.status },
-            { label: "Language", value: item.language },
+            { label: "Engagement", value: item.engagement },
+            { label: "Rémunération", value: item.remuneration ? "Oui" : "Non" },
           ]}
         />
         <div style={{ flex: 1 }} />
@@ -1574,13 +1713,14 @@ function UserCard({ item, onView, onInvite }: { item: UserAnnouncement; onView: 
           description={item.description}
           saved={saved}
           onSave={() => setSaved((s) => !s)}
+          remuneration={item.remuneration}
         />
         <MetaGrid
           items={[
             { label: "Genre", value: itemGenre(item) },
             { label: "Sous-genres", value: itemSubGenres(item).join(", ") },
-            { label: "Main skill", value: item.mainSkill },
-            { label: "Availability", value: item.availability },
+            { label: "Engagement", value: item.engagement },
+            { label: "Rémunération", value: item.remuneration ? "Oui" : "Non" },
           ]}
         />
         <div style={{ flex: 1 }} />
@@ -1837,14 +1977,10 @@ function DetailsModal({
   item,
   onClose,
   onApply,
-  onInvite,
-  onSponsor,
 }: {
   item: Announcement;
   onClose: () => void;
   onApply: () => void;
-  onInvite: () => void;
-  onSponsor: () => void;
 }) {
   const [tab, setTab] = useState<"comments" | "interested">("comments");
   const isProject = item.kind === "project";
@@ -1934,7 +2070,10 @@ function DetailsModal({
           <section style={{ padding: 24 }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <CategoryChip>{itemRole(item)}</CategoryChip>
-              <CategoryChip>{isProject ? item.status : item.availability}</CategoryChip>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              <Chip>{remunerationLabel(item)}</Chip>
+              <Chip>{item.engagement}</Chip>
             </div>
             <h2 style={{ ...sora, marginTop: 14, fontSize: 28, lineHeight: "36px", fontWeight: 800, color: C.text }}>
               {item.title}
@@ -1942,41 +2081,22 @@ function DetailsModal({
             <p style={{ ...manrope, marginTop: 12, fontSize: 15, lineHeight: "24px", fontWeight: 500, color: C.sec }}>
               {item.description}
             </p>
-
-            <DetailMeta
-              items={[
-                { label: isProject ? "Role recherche" : "Role propose", value: itemRole(item) },
-                { label: "Disponibilite", value: item.availability },
-                { label: "Langue", value: item.language },
-                { label: "Experience", value: item.experience },
-              ]}
-            />
-
-            {isProject ? (
-              <>
-                <DetailSection title="Description complete">{item.fullDescription}</DetailSection>
-                <DetailSection title="Profil attendu">{item.requirements}</DetailSection>
-                <DetailSection title="Contribution attendue">{item.contribution}</DetailSection>
-                <DetailSection title="Equipe">{item.team}</DetailSection>
-                <DetailSection title="Instructions de candidature">{item.application}</DetailSection>
-                <DetailSection title="Competences demandees">
-                  <SkillList items={item.requiredSkills} />
-                </DetailSection>
-              </>
-            ) : (
-              <>
-                <DetailSection title="Description complete">{item.fullDescription}</DetailSection>
-                <DetailSection title="Recherche">{item.lookingFor}</DetailSection>
-                <DetailSection title="Instructions de contact">{item.contact}</DetailSection>
-                <DetailSection title="Competences principales">
-                  <SkillList items={item.mainSkills} />
-                </DetailSection>
-              </>
-            )}
+            <div
+              style={{
+                marginTop: 22,
+                paddingTop: 22,
+                borderTop: `1px solid ${C.border}`,
+              }}
+            >
+              <MetaLabel>Description</MetaLabel>
+              <p style={{ ...manrope, marginTop: 8, fontSize: 14, lineHeight: "23px", fontWeight: 500, color: C.text }}>
+                {item.fullDescription}
+              </p>
+            </div>
           </section>
 
-          <aside style={{ padding: 24, borderLeft: `1px solid ${C.border}` }}>
-            <div className="cm-popup-tabs" role="tablist" aria-label="Activité de l'annonce" style={{ width: "100%" }}>
+          <aside style={{ padding: 18, borderLeft: `1px solid ${C.border}` }}>
+            <div className="cm-popup-tabs" role="tablist" aria-label="Activite de l'annonce" style={{ width: "100%", padding: 4, borderRadius: 14 }}>
               <button
                 type="button"
                 role="tab"
@@ -1984,7 +2104,7 @@ function DetailsModal({
                 data-active={tab === "comments"}
                 onClick={() => setTab("comments")}
                 className="cm-popup-tab"
-                style={{ flex: 1 }}
+                style={{ flex: 1, minHeight: 34, padding: "0 10px", fontSize: 12 }}
               >
                 Commentaires
               </button>
@@ -1995,16 +2115,16 @@ function DetailsModal({
                 data-active={tab === "interested"}
                 onClick={() => setTab("interested")}
                 className="cm-popup-tab"
-                style={{ flex: 1 }}
+                style={{ flex: 1, minHeight: 34, padding: "0 10px", fontSize: 12 }}
               >
-                Interessés
+                Intéressés
               </button>
             </div>
 
-            <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+            <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
               {tab === "comments"
                 ? comments.map((comment, index) => (
-                    <div key={comment} style={{ padding: 14, borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
+                    <div key={comment} style={{ padding: 12, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
                       <p style={{ ...manrope, color: C.text, fontSize: 12, fontWeight: 800 }}>Utilisateur {index + 1}</p>
                       <p style={{ ...manrope, marginTop: 6, color: C.sec, fontSize: 13, fontWeight: 500, lineHeight: "20px" }}>
                         {comment}
@@ -2012,7 +2132,7 @@ function DetailsModal({
                     </div>
                   ))
                 : interested.map((name) => (
-                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
+                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
                       <div style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: C.input, color: C.neon, ...sora, fontSize: 12, fontWeight: 800 }}>
                         {name.slice(0, 2).toUpperCase()}
                       </div>
@@ -2035,18 +2155,7 @@ function DetailsModal({
         }}
       >
         <GhostButton>Save</GhostButton>
-        <SecondaryButton onClick={onSponsor}>Sponsoriser</SecondaryButton>
-        {item.kind === "project" ? (
-          <>
-            <SecondaryButton>Contact Project</SecondaryButton>
-            <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>
-          </>
-        ) : (
-          <>
-            <SecondaryButton>Contact User</SecondaryButton>
-            <PrimaryButton onClick={onInvite}>Invite to Project</PrimaryButton>
-          </>
-        )}
+        <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>
       </div>
     </ModalShell>
   );
@@ -2121,7 +2230,7 @@ function AnnouncementWorkflowModal({
         message,
         recipient: owner,
       });
-      onDone("Réponse envoyée. Une notification a été créée pour l'auteur de l'annonce.");
+      onDone("Réponse envoyée.");
       return;
     }
     if (action === "invite") {
@@ -2520,6 +2629,8 @@ function AnnouncementAdvancedFiltersModal({
       langue: [],
       genres: [],
       sousGenres: [],
+      remunerationOnly: false,
+      engagement: "",
     }));
 
   return (
@@ -2533,6 +2644,32 @@ function AnnouncementAdvancedFiltersModal({
               label={language}
               active={filters.langue.includes(language)}
               onClick={() => toggleArr("langue", language)}
+            />
+          ))}
+        </FilterChipRow>
+
+        <FilterChipRow label="Rémunération">
+          <div style={{ width: 280, maxWidth: "100%" }}>
+            <ToggleSwitchField
+              label={filters.remunerationOnly ? "Rémunération active" : "Toutes les annonces"}
+              checked={filters.remunerationOnly}
+              onChange={(checked) => setFilters((f) => ({ ...f, remunerationOnly: checked }))}
+            />
+          </div>
+        </FilterChipRow>
+
+        <FilterChipRow label="Engagement">
+          <FilterChip
+            label="Tout"
+            active={filters.engagement === ""}
+            onClick={() => setFilters((f) => ({ ...f, engagement: "" }))}
+          />
+          {(["Long terme", "Ponctuel"] as const).map((engagement) => (
+            <FilterChip
+              key={engagement}
+              label={engagement}
+              active={filters.engagement === engagement}
+              onClick={() => setFilters((f) => ({ ...f, engagement }))}
             />
           ))}
         </FilterChipRow>
@@ -2645,8 +2782,68 @@ function AdvancedFiltersModal({
   );
 }
 
+function ToggleSwitchField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        width: "100%",
+        minHeight: 44,
+        borderRadius: 14,
+        border: `1px solid ${checked ? C.neonSoftBorder : C.border}`,
+        background: checked ? C.neonSoftFill : C.input,
+        color: checked ? C.neon : C.sec,
+        padding: "0 12px",
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ ...manrope, fontSize: 13, fontWeight: 800 }}>{label}</span>
+      <span
+        style={{
+          position: "relative",
+          width: 40,
+          height: 22,
+          borderRadius: 999,
+          background: checked ? "rgba(57,255,136,0.38)" : C.card,
+          border: `1px solid ${checked ? C.neonSoftBorder : C.borderStrong}`,
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 2,
+            left: checked ? 20 : 2,
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            background: checked ? C.neon : C.sec,
+            transition: "left 140ms ease",
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
 function CreateAnnouncementModal({ onClose }: { onClose: () => void }) {
   const [type, setType] = useState<"project" | "user">("project");
+  const [remuneration, setRemuneration] = useState(false);
+  const [engagement, setEngagement] = useState<"Long terme" | "Ponctuel">("Long terme");
   return (
     <ModalShell onClose={onClose} maxWidth={880} label="Create announcement">
       <ModalHeader
@@ -2740,6 +2937,14 @@ function CreateAnnouncementModal({ onClose }: { onClose: () => void }) {
                 <SelectInput value="" onChange={() => {}} options={MODES} placeholder="Select mode" ariaLabel="Collaboration mode" minWidth={0} />
               </div>
               <div>
+                <FieldLabel>Rémunération</FieldLabel>
+                <ToggleSwitchField label={remuneration ? "Rémunération active" : "Sans rémunération"} checked={remuneration} onChange={setRemuneration} />
+              </div>
+              <div>
+                <FieldLabel>Engagement</FieldLabel>
+                <SelectInput value={engagement} onChange={(value) => setEngagement(value as "Long terme" | "Ponctuel")} options={["Long terme", "Ponctuel"]} placeholder="Select engagement" ariaLabel="Engagement" minWidth={0} />
+              </div>
+              <div>
                 <FieldLabel>Availability</FieldLabel>
                 <SelectInput value="" onChange={() => {}} options={AVAILABILITIES} placeholder="Select availability" ariaLabel="Availability" minWidth={0} />
               </div>
@@ -2806,6 +3011,14 @@ function CreateAnnouncementModal({ onClose }: { onClose: () => void }) {
               <div>
                 <FieldLabel>Collaboration mode</FieldLabel>
                 <SelectInput value="" onChange={() => {}} options={MODES} placeholder="Select mode" ariaLabel="Collaboration mode" minWidth={0} />
+              </div>
+              <div>
+                <FieldLabel>Rémunération</FieldLabel>
+                <ToggleSwitchField label={remuneration ? "Rémunération active" : "Sans rémunération"} checked={remuneration} onChange={setRemuneration} />
+              </div>
+              <div>
+                <FieldLabel>Engagement</FieldLabel>
+                <SelectInput value={engagement} onChange={(value) => setEngagement(value as "Long terme" | "Ponctuel")} options={["Long terme", "Ponctuel"]} placeholder="Select engagement" ariaLabel="Engagement" minWidth={0} />
               </div>
               <div>
                 <FieldLabel>Language</FieldLabel>

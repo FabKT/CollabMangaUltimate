@@ -31,9 +31,27 @@ const SUBGENRE_OPTIONS = ["Action", "Aventure", "Comédie", "Drame", "Fantastiqu
 const LANGUAGES = ["FR", "ENG", "ES", "IT", "JP"];
 const RATING_VALUES = [0, 1, 2, 3, 4, 5];
 
+// correspondance sous-genre FR (filtre) → genres EN (données du catalogue)
+const SUBGENRE_MATCH: Record<string, string[]> = {
+  "Action": ["Action"],
+  "Aventure": ["Adventure"],
+  "Comédie": ["Comedy"],
+  "Drame": ["Drama"],
+  "Fantastique": ["Fantasy", "Supernatural"],
+  "Science-fiction": ["Sci-fi", "Science fiction"],
+  "Romance": ["Romance"],
+  "Slice of life": ["Slice of life"],
+  "Horreur": ["Horror"],
+  "Mystère": ["Mystery"],
+  "Historique": ["Historical"],
+  "Sport": ["Sports", "Sport"],
+  "Isekai": ["Isekai"],
+  "Psychologique": ["Psychological"],
+};
+
 function CatalogPage() {
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortOption>("Best rated");
+  const [sort, setSort] = useState<SortOption>("Avis décroissants");
   const [languages, setLanguages] = useState<string[]>([]);
   const [minRating, setMinRating] = useState(0);
   const [maxRating, setMaxRating] = useState(0);
@@ -51,8 +69,9 @@ function CatalogPage() {
     const maxC = Number(maxChapters) || 0;
     let list = CATALOG_MANGA.filter((m) => {
       if (query && !m.title.toLowerCase().includes(query.toLowerCase())) return false;
+      if (languages.length && !languages.includes(m.language)) return false;
       if (demos.length && !demos.includes(m.demographic)) return false;
-      if (subgenres.length && !subgenres.some((g) => m.genres.includes(g))) return false;
+      if (subgenres.length && !subgenres.some((g) => (SUBGENRE_MATCH[g] ?? [g]).some((en) => m.genres.includes(en)))) return false;
       if (minRating > 0 && m.rating < minRating) return false;
       if (maxRating > 0 && m.rating > maxRating) return false;
       if (minC > 0 && m.chapters < minC) return false;
@@ -60,20 +79,15 @@ function CatalogPage() {
       return true;
     });
     switch (sort) {
-      case "Best rated":
+      case "Avis décroissants":
         list = [...list].sort((a, b) => b.rating - a.rating);
         break;
-      case "Most chapters":
-        list = [...list].sort((a, b) => b.chapters - a.chapters);
-        break;
-      case "Title A-Z":
-        list = [...list].sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case "Recently updated":
+      case "Avis croissants":
+        list = [...list].sort((a, b) => a.rating - b.rating);
         break;
     }
     return list;
-  }, [query, demos, subgenres, minRating, maxRating, minChapters, maxChapters, sort]);
+  }, [query, languages, demos, subgenres, minRating, maxRating, minChapters, maxChapters, sort]);
 
   const activeChips: { label: string; onRemove: () => void }[] = [
     ...(query ? [{ label: `“${query}”`, onRemove: () => setQuery("") }] : []),
@@ -95,7 +109,7 @@ function CatalogPage() {
     setMaxChapters("");
     setDemos([]);
     setSubgenres([]);
-    setSort("Best rated");
+    setSort("Avis décroissants");
   };
 
   return (
@@ -127,7 +141,7 @@ function CatalogPage() {
           >
             {SORTS.map((s) => (
               <option key={s} value={s}>
-                Sort: {s}
+                {s}
               </option>
             ))}
           </select>
@@ -171,6 +185,16 @@ function CatalogPage() {
           </div>
         </FilterGroup>
 
+        <FilterGroup title="Genre">
+          <div className="flex flex-wrap gap-2">
+            {GENRE_OPTIONS.map((g) => (
+              <ChipBtn key={g} active={demos.includes(g)} onClick={() => toggle(demos, g, setDemos)}>
+                {g}
+              </ChipBtn>
+            ))}
+          </div>
+        </FilterGroup>
+
         <FilterGroup title="Chapters">
           <div className="flex items-center gap-2">
             <input
@@ -188,16 +212,6 @@ function CatalogPage() {
               placeholder="Max"
               className="h-10 w-28 rounded-lg border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
             />
-          </div>
-        </FilterGroup>
-
-        <FilterGroup title="Genre">
-          <div className="flex flex-wrap gap-2">
-            {GENRE_OPTIONS.map((g) => (
-              <ChipBtn key={g} active={demos.includes(g)} onClick={() => toggle(demos, g, setDemos)}>
-                {g}
-              </ChipBtn>
-            ))}
           </div>
         </FilterGroup>
 

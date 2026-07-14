@@ -24,6 +24,7 @@ export type CatalogManga = {
   chapters: number;
   status: string;
   synopsis: string;
+  language: "FR" | "ENG" | "ES" | "IT" | "JP";
 };
 
 const HAVEN_COVERS = [cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8];
@@ -71,8 +72,10 @@ export const DEMOGRAPHICS: Demographic[] = [
   "Josei",
 ];
 
-export const SORTS = ["Best rated", "Most chapters", "Title A-Z", "Recently updated"] as const;
+export const SORTS = ["Avis décroissants", "Avis croissants"] as const;
 export type SortOption = (typeof SORTS)[number];
+
+const LANGUAGE_CYCLE = ["FR", "ENG", "FR", "JP", "ENG", "FR", "ES", "IT"] as const;
 
 export const CATALOG_MANGA: CatalogManga[] = MANGA_LIST.map((manga, index) => ({
   id: manga.id,
@@ -85,6 +88,7 @@ export const CATALOG_MANGA: CatalogManga[] = MANGA_LIST.map((manga, index) => ({
   chapters: manga.chapterCount,
   status: manga.status,
   synopsis: manga.synopsis,
+  language: LANGUAGE_CYCLE[index % LANGUAGE_CYCLE.length],
 }));
 
 export const GENRES: string[] = Array.from(

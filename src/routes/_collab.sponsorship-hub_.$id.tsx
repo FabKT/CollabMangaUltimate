@@ -14,7 +14,7 @@ import {
 import { StatusBadge, PlatformIcon, Divider } from "../features/sponsorships/ui";
 import { ServiceModal } from "../features/sponsorships/ServiceModal";
 
-export const Route = createFileRoute("/_collab/sponsorship-hub/$id")({
+export const Route = createFileRoute("/_collab/sponsorship-hub_/$id")({
   component: SponsorshipDetailPage,
 });
 
