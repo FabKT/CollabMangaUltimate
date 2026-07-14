@@ -122,6 +122,24 @@ export function StatusChip({ status }: { status: "open" | "urgent" | "closing" }
   );
 }
 
+/** Disponibilité binaire pour les annonces de parrainage. */
+export function AvailabilityChip({ available }: { available: boolean }) {
+  const color = available ? "#39ff88" : "#7f8cb3";
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-manrope text-[13px] font-medium"
+      style={{
+        color,
+        backgroundColor: `color-mix(in oklab, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in oklab, ${color} 45%, transparent)`,
+      }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} aria-hidden />
+      {available ? "Available" : "Unavailable"}
+    </span>
+  );
+}
+
 export function Thumb({
   accent,
   label,

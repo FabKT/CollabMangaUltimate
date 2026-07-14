@@ -103,11 +103,8 @@ export function ServiceModal({
         </Field>
         <Field label="Payment type">
           <select className={inputCls} value={paymentType} onChange={(e) => setPaymentType(e.target.value as PaymentType)}>
-            <option value="one_time">One-time</option>
-            <option value="subscription">Subscription</option>
-            <option value="recurring">Recurring</option>
-            <option value="per_content">Per content</option>
-            <option value="per_quantity">Per quantity</option>
+            <option value="one_time">Paiement unique</option>
+            <option value="subscription">Abonnement</option>
           </select>
         </Field>
         <div className="sm:col-span-2">

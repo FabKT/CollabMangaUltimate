@@ -3,6 +3,7 @@ import { Modal, Field, inputCls } from "./ui";
 import {
   createSponsorship,
   formatMoney,
+  PAYMENT_LABEL,
   type PaymentType,
   type Platform,
   type Service,
@@ -28,7 +29,7 @@ const creatorOptions: CreatorOption[] = [
     bio: "Reviews hebdomadaires et mise en avant de projets manga indépendants.",
     services: [
       service("pp-1", "Dedicated review video", "Review", "10+ min", ["YouTube"], 1, 420, "one_time"),
-      service("pp-2", "Launch-week short bundle", "Presentation", "30-60 s", ["TikTok", "Instagram"], 3, 260, "per_content"),
+      service("pp-2", "Launch-week short bundle", "Presentation", "30-60 s", ["TikTok", "Instagram"], 3, 260, "one_time"),
     ],
   },
   {
@@ -39,7 +40,7 @@ const creatorOptions: CreatorOption[] = [
     bio: "Essais vidéo sur le shojo classique, le josei moderne et les sorties indé.",
     services: [
       service("mt-1", "Long-form analysis", "Deep analysis", "10+ min", ["YouTube"], 1, 350, "one_time"),
-      service("mt-2", "Stream mention", "Sponsored mention", "0-30 s", ["Other"], 4, 180, "per_quantity"),
+      service("mt-2", "Stream mention", "Sponsored mention", "0-30 s", ["Other"], 4, 180, "one_time"),
     ],
   },
   {
@@ -49,8 +50,8 @@ const creatorOptions: CreatorOption[] = [
     meta: "31k followers - TikTok, Twitter/X",
     bio: "Formats courts, hooks de lancement et posts communautaires pour nouveaux chapitres.",
     services: [
-      service("mr-1", "Short dedicated video", "Presentation", "0-30 s", ["TikTok"], 2, 180, "per_content"),
-      service("mr-2", "Community post pack", "Sponsored mention", "0-30 s", ["Twitter/X", "Instagram"], 3, 140, "per_quantity"),
+      service("mr-1", "Short dedicated video", "Presentation", "0-30 s", ["TikTok"], 2, 180, "one_time"),
+      service("mr-2", "Community post pack", "Sponsored mention", "0-30 s", ["Twitter/X", "Instagram"], 3, 140, "one_time"),
     ],
   },
 ];
@@ -282,7 +283,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
                       <span className="font-display text-sm font-bold text-neon">{formatMoney(item.price, currency)}</span>
                     </span>
                     <span className="text-xs text-text-secondary">
-                      Quantité : {item.quantity} - Paiement : {item.paymentType.replace("_", " ")}
+                      Quantité : {item.quantity} - Paiement : {PAYMENT_LABEL[item.paymentType]}
                     </span>
                   </button>
                 );

@@ -100,7 +100,7 @@ export function AnnouncementCard({
             <MetaItem label="Payment" value={a.paymentMode} />
           )}
           {showDuration(a) && <MetaItem label="Duration" value={a.duration!} />}
-          <MetaItem label="Status" value={a.status === "open" ? "Open" : a.status === "urgent" ? "Urgent" : "Closing soon"} />
+          <MetaItem label="Disponibilité" value={a.status === "closing" ? "Unavailable" : "Available"} />
         </div>
 
         {/* footer */}

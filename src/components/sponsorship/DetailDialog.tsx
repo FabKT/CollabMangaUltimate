@@ -8,7 +8,7 @@ import {
   btnSecondary,
   Chip,
   PlatformChip,
-  StatusChip,
+  AvailabilityChip,
   Thumb,
 } from "./ui";
 
@@ -111,7 +111,7 @@ export function DetailDialog({
 
               <SectionCard title="Informations du parrainage" className="space-y-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusChip status={a.status} />
+                  <AvailabilityChip available={a.status !== "closing"} />
                   <Chip>{a.sponsorshipType}</Chip>
                 </div>
                 <DialogTitle className="font-sora text-[28px] font-bold leading-[36px] text-cm-text">

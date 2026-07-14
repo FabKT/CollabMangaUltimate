@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { addAnnouncement, addIllustration } from "@/lib/db";
+import { cn } from "@/lib/utils";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -191,8 +192,9 @@ function ProfilePage({
   const [mode, setMode] = useState<ViewMode>(initialMode);
   const [tab, setTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState<null | { title: string; kind: string }>(null);
+  const [detailsOpen, setDetailsOpen] = useState<null | { title: string; kind: string; source: "own" | "favorite" }>(null);
   const [addOpen, setAddOpen] = useState<AddKind | null>(null);
+  const [editSponsorship, setEditSponsorship] = useState<string | null>(null);
   const [workflowOpen, setWorkflowOpen] = useState<ProfileWorkflow | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [available, setAvailable] = useState(true);
@@ -271,7 +273,7 @@ function ProfilePage({
                   profileType={profileType}
                   mode={mode}
                   onAdd={setAddOpen}
-                  onDetails={(t, k) => setDetailsOpen({ title: t, kind: k })}
+                  onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
                 />
               </Tabs.Content>
               <Tabs.Content value="projects">
@@ -279,41 +281,41 @@ function ProfilePage({
                   profileType={profileType}
                   mode={mode}
                   onAdd={() => setAddOpen("project")}
-                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Project" })}
+                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Project", source: "own" })}
                 />
               </Tabs.Content>
               <Tabs.Content value="illustrations">
                 <IllustrationsTab
                   mode={mode}
                   onAdd={() => setAddOpen("illustration")}
-                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Illustration" })}
+                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Illustration", source: "own" })}
                 />
               </Tabs.Content>
               <Tabs.Content value="propositions">
                 <PropositionsTab
                   mode={mode}
                   onAdd={() => setAddOpen("proposition")}
-                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Idée" })}
+                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Idée", source: "own" })}
                 />
               </Tabs.Content>
               <Tabs.Content value="announcements">
                 <AnnouncementsTab
                   mode={mode}
                   onAdd={() => setAddOpen("announcement")}
-                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Announcement" })}
+                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Announcement", source: "own" })}
                 />
               </Tabs.Content>
               <Tabs.Content value="sponsorship">
                 <SponsorshipTab
                   mode={mode}
                   onAdd={() => setAddOpen("sponsorship")}
-                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Sponsorship option" })}
+                  onDetails={(t) => setDetailsOpen({ title: t, kind: "Sponsorship option", source: "own" })}
                 />
               </Tabs.Content>
               {mode === "own" && (
                 <>
                   <Tabs.Content value="favorites">
-                    <FavoritesTab onDetails={(t, k) => setDetailsOpen({ title: t, kind: k })} />
+                    <FavoritesTab onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "favorite" })} />
                   </Tabs.Content>
                   <Tabs.Content value="account">
                     <AccountTab profileType={profileType} />
@@ -335,8 +337,21 @@ function ProfilePage({
         onClose={() => setDetailsOpen(null)}
         title={detailsOpen?.title ?? ""}
         kind={detailsOpen?.kind ?? ""}
+        source={detailsOpen?.source ?? "own"}
+        mode={mode}
+        onEdit={(t) => {
+          setDetailsOpen(null);
+          setEditSponsorship(t);
+        }}
       />
-      <AddSponsorshipModal open={addOpen === "sponsorship"} onClose={() => setAddOpen(null)} />
+      <AddSponsorshipModal
+        open={addOpen === "sponsorship" || editSponsorship !== null}
+        editTitle={editSponsorship}
+        onClose={() => {
+          setAddOpen(null);
+          setEditSponsorship(null);
+        }}
+      />
       <AddAnnouncementModal open={addOpen === "announcement"} onClose={() => setAddOpen(null)} />
       <AddIllustrationModal open={addOpen === "illustration"} onClose={() => setAddOpen(null)} />
       <AddPropositionModal open={addOpen === "proposition"} onClose={() => setAddOpen(null)} />
@@ -1450,7 +1465,11 @@ function AnnouncementsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetail
             </div>
             <div className="mt-4 flex items-center gap-2">
               <SecondaryButton onClick={() => onDetails(it.title)}>View Details</SecondaryButton>
-              <PrimaryButton icon={<Send size={16} />}>{it.kind === "project" ? "Apply" : "Contact"}</PrimaryButton>
+              {mode === "own" ? (
+                <PrimaryButton icon={<Edit3 size={16} />}>Edit</PrimaryButton>
+              ) : (
+                <PrimaryButton icon={<Send size={16} />}>{it.kind === "project" ? "Apply" : "Contact"}</PrimaryButton>
+              )}
             </div>
           </Card>
         ))}
@@ -1574,15 +1593,39 @@ function ProfileSelect({
 }
 
 function LanguageMultiSelect({ defaultValues = [] }: { defaultValues?: string[] }) {
+  const [selected, setSelected] = useState<string[]>(defaultValues);
+  const toggle = (language: string) =>
+    setSelected((prev) =>
+      prev.includes(language) ? prev.filter((l) => l !== language) : [...prev, language],
+    );
   return (
     <>
-      <select className="cm-input min-h-[124px]" multiple defaultValue={defaultValues}>
-        {PROFILE_LANGUAGES.map((language) => (
-          <option key={language} value={language}>{language}</option>
-        ))}
-      </select>
+      <div className="flex flex-wrap gap-2">
+        {PROFILE_LANGUAGES.map((language) => {
+          const active = selected.includes(language);
+          return (
+            <button
+              key={language}
+              type="button"
+              onClick={() => toggle(language)}
+              aria-pressed={active}
+              className={cn(
+                "rounded-full border px-3.5 py-1.5 font-manrope text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cm-neon/50",
+                active
+                  ? "border-transparent bg-cm-neon text-[#04111e] shadow-[0_4px_14px_rgba(57,255,136,0.28)]"
+                  : "border-[rgba(133,154,206,0.20)] bg-cm-input text-cm-text2 hover:border-[rgba(133,154,206,0.40)] hover:text-cm-text",
+              )}
+            >
+              {language}
+            </button>
+          );
+        })}
+      </div>
+      {selected.map((language) => (
+        <input key={language} type="hidden" name="languages" value={language} />
+      ))}
       <p className="mt-1.5 text-[11px] font-medium" style={{ color: "#7F8CB3" }}>
-        Maintiens Ctrl pour sélectionner plusieurs langues.
+        Clique pour ajouter ou retirer une langue.
       </p>
     </>
   );
@@ -1987,17 +2030,18 @@ function ClassicImageUploader({
   );
 }
 
-function AddSponsorshipModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddSponsorshipModal({ open, onClose, editTitle = null }: { open: boolean; onClose: () => void; editTitle?: string | null }) {
+  const isEdit = editTitle !== null;
   return (
     <ModalShell
       open={open}
       onClose={onClose}
-      title="Ajouter parrainage"
+      title={isEdit ? "Modifier parrainage" : "Ajouter parrainage"}
       width={860}
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={onClose}>Confirmer</PrimaryButton>
+          <PrimaryButton onClick={onClose}>{isEdit ? "Enregistrer" : "Confirmer"}</PrimaryButton>
         </>
       }
     >
@@ -2015,7 +2059,7 @@ function AddSponsorshipModal({ open, onClose }: { open: boolean; onClose: () => 
           <Field label="Quantité"><input type="number" min={0} className="cm-input" placeholder="0" /></Field>
           <Field label="Prix (€)"><input type="number" min={0} className="cm-input" placeholder="0" /></Field>
         </div>
-        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" /></Field>
+        <Field label="Description"><textarea key={editTitle ?? "new"} className="cm-textarea" placeholder="Description" defaultValue={editTitle ?? undefined} /></Field>
         <div className="rounded-[16px] p-4" style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)" }}>
           <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Chapitres — Parrainage</div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -2419,74 +2463,115 @@ function DetailsModal({
   onClose,
   title,
   kind,
+  source,
+  mode,
+  onEdit,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   kind: string;
+  source: "own" | "favorite";
+  mode: ViewMode;
+  onEdit: (title: string) => void;
 }) {
+  const isSponsorship = kind === "Sponsorship option";
+  // Ses propres publications (mode "own") → pas de contact/postuler ; on garde
+  // le contact pour les favoris et lorsqu'on visite un profil public.
+  const showContact = source === "favorite" || mode === "public";
+  const canEdit = isSponsorship && source === "own" && mode === "own";
+  const applyLabel = kind === "Project" ? "Apply" : "Contact";
+
   return (
     <ModalShell
       open={open}
       onClose={onClose}
       title={title || kind}
-      width={1040}
+      width={1200}
       footer={
         <>
           <SecondaryButton onClick={onClose}>Close</SecondaryButton>
-          <PrimaryButton onClick={onClose} icon={<Send size={16} />}>{kind === "Project" ? "View Project" : "Contact"}</PrimaryButton>
+          {canEdit && (
+            <PrimaryButton onClick={() => onEdit(title)} icon={<Edit3 size={16} />}>Modifier</PrimaryButton>
+          )}
+          {showContact && (
+            <PrimaryButton onClick={onClose} icon={<Send size={16} />}>{applyLabel}</PrimaryButton>
+          )}
         </>
       }
     >
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
-        <div
-          className="grid aspect-[3/4] w-full max-w-[220px] place-items-center overflow-hidden rounded-[18px]"
-          style={{
-            background: "linear-gradient(160deg, #060D24, #0B1430 50%, #101B3F 100%)",
-            border: "1px solid rgba(133,154,206,0.18)",
-          }}
-        >
-          <ImageIcon size={30} color="#5E6A90" />
-        </div>
+      <div className={isSponsorship ? "" : "grid grid-cols-1 gap-6 md:grid-cols-[240px_minmax(0,1fr)]"}>
+        {!isSponsorship && (
+          <div
+            className="grid aspect-[3/4] w-full max-w-[240px] place-items-center overflow-hidden rounded-[18px]"
+            style={{
+              background: "linear-gradient(160deg, #060D24, #0B1430 50%, #101B3F 100%)",
+              border: "1px solid rgba(133,154,206,0.18)",
+            }}
+          >
+            <ImageIcon size={30} color="#5E6A90" />
+          </div>
+        )}
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone="info">{kind}</Chip>
             <Chip tone="active">Available</Chip>
           </div>
-          <h2 className="cm-sora mt-3 text-[20px] font-bold leading-7" style={{ color: "#F7FAFF" }}>
+          <h2 className="cm-sora mt-3 text-[22px] font-bold leading-8" style={{ color: "#F7FAFF" }}>
             {title || `${kind} details`}
           </h2>
           <p className="mt-2 text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
-            Full description placeholder — this popup expands the concise card into a complete overview,
-            including context, goals, requirements and everything a collaborator or reader would want to know
-            before taking action.
+            {isSponsorship
+              ? "Détail complet de l'option de parrainage : plateformes ciblées, format, durée, mode de paiement et livrables attendus."
+              : "Vue complète de cette publication : contexte, objectifs, exigences et tout ce qu'un collaborateur ou lecteur souhaite savoir avant d'agir."}
           </p>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Stat label="Status" value="Ongoing" />
-            <Stat label="Role" value="Dessinateur" />
-            <Stat label="Chapters" value="12" />
-            <Stat label="Genre" value="Shonen" />
-            <Stat label="Mode" value="Remote" />
-            <Stat label="Updated" value="2d ago" />
-          </div>
+          {isSponsorship ? (
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Stat label="Format" value="Vidéo courte dédiée" />
+              <Stat label="Plateformes" value="YouTube · TikTok" />
+              <Stat label="Durée" value="1–3 min" />
+              <Stat label="Paiement" value="Paiement unique" />
+              <Stat label="Prix" value="450 €" />
+              <Stat label="Chapitres" value="5–12" />
+            </div>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Stat label="Status" value="Ongoing" />
+              <Stat label="Role" value="Dessinateur" />
+              <Stat label="Chapters" value="12" />
+              <Stat label="Genre" value="Shonen" />
+              <Stat label="Mode" value="Remote" />
+              <Stat label="Updated" value="2d ago" />
+            </div>
+          )}
           <div className="mt-5 flex flex-wrap gap-1.5">
-            <Chip>Long-term</Chip>
-            <Chip>Team of 3</Chip>
-            <Chip>Weekly cadence</Chip>
-            <Chip tone="info">Remote</Chip>
+            {isSponsorship ? (
+              <>
+                <Chip>YouTube</Chip>
+                <Chip>TikTok</Chip>
+                <Chip tone="info">Paiement unique</Chip>
+              </>
+            ) : (
+              <>
+                <Chip>Long-term</Chip>
+                <Chip>Team of 3</Chip>
+                <Chip>Weekly cadence</Chip>
+                <Chip tone="info">Remote</Chip>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       <div className="mt-8">
-        <SectionTitle title="Details" subtitle="Everything condensed cards omit." />
+        <SectionTitle title="Détails" subtitle="Tout ce que les cartes condensées omettent." />
         <div
           className="rounded-[18px] p-5 text-[14px] leading-[22px]"
           style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)", color: "#B8C4E5" }}
         >
-          Long-form description placeholder. Additional sections such as chapter history, contributor list,
-          previous illustrations, pricing tiers, or sponsorship deliverables belong here. Cards on the profile
-          stay sober; this modal absorbs the depth.
+          {isSponsorship
+            ? "Description longue de l'offre de parrainage : cadrage éditorial, ton, points de discussion, mentions obligatoires et conditions de livraison."
+            : "Description longue. Historique des chapitres, liste des contributeurs, illustrations précédentes ou livrables détaillés trouvent leur place ici."}
         </div>
       </div>
 

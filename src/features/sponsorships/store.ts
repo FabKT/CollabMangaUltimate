@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 export type SponsorshipStatus = "activated" | "pending" | "finished" | "cancelled";
-export type PaymentType = "one_time" | "subscription" | "recurring" | "per_content" | "per_quantity";
+export type PaymentType = "one_time" | "subscription";
 export type Platform = "TikTok" | "YouTube" | "Instagram" | "Twitter/X" | "Other";
 
 export interface Service {
@@ -46,7 +46,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 const STORAGE_KEY = "collabmanga.sponsorships.v1";
 const VALID_STATUSES: SponsorshipStatus[] = ["activated", "pending", "finished", "cancelled"];
-const VALID_PAYMENT_TYPES: PaymentType[] = ["one_time", "subscription", "recurring", "per_content", "per_quantity"];
+const VALID_PAYMENT_TYPES: PaymentType[] = ["one_time", "subscription"];
 const VALID_PLATFORMS: Platform[] = ["TikTok", "YouTube", "Instagram", "Twitter/X", "Other"];
 
 let state: Sponsorship[] = [
@@ -70,8 +70,8 @@ let state: Sponsorship[] = [
     ],
     services: [
       { id: uid(), name: "Dedicated long video", format: "Deep analysis", duration: "10+ min", platforms: ["YouTube"], quantity: 1, price: 2200, paymentType: "one_time", deliveryLink: "https://youtu.be/example-1" },
-      { id: uid(), name: "Short video", format: "Review", duration: "0–30 s", platforms: ["TikTok", "Instagram"], quantity: 3, price: 1200, paymentType: "per_content" },
-      { id: uid(), name: "Story", format: "Sponsored mention", duration: "0–30 s", platforms: ["Instagram"], quantity: 4, price: 400, paymentType: "per_quantity", deliveryLink: "" },
+      { id: uid(), name: "Short video", format: "Review", duration: "0–30 s", platforms: ["TikTok", "Instagram"], quantity: 3, price: 1200, paymentType: "one_time" },
+      { id: uid(), name: "Story", format: "Sponsored mention", duration: "0–30 s", platforms: ["Instagram"], quantity: 4, price: 400, paymentType: "one_time", deliveryLink: "" },
       { id: uid(), name: "Post", format: "Product placement", duration: "0–30 s", platforms: ["Twitter/X"], quantity: 2, price: 1000, paymentType: "one_time" },
     ],
   },
@@ -83,7 +83,7 @@ let state: Sponsorship[] = [
     totalPrice: 2600,
     currency: "EUR",
     status: "pending",
-    paymentType: "recurring",
+    paymentType: "subscription",
     deadline: "2026-09-02",
     createdAt: "2026-07-05",
     participants: [
@@ -92,7 +92,7 @@ let state: Sponsorship[] = [
     ],
     services: [
       { id: uid(), name: "Placement in a video", format: "Product placement", duration: "1–3 min", platforms: ["YouTube"], quantity: 1, price: 1400, paymentType: "one_time" },
-      { id: uid(), name: "Stream mention", format: "Sponsored mention", duration: "0–30 s", platforms: ["Other"], quantity: 6, price: 1200, paymentType: "per_content" },
+      { id: uid(), name: "Stream mention", format: "Sponsored mention", duration: "0–30 s", platforms: ["Other"], quantity: 6, price: 1200, paymentType: "one_time" },
     ],
   },
   {
@@ -112,7 +112,7 @@ let state: Sponsorship[] = [
     ],
     services: [
       { id: uid(), name: "Reaction", format: "Reaction", duration: "1–3 min", platforms: ["YouTube"], quantity: 1, price: 900, paymentType: "one_time", deliveryLink: "https://youtu.be/example-2" },
-      { id: uid(), name: "Post", format: "Sponsored mention", duration: "0–30 s", platforms: ["Twitter/X"], quantity: 2, price: 600, paymentType: "per_content", deliveryLink: "https://x.com/example" },
+      { id: uid(), name: "Post", format: "Sponsored mention", duration: "0–30 s", platforms: ["Twitter/X"], quantity: 2, price: 600, paymentType: "one_time", deliveryLink: "https://x.com/example" },
     ],
   },
   {
@@ -328,11 +328,8 @@ export const STATUS_META: Record<SponsorshipStatus, { label: string; color: stri
 };
 
 export const PAYMENT_LABEL: Record<PaymentType, string> = {
-  one_time: "One-time",
-  subscription: "Subscription",
-  recurring: "Recurring",
-  per_content: "Per content",
-  per_quantity: "Per quantity",
+  one_time: "Paiement unique",
+  subscription: "Abonnement",
 };
 
 export const PLATFORMS: Platform[] = VALID_PLATFORMS;
