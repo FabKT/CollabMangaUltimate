@@ -21,6 +21,9 @@ export type MangaCharacterProfile = {
   colorNotes?: string;
   personality?: string;
   images?: MangaCharacterImage[];
+  /** Carte de personnage consolidée (turnaround + expressions) générée à partir de la bibliothèque. */
+  cardImageDataUrl?: string;
+  cardImageGeneratedAt?: string;
 };
 
 const CHARACTER_STORAGE_KEY = "collabmanga.characterProfiles.v2";
@@ -51,6 +54,8 @@ export function createBlankCharacter(index: number): MangaCharacterProfile {
     colorNotes: "",
     personality: "",
     images: [],
+    cardImageDataUrl: undefined,
+    cardImageGeneratedAt: undefined,
   };
 }
 
@@ -76,6 +81,12 @@ function normalizeCharacterProfiles(value: unknown): MangaCharacterProfile[] {
       accessories: typeof character?.accessories === "string" ? character.accessories : "",
       colorNotes: typeof character?.colorNotes === "string" ? character.colorNotes : "",
       personality: typeof character?.personality === "string" ? character.personality : "",
+      cardImageDataUrl:
+        typeof character?.cardImageDataUrl === "string" ? character.cardImageDataUrl : undefined,
+      cardImageGeneratedAt:
+        typeof character?.cardImageGeneratedAt === "string"
+          ? character.cardImageGeneratedAt
+          : undefined,
       images: Array.isArray(character?.images)
         ? character.images
             .filter(

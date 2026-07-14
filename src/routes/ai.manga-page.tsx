@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type MangaBackendStatusResult,
+  type MangaImageDiagnostics,
   type MangaImageGenerationInput,
   type MangaImageGenerationResult,
 } from "@/server-functions/manga-image";
@@ -29,6 +30,7 @@ import {
   FileImage,
   History,
   ImageIcon,
+  Info,
   Layers,
   Lightbulb,
   Mountain,
@@ -213,8 +215,23 @@ function fileBaseName(fileName: string) {
 }
 
 function characterImagesToLibraryItems(characters: CharacterProfile[]): StoredItem[] {
-  return characters.flatMap((character) =>
-    (character.images ?? []).map((image) => ({
+  return characters.flatMap((character) => {
+    // Si une carte de personnage a été générée, elle remplace toute la
+    // bibliothèque : 1 seule image consolidée (turnaround + expressions).
+    if (character.cardImageDataUrl) {
+      return [
+        {
+          id: `profile-${character.id}-card`,
+          name: `${character.name || "Character"} - Carte`,
+          role: "Character" as const,
+          thumbHue: hueFromName(character.name || "card"),
+          imageDataUrl: character.cardImageDataUrl,
+          characterId: character.id,
+          description: "Carte de personnage (turnaround + expressions)",
+        },
+      ];
+    }
+    return (character.images ?? []).map((image) => ({
       id: `profile-${character.id}-${image.id}`,
       name: `${character.name || "Character"} - ${image.view || image.name}`,
       role: "Character" as const,
@@ -223,8 +240,8 @@ function characterImagesToLibraryItems(characters: CharacterProfile[]): StoredIt
       mimeType: image.mimeType,
       characterId: character.id,
       description: image.notes || image.view || "",
-    })),
-  );
+    }));
+  });
 }
 
 function isProfileCharacterItem(item: StoredItem) {
@@ -250,6 +267,57 @@ function characterImageItems(character: CharacterProfile, items: StoredItem[]) {
 
 function firstCharacterImageItem(character: CharacterProfile, items: StoredItem[]) {
   return characterImageItems(character, items)[0];
+}
+
+const MAX_REFERENCE_IMAGES = 16;
+const STRUCTURE_ROLES: Role[] = ["Storyboard", "Target", "Generated Page"];
+
+/**
+ * Applique le budget d'images avant l'envoi : une seule image de structure, et
+ * une notification (non bloquante) si l'ensemble dépasse le plafond OpenAI de 16.
+ * Les images de personnages ne sont pas coupées ici — le backend répartit
+ * équitablement — mais on invite l'utilisateur à créer des cartes pour consolider.
+ */
+function enforceImageBudget(
+  items: StoredItem[],
+  characters: CharacterProfile[],
+): { items: StoredItem[]; notice: string | null } {
+  const withImages = items.filter((item) => item.imageDataUrl);
+  const structure = withImages.filter((item) => STRUCTURE_ROLES.includes(item.role));
+  const rest = withImages.filter((item) => !STRUCTURE_ROLES.includes(item.role));
+
+  const keptStructure = structure.slice(0, 1);
+  const droppedStructure = structure.length - keptStructure.length;
+  const kept = [...keptStructure, ...rest];
+
+  const perCharacter = new Map<string, number>();
+  for (const item of rest) {
+    if (item.role === "Character" && item.characterId) {
+      perCharacter.set(item.characterId, (perCharacter.get(item.characterId) ?? 0) + 1);
+    }
+  }
+  const cardCandidates = characters
+    .filter((character) => (perCharacter.get(character.id) ?? 0) > 1 && !character.cardImageDataUrl)
+    .map((character) => character.name || "Personnage");
+
+  const notices: string[] = [];
+  if (droppedStructure > 0) {
+    notices.push(
+      `Une seule image de structure est conservée (${droppedStructure} ignorée${droppedStructure > 1 ? "s" : ""}).`,
+    );
+  }
+  if (kept.length > MAX_REFERENCE_IMAGES) {
+    notices.push(
+      `Tu envoies ${kept.length} images alors que la limite est de ${MAX_REFERENCE_IMAGES}. Le backend n'en gardera que ${MAX_REFERENCE_IMAGES}, réparties équitablement entre les personnages.`,
+    );
+    if (cardCandidates.length) {
+      notices.push(
+        `Pour que chaque personnage tienne dans le budget, génère une carte pour : ${cardCandidates.join(", ")} (1 carte = 1 image au lieu de plusieurs).`,
+      );
+    }
+  }
+
+  return { items: kept, notice: notices.length ? notices.join(" ") : null };
 }
 
 async function readImageAsDataUrl(file: File) {
@@ -463,6 +531,7 @@ function CollabMangaAIPage() {
   );
   const [generationResult, setGenerationResult] = useState<MangaImageGenerationResult | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [budgetNotice, setBudgetNotice] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [backendStatus, setBackendStatus] = useState<MangaBackendStatusResult | null>(null);
@@ -743,6 +812,8 @@ function CollabMangaAIPage() {
         aspectRatio,
         status.manga?.referenceImageAspectGuard === true,
       );
+      const budget = enforceImageBudget(preparedSelectedItems, characters);
+      setBudgetNotice(budget.notice);
       const result = await generateMangaImageViaApi({
         operation,
         prompt,
@@ -752,7 +823,7 @@ function CollabMangaAIPage() {
         pages: [1],
         panelCount,
         panelInstructions,
-        selectedAssets: preparedSelectedItems.map((item) => {
+        selectedAssets: budget.items.map((item) => {
           const character = characters.find((profile) => profile.id === item.characterId);
           return {
             ...item,
@@ -928,6 +999,7 @@ function CollabMangaAIPage() {
           setAspectRatio={setAspectRatio}
           hasResult={Boolean(generationResult)}
           generationError={generationError}
+          budgetNotice={budgetNotice}
           isGenerating={isGenerating}
           onGenerate={() => requestImageGeneration("generate")}
           onApplyEdit={() => requestImageGeneration("edit")}
@@ -1338,6 +1410,58 @@ function AssetThumb({ item, sizeClass }: { item: StoredItem; sizeClass: string }
   );
 }
 
+function GenerationDiagnostics({ diagnostics }: { diagnostics: MangaImageDiagnostics }) {
+  const perCharacter = Object.entries(diagnostics.perCharacterImageCount ?? {});
+  const missing = diagnostics.charactersWithoutImage ?? [];
+  const overPromptLimit =
+    (diagnostics.promptLength ?? 0) > (diagnostics.promptLimit ?? Number.POSITIVE_INFINITY);
+  return (
+    <div className="rounded-[14px] border border-border bg-surface-3 p-3 text-[12px] text-text-secondary">
+      <div className="mb-2 flex items-center gap-2 text-[12px] font-bold text-text-primary">
+        <Info className="h-4 w-4 text-accent" />
+        Diagnostic de génération
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+        <span>
+          Prompt : {diagnostics.promptLength ?? "?"}
+          {diagnostics.promptLimit ? `/${diagnostics.promptLimit}` : ""} car.
+        </span>
+        <span className={diagnostics.promptCompacted ? "text-warning" : ""}>
+          Compaction : {diagnostics.promptCompacted ? "oui" : "non"}
+        </span>
+        <span className={diagnostics.droppedImageCount ? "text-warning" : ""}>
+          Images : {diagnostics.imagesSentToOpenAI ?? "?"}/{diagnostics.maxImages ?? 16}
+          {diagnostics.droppedImageCount
+            ? ` (${diagnostics.droppedImageCount} ignorée${diagnostics.droppedImageCount > 1 ? "s" : ""})`
+            : ""}
+        </span>
+        <span>Structure : {diagnostics.structureImages ?? 0}</span>
+        <span>Références : {diagnostics.referenceImages ?? 0}</span>
+        <span>Personnages : {diagnostics.charactersUsed ?? 0}</span>
+      </div>
+      {perCharacter.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {perCharacter.map(([name, count]) => (
+            <span
+              key={name}
+              className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold text-text-primary"
+            >
+              {name} · {count} img
+            </span>
+          ))}
+        </div>
+      )}
+      {(missing.length > 0 || overPromptLimit) && (
+        <div className="mt-2 text-[11px] font-semibold text-warning">
+          {missing.length > 0 &&
+            `Sans image utilisée : ${missing.join(", ")}. Génère une carte pour ces personnages. `}
+          {overPromptLimit && "Prompt au-delà de la limite : contenu condensé."}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GenerationPanel({
   result,
   error,
@@ -1460,6 +1584,8 @@ function GenerationPanel({
             </div>
           </div>
         </div>
+
+        {result?.diagnostics && <GenerationDiagnostics diagnostics={result.diagnostics} />}
 
         {history.length > 0 && (
           <div className="rounded-[14px] border border-border bg-surface-3 p-3">
@@ -1649,6 +1775,7 @@ function WorkspacePanel(props: {
   setAspectRatio: (value: AspectRatio) => void;
   hasResult: boolean;
   generationError: string | null;
+  budgetNotice: string | null;
   isGenerating: boolean;
   onGenerate: () => void;
   onApplyEdit: () => void;
@@ -1705,6 +1832,11 @@ function WorkspacePanel(props: {
         {props.generationError && (
           <div className="rounded-[12px] border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-semibold leading-relaxed text-danger">
             {props.generationError}
+          </div>
+        )}
+        {props.budgetNotice && (
+          <div className="rounded-[12px] border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] font-semibold leading-relaxed text-warning">
+            {props.budgetNotice}
           </div>
         )}
         {props.hasResult && (

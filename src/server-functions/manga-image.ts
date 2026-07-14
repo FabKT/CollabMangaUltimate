@@ -82,6 +82,22 @@ export type MangaImageTaskType =
   | "strict_character_replacement"
   | "targeted_correction";
 
+export type MangaImageDiagnostics = {
+  taskType?: string;
+  promptLength?: number;
+  promptLimit?: number;
+  promptCompacted?: boolean;
+  maxImages?: number;
+  providedImageCount?: number;
+  imagesSentToOpenAI?: number;
+  droppedImageCount?: number;
+  structureImages?: number;
+  referenceImages?: number;
+  charactersUsed?: number;
+  perCharacterImageCount?: Record<string, number>;
+  charactersWithoutImage?: string[];
+};
+
 export type MangaImageGenerationResult = {
   imageUrl: string;
   finalPrompt: string;
@@ -91,6 +107,7 @@ export type MangaImageGenerationResult = {
   quality: string;
   createdAt: string;
   creditsUsed?: number;
+  diagnostics?: MangaImageDiagnostics;
 };
 
 export type MangaBackendStatusResult = {
@@ -129,6 +146,7 @@ type PulseNoteMangaResponse = {
   quality?: string;
   createdAt?: string;
   creditsUsed?: number;
+  diagnostics?: MangaImageDiagnostics;
   error?: string;
   details?: {
     message?: string;
@@ -357,6 +375,7 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
         quality: payload.quality ?? "high",
         createdAt: payload.createdAt ?? new Date().toISOString(),
         creditsUsed: payload.creditsUsed,
+        diagnostics: payload.diagnostics,
       } satisfies MangaImageGenerationResult;
     } catch (error) {
       lastError = error;

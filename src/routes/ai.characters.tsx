@@ -89,6 +89,8 @@ function CharacterStudio() {
   const [selectedView, setSelectedView] = useState(viewOptions[0]);
   const [isImporting, setIsImporting] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [cardLoading, setCardLoading] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -203,6 +205,62 @@ function CharacterStudio() {
     setSaveState("saving");
     const saved = await saveCharacterProfiles(characters);
     setSaveState(saved ? "saved" : "error");
+  };
+
+  const generateCard = async () => {
+    if (!activeCharacter) return;
+    const referenceImages = (activeCharacter.images ?? []).filter((image) => image.imageDataUrl);
+    if (!referenceImages.length) {
+      setCardError("Ajoute au moins une image de référence avant de générer la carte.");
+      return;
+    }
+    setCardError(null);
+    setCardLoading(true);
+    try {
+      const profileNotes = [
+        activeCharacter.identityLock,
+        activeCharacter.outfit,
+        activeCharacter.accessories,
+        activeCharacter.colorNotes,
+        activeCharacter.personality,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      const response = await fetch("/api/character/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: profileNotes,
+          identityImageDataUrl: referenceImages[0].imageDataUrl,
+          identityReferenceName: activeCharacter.name,
+          styleId: "manga-bw",
+          styleName: "Manga noir et blanc",
+          styleDescription:
+            "Encrage net, aplats noirs propres, trames légères si utiles, style planche manga noir et blanc.",
+          references: referenceImages.slice(1).map((image) => ({
+            id: image.id,
+            name: image.name,
+            imageDataUrl: image.imageDataUrl,
+            mimeType: image.mimeType,
+            description: image.notes,
+          })),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Échec de la génération de carte (${response.status}).`);
+      }
+      const cardUrl = payload.imageDataUrl || payload.imageUrl;
+      if (!cardUrl) throw new Error("Le backend n'a renvoyé aucune carte.");
+      updateActiveCharacter({
+        cardImageDataUrl: cardUrl,
+        cardImageGeneratedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      setCardError(error instanceof Error ? error.message : "Échec de la génération de carte.");
+    } finally {
+      setCardLoading(false);
+    }
   };
 
   return (
@@ -328,6 +386,76 @@ function CharacterStudio() {
             >
               Reference images
             </SectionTitle>
+
+            <div
+              className="mb-4 rounded-[16px] border p-4"
+              style={{ background: "var(--bg-elevated)", borderColor: "var(--border-default)" }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
+                    Carte de personnage
+                  </div>
+                  <div className="mt-0.5 text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                    Consolide la bibliothèque en une seule image (profils + expressions), utilisée
+                    comme référence unique dans la planche pour rester dans le budget de 16 images.
+                  </div>
+                </div>
+                <button
+                  className="cma-btn-secondary shrink-0"
+                  type="button"
+                  onClick={generateCard}
+                  disabled={
+                    cardLoading ||
+                    !activeCharacter ||
+                    (activeCharacter.images ?? []).length === 0
+                  }
+                >
+                  {cardLoading
+                    ? "Génération..."
+                    : activeCharacter?.cardImageDataUrl
+                      ? "Régénérer la carte"
+                      : "Générer la carte"}
+                </button>
+              </div>
+
+              {cardError && (
+                <div className="mt-3 rounded-[10px] border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-semibold text-danger">
+                  {cardError}
+                </div>
+              )}
+
+              {activeCharacter?.cardImageDataUrl && (
+                <div className="mt-3">
+                  <div className="overflow-hidden rounded-[12px] bg-black/20">
+                    <img
+                      src={activeCharacter.cardImageDataUrl}
+                      alt="Carte de personnage"
+                      className="w-full object-contain"
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                      {activeCharacter.cardImageGeneratedAt
+                        ? `Générée le ${new Date(activeCharacter.cardImageGeneratedAt).toLocaleString()}`
+                        : "Carte active"}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-[12px] font-semibold text-danger"
+                      onClick={() =>
+                        updateActiveCharacter({
+                          cardImageDataUrl: undefined,
+                          cardImageGeneratedAt: undefined,
+                        })
+                      }
+                    >
+                      Supprimer la carte
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={() => inputRef.current?.click()}
