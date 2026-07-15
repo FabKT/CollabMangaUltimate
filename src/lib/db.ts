@@ -250,6 +250,34 @@ export async function sendMessage(conversationId: string, content: string, file?
     .select("*")
     .single();
   if (error) throw new Error(error.message);
+
+  // Notification pour les autres membres de la conversation (best-effort :
+  // l'envoi du message n'échoue jamais à cause d'une notification).
+  try {
+    const { data: members } = await sb
+      .from("conversation_members")
+      .select("profile_id")
+      .eq("conversation_id", conversationId)
+      .neq("profile_id", uid);
+    const { data: me } = await sb.from("profiles").select("display_name, username").eq("id", uid).single();
+    const senderName = me?.display_name || me?.username || "Un membre";
+    if (members?.length) {
+      await sb.from("notifications").insert(
+        members.map((m) => ({
+          recipient_id: m.profile_id,
+          actor_id: uid,
+          category: "message",
+          type: "nouveau_message",
+          title: `${senderName} t'a envoyé un message`,
+          content: (content || "Image envoyée").slice(0, 180),
+          entity_type: "conversation",
+          entity_title: senderName,
+        })),
+      );
+    }
+  } catch {
+    /* silencieux */
+  }
   return data as DbMessage;
 }
 

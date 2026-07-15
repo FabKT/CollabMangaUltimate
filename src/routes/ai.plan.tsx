@@ -3,22 +3,47 @@ import { PageHeader, Panel, Card, SectionTitle, Chip } from "@/components/cma/La
 import { Check, Sparkles, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/ai/plan")({
-  head: () => ({ meta: [{ title: "Plan & Credits — CollabManga AI" }] }),
-  component: PlanCredits,
+  head: () => ({ meta: [{ title: "Plan & Images — CollabManga AI" }] }),
+  component: PlanImages,
 });
 
+/**
+ * Abonnements organisés par IMAGES générées (et non par crédits) :
+ * chaque génération consomme 1 image du quota mensuel.
+ */
 const plans = [
-  { name: "Starter", tagline: "For exploring CollabManga AI", price: "—", credits: "000 / cycle", features: ["Basic generations", "Character sheets", "Asset Library"], current: true },
-  { name: "Creator", tagline: "For ongoing manga projects", price: "—", credits: "000 / cycle", features: ["Higher-priority generation", "Chapter Builder", "Style Transfer"], featured: true },
-  { name: "Studio", tagline: "For teams and studios", price: "—", credits: "000 / cycle", features: ["Highest priority", "Advanced consistency", "Team library"] },
+  {
+    name: "Starter",
+    tagline: "For exploring CollabManga AI",
+    price: "23,99 €",
+    images: 80,
+    features: ["80 images / mois", "Manga Page Creator", "Character Studio", "Bibliothèque d'assets"],
+    current: true,
+  },
+  {
+    name: "Creator",
+    tagline: "For ongoing manga projects",
+    price: "79,99 €",
+    images: 300,
+    features: ["300 images / mois", "Génération prioritaire", "Raw to Final", "Transfert de style"],
+    featured: true,
+  },
+  {
+    name: "Studio",
+    tagline: "For teams and studios",
+    price: "299,99 €",
+    images: 1200,
+    features: ["1200 images / mois", "Priorité maximale", "Cohérence avancée", "Bibliothèque d'équipe"],
+  },
 ];
 
-function PlanCredits() {
+function PlanImages() {
+  const current = plans.find((p) => p.current) ?? plans[0];
   return (
     <>
       <PageHeader
-        title="Plan & Credits"
-        description="Manage your CollabManga AI subscription and credit balance."
+        title="Plan & Images"
+        description="Gère ton abonnement CollabManga AI et ton quota d'images générées."
         actions={
           <>
             <button className="cma-btn-secondary"><Receipt size={16} /> Billing</button>
@@ -33,35 +58,37 @@ function PlanCredits() {
           <div className="flex items-end justify-between flex-wrap gap-4">
             <div>
               <div className="text-[12px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Plan</div>
-              <div style={{ font: "700 28px/36px var(--font-display)" }}>Starter Plan</div>
-              <div className="text-[13px] mt-1" style={{ color: "var(--text-secondary)" }}>Renews on placeholder date</div>
+              <div style={{ font: "700 28px/36px var(--font-display)" }}>{current.name}</div>
+              <div className="text-[13px] mt-1" style={{ color: "var(--text-secondary)" }}>
+                {current.images} images incluses par mois
+              </div>
             </div>
             <div className="text-right">
               <div className="text-[12px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Price</div>
-              <div style={{ font: "700 28px/36px var(--font-display)" }}>—</div>
+              <div style={{ font: "700 28px/36px var(--font-display)" }}>{current.price}<span className="text-[13px]" style={{ color: "var(--text-muted)" }}> / mois</span></div>
             </div>
           </div>
 
           <div className="mt-6">
             <div className="flex items-center justify-between text-[13px]" style={{ color: "var(--text-secondary)" }}>
-              <span>Credits used</span>
-              <span><strong style={{ color: "var(--text-primary)" }}>000</strong> / 000</span>
+              <span>Images utilisées ce mois-ci</span>
+              <span><strong style={{ color: "var(--text-primary)" }}>0</strong> / {current.images}</span>
             </div>
             <div className="mt-2" style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.06)" }}>
-              <div style={{ width: "42%", height: "100%", borderRadius: 999, background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
+              <div style={{ width: "0%", height: "100%", borderRadius: 999, background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
             </div>
           </div>
         </Panel>
 
         <Panel>
-          <SectionTitle>What credits are used for</SectionTitle>
+          <SectionTitle>Ce qui consomme une image</SectionTitle>
           <ul className="flex flex-col gap-2 text-[13px]" style={{ color: "var(--text-secondary)" }}>
             {[
-              "Generating a manga page",
-              "Generating a character view",
-              "Style transfer per variant",
-              "Scene preview generation",
-              "Chapter outline generation",
+              "Génération d'une planche manga",
+              "Génération d'une carte de personnage",
+              "Variante de transfert de style",
+              "Finalisation Raw to Final",
+              "Génération de décor",
             ].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <Check size={14} color="var(--neon)" /> {t}
@@ -82,9 +109,9 @@ function PlanCredits() {
             <div className="mt-2" style={{ font: "700 22px/28px var(--font-display)" }}>{p.name}</div>
             <div className="mt-4 flex items-baseline gap-2">
               <span style={{ font: "700 32px/36px var(--font-display)", color: "var(--text-primary)" }}>{p.price}</span>
-              <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>placeholder</span>
+              <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>/ mois</span>
             </div>
-            <div className="text-[13px] mt-1" style={{ color: "var(--text-secondary)" }}>{p.credits}</div>
+            <div className="text-[13px] mt-1 font-bold" style={{ color: "var(--neon)" }}>{p.images} images / mois</div>
             <ul className="mt-5 flex flex-col gap-2 text-[13px]" style={{ color: "var(--text-secondary)" }}>
               {p.features.map((f) => (
                 <li key={f} className="flex items-center gap-2"><Check size={14} color="var(--neon)" /> {f}</li>
@@ -102,14 +129,9 @@ function PlanCredits() {
         <div className="grid grid-cols-[1fr_140px_140px_120px] gap-4 px-1 pb-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-default)" }}>
           <div>Description</div><div>Date</div><div>Amount</div><div className="text-right">Invoice</div>
         </div>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="grid grid-cols-[1fr_140px_140px_120px] gap-4 items-center px-1 py-3 text-[13px]" style={{ borderBottom: "1px solid var(--border-default)" }}>
-            <div>Subscription · placeholder</div>
-            <div style={{ color: "var(--text-muted)" }}>—</div>
-            <div>—</div>
-            <div className="text-right"><button className="cma-btn-ghost" style={{ height: 32 }}>Download</button></div>
-          </div>
-        ))}
+        <div className="px-1 py-4 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+          Aucune facture pour l'instant — l'historique apparaîtra après ton premier paiement.
+        </div>
       </Panel>
     </>
   );

@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/ai/sketch-final")({
-  head: () => ({ meta: [{ title: "Croquis -> Final - CollabManga AI" }] }),
+  head: () => ({ meta: [{ title: "Raw to Final - CollabManga AI" }] }),
   component: SketchFinalPage,
 });
 
@@ -205,7 +205,7 @@ function SketchFinalPage() {
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
-        title="Croquis -> Final"
+        title="Raw to Final"
         description="Transforme un croquis en image finale en verrouillant la composition, le style et les references d'elements."
         actions={
           <button

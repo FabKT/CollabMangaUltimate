@@ -27,7 +27,7 @@ const groups: Group[] = [
       { label: "Manga Page Creator", to: "/ai/manga-page", icon: FileImage },
       { label: "Création de personnage", to: "/ai/character-create", icon: UserPlus },
       { label: "Transfert de style", to: "/ai/style-transfer", icon: Wand2 },
-      { label: "Croquis → Final", to: "/ai/sketch-final", icon: PenLine },
+      { label: "Raw to Final", to: "/ai/sketch-final", icon: PenLine },
     ],
   },
   {
@@ -40,7 +40,7 @@ const groups: Group[] = [
   {
     title: "Compte",
     items: [
-      { label: "Plan & Crédits", to: "/ai/plan", icon: CreditCard },
+      { label: "Plan & Images", to: "/ai/plan", icon: CreditCard },
       { label: "Paramètres", to: "/ai/settings", icon: Settings },
     ],
   },

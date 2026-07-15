@@ -576,3 +576,29 @@
   &:active { transform: translateY(1px); }
   &:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
 }
+
+/* ---- Tokens messagerie (page Messages « prime ») ---- */
+:root {
+  --cm-container: #08112b;
+  --cm-rail: #060d24;
+  --cm-menu: #0a1028;
+  --cm-chat: #08112b;
+  --cm-topbar: #0b1430;
+  --cm-elevated: #101b3f;
+  --cm-hover: rgba(255, 255, 255, 0.045);
+  --cm-muted: #7f8cb3;
+  --cm-disabled: #5e6a90;
+  --cm-neon: #39ff88;
+  --cm-neon-hover: #25e575;
+  --cm-danger: #ff5f7e;
+  --cm-warning: #ffb84d;
+  --cm-info: #75a7ff;
+}
+.cm-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.cm-scroll::-webkit-scrollbar-thumb { background: rgba(133, 154, 206, 0.18); border-radius: 8px; }
+.cm-scroll::-webkit-scrollbar-track { background: transparent; }
+.cm-scroll { scrollbar-width: thin; scrollbar-color: rgba(133, 154, 206, 0.18) transparent; }
+:root {
+  --font-manrope: var(--font-sans);
+  --font-sora: var(--font-display);
+}

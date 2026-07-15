@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import MessagesPage from "@/features/messages/MessagesPage";
+import MessagesPrime from "@/features/messages/MessagesPrime";
 
 export const Route = createFileRoute("/_collab/messages")({
-  component: MessagesPage,
+  head: () => ({ meta: [{ title: "Messages — CollabManga" }] }),
+  component: MessagesPrime,
 });
