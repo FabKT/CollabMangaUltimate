@@ -131,7 +131,11 @@ function SponsorshipDetailPage() {
         {/* Summary strip */}
         <section className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-border bg-surface/70 p-2 sm:grid-cols-6">
           <Summary label="Total price" value={formatMoney(s.totalPrice, s.currency)} highlight />
-          <Summary label="Services value" value={formatMoney(servicesTotal, s.currency)} />
+          {/* Abonnement : montant versé chaque mois (le total = mensuel × durée). */}
+          <Summary
+            label="Paiement mensuel"
+            value={s.paymentType === "subscription" ? formatMoney(servicesTotal, s.currency) : "—"}
+          />
           <Summary label="Project" value={s.project} />
           <Summary label="Creator" value={s.creator} />
           <Summary label="Payment" value={PAYMENT_LABEL[s.paymentType]} />

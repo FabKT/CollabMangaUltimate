@@ -2,7 +2,47 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Send, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ANNOUNCEMENTS, type Announcement, type AnnouncementMode } from "@/lib/sponsorship-data";
+import { ANNOUNCEMENTS, type Announcement, type AnnouncementMode, type Platform, type SponsorshipType } from "@/lib/sponsorship-data";
+import { listSponsorOptions, type SponsorOption } from "@/lib/sponsorship-options";
+
+const PLATFORM_ALIAS: Record<string, Platform> = {
+  Youtube: "YouTube",
+  Tiktok: "TikTok",
+  Instagram: "Instagram",
+  Twitter: "Twitter / X",
+};
+
+/** Option créée par un utilisateur/projet → annonce affichée dans la page parrainage. */
+function announcementFromOption(o: SponsorOption): Announcement {
+  return {
+    id: o.id,
+    mode: o.mode,
+    title: o.format,
+    ownerName: o.ownerName,
+    category: "",
+    shortDescription: o.description || o.format,
+    fullDescription: o.description || o.format,
+    price: o.price ? `€${o.price}` : null,
+    priceLabel: o.mode === "project" ? "Budget" : "Price",
+    priceMin: Number(o.price) || undefined,
+    priceMax: Number(o.price) || undefined,
+    platforms: o.platforms.map((p) => PLATFORM_ALIAS[p] ?? ("Other" as Platform)),
+    sponsorshipType: o.format as SponsorshipType,
+    videoType: o.videoType !== "—" ? (o.videoType as Announcement["videoType"]) : undefined,
+    duration: o.duration !== "—" ? (o.duration as Announcement["duration"]) : undefined,
+    paymentMode: o.paymentMode,
+    chapters: o.chaptersMax ?? o.chaptersMin,
+    status: "open",
+    availability: "Available",
+    deadline: "",
+    requirements: [],
+    deliverables: [],
+    targetAudience: "",
+    contactInstructions: "",
+    linked: "",
+    accent: "#39ff88",
+  };
+}
 import { btnSecondary, inputCls, metaLabel } from "@/components/sponsorship/ui";
 import { AnnouncementCard, CardSkeleton } from "@/components/sponsorship/AnnouncementCard";
 import { DetailDialog } from "@/components/sponsorship/DetailDialog";
@@ -22,6 +62,11 @@ export const Route = createFileRoute("/_collab/sponsorship")({
 function SponsorshipPage() {
   const [mode, setMode] = useState<AnnouncementMode>("creator");
   const [search, setSearch] = useState("");
+  const [userAnnouncements, setUserAnnouncements] = useState<Announcement[]>([]);
+
+  useEffect(() => {
+    setUserAnnouncements(listSponsorOptions().map(announcementFromOption));
+  }, []);
   const [filters, setFilters] = useState<SponsorFilters>(emptyFilters);
 
   const [detail, setDetail] = useState<Announcement | null>(null);
@@ -92,7 +137,7 @@ function SponsorshipPage() {
     const minS = Number(filters.minSubs) || 0;
     const maxS = Number(filters.maxSubs) || 0;
 
-    return ANNOUNCEMENTS.filter((a) => a.mode === mode).filter((a) => {
+    return [...userAnnouncements, ...ANNOUNCEMENTS].filter((a) => a.mode === mode).filter((a) => {
       if (search && !`${a.title} ${a.ownerName} ${a.shortDescription}`.toLowerCase().includes(search.toLowerCase())) return false;
 
       // prix (bornes de l'annonce vs bornes du filtre)
@@ -120,7 +165,7 @@ function SponsorshipPage() {
 
       return true;
     });
-  }, [mode, search, filters]);
+  }, [mode, search, filters, userAnnouncements]);
 
   return (
     <div className="min-h-screen bg-cm-bg font-manrope text-cm-text">

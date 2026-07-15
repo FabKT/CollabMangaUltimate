@@ -6,8 +6,9 @@ import {
   StickyNote, Megaphone, Settings as SettingsIcon, ChevronLeft, ChevronRight,
   BookOpen, Layers, AlertTriangle, FileImage, RefreshCw, Save, Play,
   Filter, ArrowUpDown, Bell, Target, Sparkles, Star, X,
-  Users, UserPlus, Rocket, Undo2,
+  Users, UserPlus, Rocket, Undo2, Handshake,
 } from "lucide-react";
+import { addSponsorOption } from "@/lib/sponsorship-options";
 import {
   createAnnouncementWorkflow,
   createProjectNote,
@@ -406,7 +407,7 @@ function ProjectWorkspace({
           value={tab}
           onChange={setTab}
           items={["Chapters", "Notes", "Calendar", "Recrutement", "Parrainage", "Collaborateurs", "Settings"]}
-          icons={{ Recrutement: UserPlus, Parrainage: Megaphone, Collaborateurs: Users }}
+          icons={{ Recrutement: Megaphone, Parrainage: Handshake, Collaborateurs: Users }}
         />
 
         {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => setModal("chapter")} />}
@@ -451,6 +452,19 @@ function ProjectWorkspace({
           onClose={() => setModal(null)}
           onAdd={(sponsorship) => {
             updateProject((p) => ({ ...p, sponsorships: [sponsorship, ...p.sponsorships], updated: "À l'instant" }));
+            // Annonce créée par un projet → visible dans « Trouver un projet ».
+            addSponsorOption({
+              mode: "project",
+              format: sponsorship.title,
+              platforms: sponsorship.platform.split(", ").filter(Boolean),
+              videoType: sponsorship.videoType,
+              duration: sponsorship.duration,
+              paymentMode: sponsorship.paymentMode,
+              price: sponsorship.price,
+              quantity: sponsorship.quantity,
+              description: sponsorship.description,
+              ownerName: project.title,
+            });
             createAnnouncementWorkflow({
               title: sponsorship.title,
               category: "Parrainage",
@@ -1172,7 +1186,15 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
         <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre de la note" /></ModalField>
         <ModalField label="Contenu"><textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Contenu de la note…" className={modalTextarea} /></ModalField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ModalField label="Date liée"><TextInput placeholder="aaaa-mm-jj" value={date} onChange={setDate} /></ModalField>
+          <ModalField label="Date liée">
+            {/* Mini calendrier natif + saisie chiffrée, stylé selon le design du site. */}
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-11 w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 text-[14px] text-[var(--text-primary)] outline-none transition-shadow focus:border-[var(--neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)] [color-scheme:dark]"
+            />
+          </ModalField>
           <ChoiceRow label="Priorité" defaultValue="Medium" options={["Low", "Medium", "High"]} onChange={setPriority} />
         </div>
       </div>

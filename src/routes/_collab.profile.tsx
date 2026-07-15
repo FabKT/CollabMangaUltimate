@@ -1,7 +1,31 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { addAnnouncement, addIllustration } from "@/lib/db";
+import {
+  addAnnouncement,
+  addIdea,
+  addIllustration,
+  currentUserId,
+  listAnnouncements,
+  listIdeas,
+  listIllustrations,
+  uploadImage,
+  type DbAnnouncement,
+  type DbIdea,
+  type DbIllustration,
+} from "@/lib/db";
 import { supabase } from "@/lib/supabase";
+import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
+import { addSponsorOption, listSponsorOptions, type SponsorOption } from "@/lib/sponsorship-options";
+import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
+
+/** Projection minimale d'un projet Studio (stocké en IndexedDB). */
+type StudioProjectLite = {
+  id: string;
+  title: string;
+  status: string;
+  genres: string[];
+  chapters: unknown[];
+};
 import { cn } from "@/lib/utils";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -62,6 +86,8 @@ export type PublicProfileIdentity = {
   initials: string;
   tagline: string;
   profileType: ProfileType;
+  avatarUrl?: string;
+  bannerUrl?: string;
 };
 
 const DEFAULT_PROFILE_IDENTITY: PublicProfileIdentity = {
@@ -194,6 +220,7 @@ function ProfilePage({
   const [tab, setTab] = useState("overview");
   // Identité réelle de l'utilisateur connecté (remplace l'identité de démonstration).
   const [liveIdentity, setLiveIdentity] = useState<PublicProfileIdentity | null>(null);
+  const [identityRefreshKey, setIdentityRefreshKey] = useState(0);
 
   useEffect(() => {
     if (publicLocked) return; // profil public visité : identité fournie par la route
@@ -220,6 +247,8 @@ function ProfilePage({
           initials: initials || "?",
           tagline: "",
           profileType: "creator",
+          avatarUrl: meta?.avatar_url,
+          bannerUrl: meta?.banner_url,
         });
       } catch {
         /* identité par défaut conservée */
@@ -228,9 +257,33 @@ function ProfilePage({
     return () => {
       cancelled = true;
     };
-  }, [publicLocked]);
+  }, [publicLocked, identityRefreshKey]);
 
   const effectiveIdentity = liveIdentity ?? identity;
+
+  // Contenus réels de l'utilisateur (DB Supabase + stores locaux).
+  const [myIllustrations, setMyIllustrations] = useState<DbIllustration[]>([]);
+  const [myAnnouncements, setMyAnnouncements] = useState<DbAnnouncement[]>([]);
+  const [myIdeas, setMyIdeas] = useState<DbIdea[]>([]);
+  const [myProjects, setMyProjects] = useState<StudioProjectLite[]>([]);
+  const [myOptions, setMyOptions] = useState<SponsorOption[]>([]);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+
+  const refreshOwnContent = () => {
+    void (async () => {
+      const uid = await currentUserId().catch(() => null);
+      if (uid) {
+        void listIllustrations().then((rows) => setMyIllustrations(rows.filter((r) => r.author_id === uid))).catch(() => {});
+        void listAnnouncements().then((rows) => setMyAnnouncements(rows.filter((r) => r.author_id === uid))).catch(() => {});
+        void listIdeas().then((rows) => setMyIdeas(rows.filter((r) => r.author_id === uid))).catch(() => {});
+      }
+      void loadStudioProjects<StudioProjectLite>().then(setMyProjects).catch(() => {});
+      setMyOptions(listSponsorOptions().filter((o) => o.mode === "creator"));
+      setFavorites(listFavorites());
+    })();
+  };
+
+  useEffect(refreshOwnContent, []);
   const [editOpen, setEditOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState<null | { title: string; kind: string; source: "own" | "favorite" }>(null);
   const [addOpen, setAddOpen] = useState<AddKind | null>(null);
@@ -320,6 +373,7 @@ function ProfilePage({
                 <ProjectsTab
                   profileType={profileType}
                   mode={mode}
+                  projects={myProjects}
                   onAdd={() => setAddOpen("project")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Project", source: "own" })}
                 />
@@ -327,6 +381,7 @@ function ProfilePage({
               <Tabs.Content value="illustrations">
                 <IllustrationsTab
                   mode={mode}
+                  illustrations={myIllustrations}
                   onAdd={() => setAddOpen("illustration")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Illustration", source: "own" })}
                 />
@@ -334,6 +389,7 @@ function ProfilePage({
               <Tabs.Content value="propositions">
                 <PropositionsTab
                   mode={mode}
+                  ideas={myIdeas}
                   onAdd={() => setAddOpen("proposition")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Idée", source: "own" })}
                 />
@@ -341,6 +397,7 @@ function ProfilePage({
               <Tabs.Content value="announcements">
                 <AnnouncementsTab
                   mode={mode}
+                  announcements={myAnnouncements}
                   onAdd={() => setAddOpen("announcement")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Announcement", source: "own" })}
                 />
@@ -348,6 +405,7 @@ function ProfilePage({
               <Tabs.Content value="sponsorship">
                 <SponsorshipTab
                   mode={mode}
+                  options={myOptions}
                   onAdd={() => setAddOpen("sponsorship")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Sponsorship option", source: "own" })}
                 />
@@ -355,10 +413,10 @@ function ProfilePage({
               {mode === "own" && (
                 <>
                   <Tabs.Content value="favorites">
-                    <FavoritesTab onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "favorite" })} />
+                    <FavoritesTab favorites={favorites} onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "favorite" })} />
                   </Tabs.Content>
                   <Tabs.Content value="account">
-                    <AccountTab profileType={profileType} />
+                    <AccountTab profileType={profileType} onIdentityChange={() => setIdentityRefreshKey((k) => k + 1)} />
                   </Tabs.Content>
                 </>
               )}
@@ -371,6 +429,7 @@ function ProfilePage({
         open={editOpen}
         onClose={() => setEditOpen(false)}
         profileType={profileType}
+        onIdentityChange={() => setIdentityRefreshKey((k) => k + 1)}
       />
       <DetailsModal
         open={!!detailsOpen}
@@ -387,15 +446,17 @@ function ProfilePage({
       <AddSponsorshipModal
         open={addOpen === "sponsorship" || editSponsorship !== null}
         editTitle={editSponsorship}
+        ownerName={effectiveIdentity.displayName}
+        onCreated={refreshOwnContent}
         onClose={() => {
           setAddOpen(null);
           setEditSponsorship(null);
         }}
       />
-      <AddAnnouncementModal open={addOpen === "announcement"} onClose={() => setAddOpen(null)} />
-      <AddIllustrationModal open={addOpen === "illustration"} onClose={() => setAddOpen(null)} />
-      <AddPropositionModal open={addOpen === "proposition"} onClose={() => setAddOpen(null)} />
-      <AddProjectModal open={addOpen === "project"} onClose={() => setAddOpen(null)} />
+      <AddAnnouncementModal open={addOpen === "announcement"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
+      <AddIllustrationModal open={addOpen === "illustration"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
+      <AddPropositionModal open={addOpen === "proposition"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
+      <AddProjectModal open={addOpen === "project"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
       {workflowOpen && (
         <ProfileWorkflowModal
           type={workflowOpen}
@@ -765,8 +826,9 @@ function ProfileHeader({
         className="relative w-full overflow-hidden rounded-[22px]"
         style={{
           height: 240,
-          background:
-            "linear-gradient(135deg, #060D24 0%, #0B1430 50%, #101B3F 100%)",
+          background: identity.bannerUrl
+            ? `url(${identity.bannerUrl}) center/cover no-repeat`
+            : "linear-gradient(135deg, #060D24 0%, #0B1430 50%, #101B3F 100%)",
           border: "1px solid rgba(133,154,206,0.18)",
         }}
       >
@@ -793,7 +855,7 @@ function ProfileHeader({
       <div className="relative -mt-14 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 px-1 md:-mt-16 md:gap-6">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-4 md:gap-5">
           <div
-            className="grid shrink-0 place-items-center rounded-full"
+            className="grid shrink-0 place-items-center overflow-hidden rounded-full"
             style={{
               width: 112,
               height: 112,
@@ -804,9 +866,13 @@ function ProfileHeader({
               boxShadow: "0 8px 22px rgba(0,0,0,0.35)",
             }}
           >
-            <span className="cm-sora text-[36px] font-bold" style={{ color: "#F7FAFF" }}>
-              {identity.initials}
-            </span>
+            {identity.avatarUrl ? (
+              <img src={identity.avatarUrl} alt={identity.displayName} className="h-full w-full object-cover" />
+            ) : (
+              <span className="cm-sora text-[36px] font-bold" style={{ color: "#F7FAFF" }}>
+                {identity.initials}
+              </span>
+            )}
           </div>
           <div className="min-w-0 pt-14 md:pt-16">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -852,7 +918,6 @@ function ProfileHeader({
               <PrimaryButton icon={<Edit3 size={16} />} onClick={onEdit}>
                 Edit Profile
               </PrimaryButton>
-              <SecondaryButton icon={<Eye size={16} />}>Preview Public</SecondaryButton>
               <CreateDropdown profileType={profileType} onSelect={onAdd} />
               <GhostButton icon={<Link2 size={16} />}>Copy Link</GhostButton>
             </>
@@ -880,7 +945,7 @@ function ProfileHeader({
 function CreateDropdown({ profileType, onSelect }: { profileType: ProfileType; onSelect: (kind: AddKind) => void }) {
   const items = [
     { label: "Create Project", kind: "project" as const },
-    profileType === "content" ? { label: "Add Sponsorship Option", kind: "sponsorship" as const } : null,
+    profileType === "content" ? { label: "Add service", kind: "sponsorship" as const } : null,
     { label: "Create Sponsorship Announcement", kind: "announcement" as const },
     { label: "Upload Illustration", kind: "illustration" as const },
     { label: "Create Collaboration Announcement", kind: "announcement" as const },
@@ -1151,7 +1216,7 @@ function SponsorshipShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd
         title="Sponsorship Options"
         subtitle="Services this creator offers to promote manga projects."
         action={
-          mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Option</SecondaryButton>
+          mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>Add service</SecondaryButton>
         }
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1241,20 +1306,22 @@ function SponsorshipCard({
 function ProjectsTab({
   profileType,
   mode,
+  projects,
   onAdd,
   onDetails,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
+  projects?: StudioProjectLite[];
   onAdd: () => void;
   onDetails: (title: string) => void;
 }) {
-  // Production : aucun projet d'exemple.
-  const projects = ([] as { title: string; role: string; status: string; chapters: string }[]).map((p) => ({
+  // Projets réels créés dans le Studio (IndexedDB).
+  const projectCards = (projects ?? []).map((p) => ({
     title: p.title,
-    role: p.role,
+    role: "Propriétaire",
     status: p.status,
-    chapters: p.chapters,
+    chapters: `${p.chapters.length} chapitre${p.chapters.length > 1 ? "s" : ""}`,
   }));
 
   return (
@@ -1274,18 +1341,21 @@ function ProjectsTab({
           </div>
         }
       />
-      <div className="grid grid-cols-1 gap-4">
-        {projects.map((p, i) => (
-          <ProjectCard key={i} project={p} mode={mode} onDetails={() => onDetails(p.title)} />
-        ))}
-      </div>
+      {projectCards.length === 0 ? (
+        <EmptyState title="No projects yet" text="Les projets créés dans le Studio apparaîtront ici." />
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {projectCards.map((p, i) => (
+            <ProjectCard key={i} project={p} mode={mode} onDetails={() => onDetails(p.title)} />
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }
 
-function IllustrationsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
-  // Production : aucune illustration d'exemple.
-  const items: unknown[] = [];
+function IllustrationsTab({ mode, illustrations, onDetails, onAdd }: { mode: ViewMode; illustrations?: DbIllustration[]; onDetails: (title: string) => void; onAdd: () => void }) {
+  const items = illustrations ?? [];
   return (
     <Panel>
       <SectionTitle
@@ -1299,8 +1369,15 @@ function IllustrationsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetail
         <EmptyState title="No illustrations yet" text="Uploaded artwork will appear here." />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((_, i) => (
-            <IllustrationCard key={i} mode={mode} onDetails={() => onDetails(`Illustration ${i + 1}`)} />
+          {items.map((illustration) => (
+            <IllustrationCard
+              key={illustration.id}
+              mode={mode}
+              title={illustration.title}
+              subtitle={illustration.description || "Illustration"}
+              imageUrl={illustration.image_url}
+              onDetails={() => onDetails(illustration.title)}
+            />
           ))}
         </div>
       )}
@@ -1308,7 +1385,19 @@ function IllustrationsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetail
   );
 }
 
-function IllustrationCard({ mode, onDetails }: { mode: ViewMode; onDetails: () => void }) {
+function IllustrationCard({
+  mode,
+  title,
+  subtitle,
+  imageUrl,
+  onDetails,
+}: {
+  mode: ViewMode;
+  title: string;
+  subtitle?: string;
+  imageUrl?: string;
+  onDetails: () => void;
+}) {
   return (
     <Card padding={14}>
       <div
@@ -1319,19 +1408,21 @@ function IllustrationCard({ mode, onDetails }: { mode: ViewMode; onDetails: () =
           border: "1px solid rgba(133,154,206,0.18)",
         }}
       >
-        <Palette size={28} color="#5E6A90" />
+        {imageUrl ? (
+          <img src={imageUrl} alt={title} className="h-full w-full object-cover" />
+        ) : (
+          <Palette size={28} color="#5E6A90" />
+        )}
       </div>
       <div className="mt-3">
         <h3 className="truncate text-[15px] font-extrabold" style={{ color: "#F7FAFF" }}>
-          Ronin sous la pluie
+          {title}
         </h3>
-        <p className="mt-0.5 text-[12px] font-semibold" style={{ color: "#7F8CB3" }}>
-          Illustration · encre
+        <p className="mt-0.5 truncate text-[12px] font-semibold" style={{ color: "#7F8CB3" }}>
+          {subtitle || "Illustration"}
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <Chip>Ink</Chip>
-          <Chip>Character</Chip>
-          <Chip tone="active">Available</Chip>
+          <Chip tone="active">Publiée</Chip>
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2">
@@ -1348,9 +1439,8 @@ function IllustrationCard({ mode, onDetails }: { mode: ViewMode; onDetails: () =
   );
 }
 
-function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
-  // Production : aucune idée d'exemple.
-  const items: unknown[] = [];
+function PropositionsTab({ mode, ideas, onDetails, onAdd }: { mode: ViewMode; ideas?: DbIdea[]; onDetails: (title: string) => void; onAdd: () => void }) {
+  const items = ideas ?? [];
   return (
     <Panel>
       <SectionTitle
@@ -1358,41 +1448,43 @@ function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails
         subtitle="Story ideas, arcs and creative pitches shared by this creator."
         action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Idea</SecondaryButton>}
       />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {items.map((_, i) => (
-          <Card key={i}>
-            <div className="flex items-start justify-between gap-2">
-              <Chip tone="info">Story arc</Chip>
-              <Chip>Shonen</Chip>
-            </div>
-            <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
-              Idea title {i + 1}
-            </h3>
-            <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
-              Short description of the pitch — logline, tone and hook, two lines maximum before View Details.
-            </p>
-            <div className="mt-4 flex items-center gap-2">
-              <SecondaryButton onClick={() => onDetails(`Idée ${i + 1}`)}>View Details</SecondaryButton>
-              {mode === "own" ? (
-                <PrimaryButton icon={<Edit3 size={16} />}>Edit</PrimaryButton>
-              ) : (
-                <PrimaryButton icon={<Check size={16} />}>Save</PrimaryButton>
-              )}
-            </div>
-          </Card>
-        ))}
-      </div>
+      {items.length === 0 ? (
+        <EmptyState title="No ideas yet" text="Les idées publiées apparaîtront ici." />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.map((idea) => (
+            <Card key={idea.id}>
+              <div className="flex items-start justify-between gap-2">
+                <Chip tone="info">{idea.category || "Idée"}</Chip>
+                {idea.image_url && <Chip>Image incluse</Chip>}
+              </div>
+              <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
+                {idea.title}
+              </h3>
+              <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
+                {idea.description}
+              </p>
+              <div className="mt-4 flex items-center gap-2">
+                <SecondaryButton onClick={() => onDetails(idea.title)}>View Details</SecondaryButton>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }
 
-function FavoritesTab({ onDetails }: { onDetails: (title: string, kind: string) => void }) {
-  // Production : les favoris démarrent vides et se remplissent au fil des sauvegardes.
+function FavoritesTab({ favorites, onDetails }: { favorites?: Favorite[]; onDetails: (title: string, kind: string) => void }) {
+  // Favoris réels (store local) — chaque publication créée y est ajoutée.
+  const all = favorites ?? [];
+  const byKind = (kind: string) => all.filter((f) => f.kind === kind).map((f) => f.title);
   const groups: { title: string; kind: string; items: string[] }[] = [
-    { title: "Annonces", kind: "Announcement", items: [] },
-    { title: "Idées", kind: "Idée", items: [] },
-    { title: "Illustrations", kind: "Illustration", items: [] },
-    { title: "Parrainages", kind: "Sponsorship option", items: [] },
+    { title: "Annonces", kind: "Announcement", items: byKind("Announcement") },
+    { title: "Idées", kind: "Idée", items: byKind("Idée") },
+    { title: "Illustrations", kind: "Illustration", items: byKind("Illustration") },
+    { title: "Parrainages", kind: "Sponsorship option", items: byKind("Sponsorship option") },
+    { title: "Projets", kind: "Project", items: byKind("Project") },
   ];
 
   return (
@@ -1430,9 +1522,8 @@ function FavoritesTab({ onDetails }: { onDetails: (title: string, kind: string) 
   );
 }
 
-function AnnouncementsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
-  // Production : aucune annonce d'exemple.
-  const items: { kind: "project" | "user"; title: string; remuneration: boolean; engagement: string }[] = [];
+function AnnouncementsTab({ mode, announcements, onDetails, onAdd }: { mode: ViewMode; announcements?: DbAnnouncement[]; onDetails: (title: string) => void; onAdd: () => void }) {
+  const items = announcements ?? [];
   return (
     <Panel>
       <SectionTitle
@@ -1440,64 +1531,71 @@ function AnnouncementsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetail
         subtitle="Open collaboration calls and availability posts."
         action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Announcement</SecondaryButton>}
       />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {items.map((it, i) => (
-          <Card key={i}>
-            <div className="flex items-start justify-between gap-2">
-              <Chip tone={it.kind === "project" ? "info" : "active"}>
-                {it.kind === "project" ? "Project seeks partner" : "User seeks project"}
-              </Chip>
-              <div className="flex items-center gap-1.5">
-                {it.remuneration && <Chip tone="active">€</Chip>}
+      {items.length === 0 ? (
+        <EmptyState title="No announcements yet" text="Les annonces publiées apparaîtront ici." />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.map((it) => (
+            <Card key={it.id}>
+              <div className="flex items-start justify-between gap-2">
+                <Chip tone={it.mode === "project" ? "info" : "active"}>
+                  {it.mode === "project" ? "Project seeks partner" : "User seeks project"}
+                </Chip>
                 <Chip tone="warning">Recruiting</Chip>
               </div>
-            </div>
-            <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
-              {it.title}
-            </h3>
-            <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
-              Short announcement description placeholder — two lines maximum before View Details.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <Chip>{it.kind === "project" ? "Role · Dessinateur" : "Offering · Scénariste"}</Chip>
-              <Chip>{it.engagement}</Chip>
-              <Chip>{it.remuneration ? "Rémunération" : "Sans rémunération"}</Chip>
-              <Chip>Shonen</Chip>
-            </div>
-            <div className="mt-4 flex items-center gap-2">
-              <SecondaryButton onClick={() => onDetails(it.title)}>View Details</SecondaryButton>
-              {mode === "own" ? (
-                <PrimaryButton icon={<Edit3 size={16} />}>Edit</PrimaryButton>
-              ) : (
-                <PrimaryButton icon={<Send size={16} />}>{it.kind === "project" ? "Apply" : "Contact"}</PrimaryButton>
-              )}
-            </div>
-          </Card>
-        ))}
-      </div>
+              <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
+                {it.title}
+              </h3>
+              <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
+                {it.hook || it.description}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {it.status_sought && <Chip>Role · {it.status_sought}</Chip>}
+                <Chip>{it.language}</Chip>
+                {it.genres.slice(0, 2).map((g) => (
+                  <Chip key={g}>{g}</Chip>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <SecondaryButton onClick={() => onDetails(it.title)}>View Details</SecondaryButton>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }
 
-function SponsorshipTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
+function SponsorshipTab({ mode, options, onDetails, onAdd }: { mode: ViewMode; options?: SponsorOption[]; onDetails: (title: string) => void; onAdd: () => void }) {
+  const cards = (options ?? []).map((o) => ({
+    title: o.format,
+    price: `€${o.price}`,
+    type: o.format,
+    video: o.videoType,
+    duration: o.duration,
+  }));
   return (
     <Panel>
       <SectionTitle
         title="Sponsorship"
         subtitle="Services offered and sponsorship announcements."
-        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Option</SecondaryButton>}
+        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>Add service</SecondaryButton>}
       />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* Production : aucune option d'exemple — les options créées apparaîtront ici. */}
-        {([] as { title: string; price: string; type: string; video: string; duration: string }[]).map((o, i) => (
-          <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.title)} />
-        ))}
-      </div>
+      {cards.length === 0 ? (
+        <EmptyState title="No services yet" text="Les services de parrainage créés apparaîtront ici." />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {cards.map((o, i) => (
+            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.title)} />
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }
 
-function AccountTab({ profileType }: { profileType: ProfileType }) {
+function AccountTab({ profileType, onIdentityChange }: { profileType: ProfileType; onIdentityChange?: () => void }) {
   const [accountAvailable, setAccountAvailable] = useState(true);
 
   return (
@@ -1508,8 +1606,8 @@ function AccountTab({ profileType }: { profileType: ProfileType }) {
           <Field label="Display name"><input className="cm-input" defaultValue="Creator display name" /></Field>
           <Field label="Username"><input className="cm-input" defaultValue="@username" /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Avatar"><SecondaryButton full>Upload avatar</SecondaryButton></Field>
-            <Field label="Banner"><SecondaryButton full>Upload banner</SecondaryButton></Field>
+            <Field label="Avatar"><MediaUploadButton kind="avatar" onDone={onIdentityChange} /></Field>
+            <Field label="Banner"><MediaUploadButton kind="banner" onDone={onIdentityChange} /></Field>
           </div>
         </div>
       </Panel>
@@ -1804,9 +1902,11 @@ function EditProfileModal({
   open,
   onClose,
   profileType,
+  onIdentityChange,
 }: {
   open: boolean;
   onClose: () => void;
+  onIdentityChange?: () => void;
   profileType: ProfileType;
 }) {
   const [available, setAvailable] = useState(true);
@@ -1829,8 +1929,8 @@ function EditProfileModal({
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="Display name"><input className="cm-input" defaultValue="Creator display name" /></Field>
             <Field label="Username"><input className="cm-input" defaultValue="@username" /></Field>
-            <Field label="Avatar"><SecondaryButton full>Upload avatar</SecondaryButton></Field>
-            <Field label="Banner"><SecondaryButton full>Upload banner</SecondaryButton></Field>
+            <Field label="Avatar"><MediaUploadButton kind="avatar" onDone={onIdentityChange} /></Field>
+            <Field label="Banner"><MediaUploadButton kind="banner" onDone={onIdentityChange} /></Field>
           </div>
         </FormGroup>
 
@@ -1855,22 +1955,79 @@ function EditProfileModal({
             <Field label="Profile visibility">
               <ProfileSelect defaultValue="Public" options={PROFILE_VISIBILITY_OPTIONS} />
             </Field>
-            {profileType === "content" ? (
+            {profileType === "content" && (
               <Field label="Sponsorship settings">
                 <ProfileSelect defaultValue="Accepting sponsorships" options={["Accepting sponsorships", "Paused", "Hidden"]} />
               </Field>
-            ) : (
-              <Field label="Portfolio visibility">
-                <ProfileSelect defaultValue="Public" options={PROFILE_VISIBILITY_OPTIONS} />
-              </Field>
             )}
-            <Field label="Writing sample visibility">
-              <ProfileSelect defaultValue="Public" options={PROFILE_VISIBILITY_OPTIONS} />
-            </Field>
+          </div>
+        </FormGroup>
+
+        <FormGroup title="Genres favoris">
+          <div className="space-y-4">
+            <ChoiceRow multi label="Genres" options={["Shonen", "Seinen", "Shojo", "Josei"]} />
+            <ChoiceRow
+              multi
+              label="Sous-genres"
+              options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
+            />
           </div>
         </FormGroup>
       </div>
     </ModalShell>
+  );
+}
+
+/** Upload réel d'avatar/bannière : Storage Supabase + user_metadata (+ profiles.avatar_url). */
+function MediaUploadButton({ kind, onDone }: { kind: "avatar" | "banner"; onDone?: () => void }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const handle = async (file: File | undefined) => {
+    if (!file || !supabase) return;
+    setState("saving");
+    try {
+      const url = await uploadImage(file, kind === "avatar" ? "avatars" : "banners");
+      await supabase.auth.updateUser({
+        data: kind === "avatar" ? { avatar_url: url } : { banner_url: url },
+      });
+      if (kind === "avatar") {
+        const uid = (await supabase.auth.getSession()).data.session?.user.id;
+        if (uid) await supabase.from("profiles").update({ avatar_url: url }).eq("id", uid);
+      }
+      setState("saved");
+      onDone?.();
+      window.setTimeout(() => setState("idle"), 1600);
+    } catch {
+      setState("error");
+      window.setTimeout(() => setState("idle"), 2400);
+    }
+  };
+
+  return (
+    <>
+      <SecondaryButton full onClick={() => inputRef.current?.click()}>
+        {state === "saving"
+          ? "Envoi…"
+          : state === "saved"
+            ? "Enregistré ✓"
+            : state === "error"
+              ? "Échec — réessayer"
+              : kind === "avatar"
+                ? "Upload avatar"
+                : "Upload banner"}
+      </SecondaryButton>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          void handle(e.currentTarget.files?.[0]);
+          e.currentTarget.value = "";
+        }}
+      />
+    </>
   );
 }
 
@@ -2029,49 +2186,104 @@ function ClassicImageUploader({
   );
 }
 
-function AddSponsorshipModal({ open, onClose, editTitle = null }: { open: boolean; onClose: () => void; editTitle?: string | null }) {
+function AddSponsorshipModal({
+  open,
+  onClose,
+  editTitle = null,
+  ownerName = "Créateur",
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  editTitle?: string | null;
+  ownerName?: string;
+  onCreated?: () => void;
+}) {
   const isEdit = editTitle !== null;
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  // Un seul format par option : pour proposer deux formats, créer deux services.
+  const [format, setFormat] = useState<string[]>([]);
+  const [videoType, setVideoType] = useState<string[]>([]);
+  const [duration, setDuration] = useState<string[]>([]);
+  const [payment, setPayment] = useState<string[]>([]);
+  const [quantity, setQuantity] = useState("");
+  const [price, setPrice] = useState("");
+  const [description, setDescription] = useState(editTitle ?? "");
+  const [chaptersMin, setChaptersMin] = useState("");
+  const [chaptersMax, setChaptersMax] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = () => {
+    if (!format[0]) {
+      setError("Choisis un format de parrainage (un seul par service).");
+      return;
+    }
+    setError(null);
+    addSponsorOption({
+      mode: "creator",
+      format: format[0],
+      platforms,
+      videoType: videoType[0] ?? "—",
+      duration: duration[0] ?? "—",
+      paymentMode: payment[0] ?? "Paiement unique",
+      price: price.trim() || "0",
+      quantity: Math.max(1, Number(quantity) || 1),
+      description: description.trim(),
+      ownerName,
+      chaptersMin: Number(chaptersMin) || undefined,
+      chaptersMax: Number(chaptersMax) || undefined,
+    });
+    addFavorite("Sponsorship option", format[0]);
+    onCreated?.();
+    onClose();
+  };
+
   return (
     <ModalShell
       open={open}
       onClose={onClose}
-      title={isEdit ? "Modifier parrainage" : "Ajouter parrainage"}
+      title={isEdit ? "Modifier le service" : "Add service"}
       width={860}
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={onClose}>{isEdit ? "Enregistrer" : "Confirmer"}</PrimaryButton>
+          <PrimaryButton onClick={submit}>{isEdit ? "Enregistrer" : "Confirmer"}</PrimaryButton>
         </>
       }
     >
       <div className="space-y-6">
-        <ChoiceRow multi label="Plateforme" options={["Youtube", "Tiktok", "Instagram", "Twitter"]} />
+        <ChoiceRow multi label="Plateforme" options={["Youtube", "Tiktok", "Instagram", "Twitter"]} onChange={setPlatforms} />
         <ChoiceRow
-          multi
-          label="Format de parrainage"
+          label="Format de parrainage (un seul par service)"
           options={["Post communautaire", "Vidéo longue dédiée", "Vidéo courte dédiée", "Placement dans une vidéo", "Story"]}
+          onChange={setFormat}
         />
-        <ChoiceRow label="Type de vidéo" options={["Analyse profonde", "Review", "Reaction", "Présentation"]} />
-        <ChoiceRow label="Durée de vidéo" options={["0–30 s", "30–60 s", "60–120 s", "2–3 min", "3–5 min", "5–10 min", "10+ min"]} />
-        <ChoiceRow label="Mode de paiement" options={["Abonnement", "Paiement unique"]} />
+        <ChoiceRow label="Type de vidéo" options={["Analyse profonde", "Review", "Reaction", "Présentation"]} onChange={setVideoType} />
+        <ChoiceRow label="Durée de vidéo" options={["0–30 s", "30–60 s", "60–120 s", "2–3 min", "3–5 min", "5–10 min", "10+ min"]} onChange={setDuration} />
+        <ChoiceRow label="Mode de paiement" options={["Abonnement", "Paiement unique"]} onChange={setPayment} />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field label="Quantité"><input type="number" min={0} className="cm-input" placeholder="0" /></Field>
-          <Field label="Prix (€)"><input type="number" min={0} className="cm-input" placeholder="0" /></Field>
+          <Field label="Quantité"><input type="number" min={0} className="cm-input" placeholder="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></Field>
+          <Field label="Prix (€)"><input type="number" min={0} className="cm-input" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} /></Field>
         </div>
-        <Field label="Description"><textarea key={editTitle ?? "new"} className="cm-textarea" placeholder="Description" defaultValue={editTitle ?? undefined} /></Field>
+        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
         <div className="rounded-[16px] p-4" style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)" }}>
-          <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Chapitres — Parrainage</div>
+          <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Chapitres du projet</div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Nombre de chapitres minimum"><input type="number" min={0} className="cm-input" placeholder="0" /></Field>
-            <Field label="Nombre de chapitres maximal"><input type="number" min={0} className="cm-input" placeholder="0" /></Field>
+            <Field label="Nombre de chapitres minimum"><input type="number" min={0} className="cm-input" placeholder="0" value={chaptersMin} onChange={(e) => setChaptersMin(e.target.value)} /></Field>
+            <Field label="Nombre de chapitres maximal"><input type="number" min={0} className="cm-input" placeholder="0" value={chaptersMax} onChange={(e) => setChaptersMax(e.target.value)} /></Field>
           </div>
         </div>
+        {error && (
+          <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
+            {error}
+          </div>
+        )}
       </div>
     </ModalShell>
   );
 }
 
-function AddAnnouncementModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [language, setLanguage] = useState("FR");
   const [title, setTitle] = useState("");
   const [hook, setHook] = useState("");
@@ -2101,6 +2313,8 @@ function AddAnnouncementModal({ open, onClose }: { open: boolean; onClose: () =>
         genres,
         subgenres,
       });
+      addFavorite("Announcement", title.trim());
+      onCreated?.();
       setDone(true);
       setTimeout(() => {
         setDone(false);
@@ -2169,7 +2383,7 @@ function AddAnnouncementModal({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
-function AddIllustrationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -2201,6 +2415,8 @@ function AddIllustrationModal({ open, onClose }: { open: boolean; onClose: () =>
       for (const file of files) {
         await addIllustration({ title: title.trim(), description: description.trim(), file });
       }
+      addFavorite("Illustration", title.trim());
+      onCreated?.();
       setDone(true);
       setTimeout(() => {
         reset();
@@ -2256,7 +2472,32 @@ function AddIllustrationModal({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
-function AddPropositionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
+  const [category, setCategory] = useState("Autre");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setError(null);
+    if (!title.trim()) { setError("Donne un titre à ton idée."); return; }
+    if (!description.trim()) { setError("Ajoute une description."); return; }
+    setSaving(true);
+    try {
+      await addIdea({ title: title.trim(), category, description: description.trim(), file: files[0] ?? null });
+      addFavorite("Idée", title.trim());
+      setTitle(""); setDescription(""); setFiles([]);
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Publication impossible.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalShell
       open={open}
@@ -2266,27 +2507,72 @@ function AddPropositionModal({ open, onClose }: { open: boolean; onClose: () => 
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={onClose}>Ajouter</PrimaryButton>
+          <PrimaryButton onClick={submit}>{saving ? "Publication…" : "Ajouter"}</PrimaryButton>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ClassicImageUploader multiple label="Importer des images d'idée" />
+        <ClassicImageUploader multiple label="Importer des images d'idée" onFiles={setFiles} />
         <div className="space-y-4">
         <ChoiceRow
           label="Type d'idée"
           defaultValue="Autre"
           options={["Autre", "Système de pouvoirs", "Motivations", "Charadesign", "Worldbuilding", "Équipement"]}
+          onChange={(sel) => setCategory(sel[0] ?? "Autre")}
         />
-        <Field label="Titre"><input className="cm-input" placeholder="Titre" /></Field>
-        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" /></Field>
+        <Field label="Titre"><input className="cm-input" placeholder="Titre" value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
+        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+        {error && (
+          <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
+            {error}
+          </div>
+        )}
         </div>
       </div>
     </ModalShell>
   );
 }
 
-function AddProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
+  const [name, setName] = useState("");
+  const [synopsis, setSynopsis] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim()) { setError("Donne un nom au projet."); return; }
+    setError(null);
+    setSaving(true);
+    try {
+      // Le projet est créé dans le même store que le Studio (IndexedDB).
+      const existing = await loadStudioProjects<Record<string, unknown>>();
+      const project = {
+        id: `prj-${Date.now()}`,
+        title: name.trim(),
+        synopsis: synopsis.trim() || "Synopsis à compléter.",
+        status: "Draft",
+        chaptersCount: 0,
+        validatedPages: 0,
+        totalPages: 0,
+        updated: "À l'instant",
+        genres: [] as string[],
+        chapters: [] as unknown[],
+        notes: [] as unknown[],
+        sponsorships: [] as unknown[],
+        recruits: [] as unknown[],
+      };
+      await saveStudioProjects([project, ...existing]);
+      addFavorite("Project", name.trim());
+      setName(""); setSynopsis("");
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Création impossible.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalShell
       open={open}
@@ -2296,15 +2582,20 @@ function AddProjectModal({ open, onClose }: { open: boolean; onClose: () => void
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={onClose}>Créer le projet</PrimaryButton>
+          <PrimaryButton onClick={submit}>{saving ? "Création…" : "Créer le projet"}</PrimaryButton>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <ClassicImageUploader multiple={false} label="Importer une couverture" />
         <div className="space-y-4">
-          <Field label="Nom du projet"><input className="cm-input" placeholder="Nom du projet" /></Field>
-          <Field label="Synopsis"><textarea className="cm-textarea" placeholder="Synopsis du projet" /></Field>
+          <Field label="Nom du projet"><input className="cm-input" placeholder="Nom du projet" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Synopsis"><textarea className="cm-textarea" placeholder="Synopsis du projet" value={synopsis} onChange={(e) => setSynopsis(e.target.value)} /></Field>
+          {error && (
+            <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
+              {error}
+            </div>
+          )}
         </div>
       </div>
     </ModalShell>

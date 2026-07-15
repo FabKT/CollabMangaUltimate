@@ -28,7 +28,8 @@ export const Route = createFileRoute("/_collab/manga/")({
 
 const GENRE_OPTIONS = ["Shonen", "Seinen", "Shojo", "Josei"];
 const SUBGENRE_OPTIONS = ["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique"];
-const LANGUAGES = ["FR", "ENG", "ES", "IT", "JP"];
+// Langues alignées sur celles proposées dans le profil (langues du site).
+const LANGUAGES = ["FR", "ENG", "ES", "IT", "JP", "DE", "PT", "KR", "CN", "NL", "AR", "HI"];
 const RATING_VALUES = [0, 1, 2, 3, 4, 5];
 
 // correspondance sous-genre FR (filtre) → genres EN (données du catalogue)
