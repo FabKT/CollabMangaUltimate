@@ -216,9 +216,9 @@ function fileBaseName(fileName: string) {
 
 function characterImagesToLibraryItems(characters: CharacterProfile[]): StoredItem[] {
   return characters.flatMap((character) => {
-    // Si une carte de personnage a été générée, elle remplace toute la
-    // bibliothèque : 1 seule image consolidée (turnaround + expressions).
-    if (character.cardImageDataUrl) {
+    // Si une carte de personnage a été générée ET est activée, elle remplace
+    // toute la bibliothèque : 1 seule image consolidée (turnaround + expressions).
+    if (character.cardImageDataUrl && character.cardEnabled !== false) {
       return [
         {
           id: `profile-${character.id}-card`,
@@ -231,16 +231,18 @@ function characterImagesToLibraryItems(characters: CharacterProfile[]): StoredIt
         },
       ];
     }
-    return (character.images ?? []).map((image) => ({
-      id: `profile-${character.id}-${image.id}`,
-      name: `${character.name || "Character"} - ${image.view || image.name}`,
-      role: "Character" as const,
-      thumbHue: hueFromName(character.name || image.name),
-      imageDataUrl: image.imageDataUrl,
-      mimeType: image.mimeType,
-      characterId: character.id,
-      description: image.notes || image.view || "",
-    }));
+    return (character.images ?? [])
+      .filter((image) => image.enabled !== false)
+      .map((image) => ({
+        id: `profile-${character.id}-${image.id}`,
+        name: `${character.name || "Character"} - ${image.view || image.name}`,
+        role: "Character" as const,
+        thumbHue: hueFromName(character.name || image.name),
+        imageDataUrl: image.imageDataUrl,
+        mimeType: image.mimeType,
+        characterId: character.id,
+        description: image.notes || image.view || "",
+      }));
   });
 }
 
@@ -705,6 +707,7 @@ function CollabMangaAIPage() {
             imageDataUrl: item.imageDataUrl ?? "",
             mimeType: item.mimeType,
             notes: item.description ?? "",
+            enabled: true,
           }));
         if (importedCharacterImages.length > 0) {
           let targetId = forcedCharacterId ?? activeCharacterId;
@@ -1968,7 +1971,7 @@ function CharactersTab({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-3 gap-2">
       {characters.map((character) => {
         const firstImage = firstCharacterImageItem(character, items);
         const isSelected = !!selectedCharacterIds[character.id];
@@ -1978,11 +1981,11 @@ function CharactersTab({
             key={character.id}
             onClick={() => toggleCharacter(character.id)}
             aria-pressed={isSelected}
-            className={`group min-w-0 rounded-[14px] border p-2 text-left transition ${
+            className={`group min-w-0 rounded-[12px] border p-1.5 text-left transition ${
               isSelected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3"
             }`}
           >
-            <div className="relative aspect-[3/4] overflow-hidden rounded-[10px] border border-border bg-surface-2">
+            <div className="relative aspect-square overflow-hidden rounded-[8px] border border-border bg-surface-2">
               {firstImage?.imageDataUrl ? (
                 <img
                   src={firstImage.imageDataUrl}
@@ -1991,20 +1994,20 @@ function CharactersTab({
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-text-muted">
-                  <ImageIcon className="h-6 w-6" />
+                  <ImageIcon className="h-5 w-5" />
                 </div>
               )}
               <span
-                className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md border ${
+                className={`absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded border ${
                   isSelected
                     ? "border-accent bg-accent text-accent-foreground"
                     : "border-border-strong bg-surface-2/85 text-transparent group-hover:border-accent"
                 }`}
               >
-                <Check className="h-4 w-4" />
+                <Check className="h-3 w-3" />
               </span>
             </div>
-            <p className="mt-2 truncate text-center text-[12px] font-bold text-text-primary">
+            <p className="mt-1 truncate text-center text-[11px] font-bold text-text-primary">
               {character.name || "Personnage"}
             </p>
           </button>

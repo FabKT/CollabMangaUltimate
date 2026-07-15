@@ -49,87 +49,8 @@ const VALID_STATUSES: SponsorshipStatus[] = ["activated", "pending", "finished",
 const VALID_PAYMENT_TYPES: PaymentType[] = ["one_time", "subscription"];
 const VALID_PLATFORMS: Platform[] = ["TikTok", "YouTube", "Instagram", "Twitter/X", "Other"];
 
+// Production : aucun parrainage d exemple ; le store démarre vide (persistance localStorage).
 let state: Sponsorship[] = [
-  {
-    id: "sp-001",
-    name: "Arc VII Launch — Neon Blade",
-    project: "Neon Blade",
-    creator: "Kaira Yumi",
-    totalPrice: 4800,
-    currency: "EUR",
-    status: "activated",
-    paymentType: "one_time",
-    deadline: "2026-08-14",
-    notes: "Priority campaign for the new arc reveal.",
-    conditions: "Deliverables must go live within 10 days of asset handoff. No mention of competing titles.",
-    createdAt: "2026-07-01",
-    participants: [
-      { id: "p1", name: "Kaira Yumi", role: "creator", meta: "218k abonnés · YouTube", initials: "KY" },
-      { id: "p2", name: "Studio Ronin", role: "owner", meta: "Publisher · 12 titles", initials: "SR" },
-      { id: "p3", name: "Aiko Hara", role: "manager", meta: "Talent management", initials: "AH" },
-    ],
-    services: [
-      { id: uid(), name: "Dedicated long video", format: "Deep analysis", duration: "10+ min", platforms: ["YouTube"], quantity: 1, price: 2200, paymentType: "one_time", deliveryLink: "https://youtu.be/example-1" },
-      { id: uid(), name: "Short video", format: "Review", duration: "0–30 s", platforms: ["TikTok", "Instagram"], quantity: 3, price: 1200, paymentType: "one_time" },
-      { id: uid(), name: "Story", format: "Sponsored mention", duration: "0–30 s", platforms: ["Instagram"], quantity: 4, price: 400, paymentType: "one_time", deliveryLink: "" },
-      { id: uid(), name: "Post", format: "Product placement", duration: "0–30 s", platforms: ["Twitter/X"], quantity: 2, price: 1000, paymentType: "one_time" },
-    ],
-  },
-  {
-    id: "sp-002",
-    name: "Volume 3 Teaser — Silver Fang",
-    project: "Silver Fang",
-    creator: "Rin Tanaka",
-    totalPrice: 2600,
-    currency: "EUR",
-    status: "pending",
-    paymentType: "subscription",
-    deadline: "2026-09-02",
-    createdAt: "2026-07-05",
-    participants: [
-      { id: "p1", name: "Rin Tanaka", role: "creator", meta: "94k · TikTok", initials: "RT" },
-      { id: "p2", name: "Moonline Press", role: "owner", meta: "Indie publisher", initials: "MP" },
-    ],
-    services: [
-      { id: uid(), name: "Placement in a video", format: "Product placement", duration: "1–3 min", platforms: ["YouTube"], quantity: 1, price: 1400, paymentType: "one_time" },
-      { id: uid(), name: "Stream mention", format: "Sponsored mention", duration: "0–30 s", platforms: ["Other"], quantity: 6, price: 1200, paymentType: "one_time" },
-    ],
-  },
-  {
-    id: "sp-003",
-    name: "Finale Recap — Hollow Sun",
-    project: "Hollow Sun",
-    creator: "Miko Sato",
-    totalPrice: 1500,
-    currency: "EUR",
-    status: "finished",
-    paymentType: "one_time",
-    deadline: "2026-05-30",
-    createdAt: "2026-04-12",
-    participants: [
-      { id: "p1", name: "Miko Sato", role: "creator", meta: "62k · YouTube", initials: "MS" },
-      { id: "p2", name: "Studio Ronin", role: "owner", initials: "SR" },
-    ],
-    services: [
-      { id: uid(), name: "Reaction", format: "Reaction", duration: "1–3 min", platforms: ["YouTube"], quantity: 1, price: 900, paymentType: "one_time", deliveryLink: "https://youtu.be/example-2" },
-      { id: uid(), name: "Post", format: "Sponsored mention", duration: "0–30 s", platforms: ["Twitter/X"], quantity: 2, price: 600, paymentType: "one_time", deliveryLink: "https://x.com/example" },
-    ],
-  },
-  {
-    id: "sp-004",
-    name: "Cancelled — Crimson Vow",
-    project: "Crimson Vow",
-    creator: "Yuu Kaneko",
-    totalPrice: 900,
-    currency: "EUR",
-    status: "cancelled",
-    paymentType: "one_time",
-    createdAt: "2026-06-20",
-    participants: [
-      { id: "p1", name: "Yuu Kaneko", role: "creator", initials: "YK" },
-    ],
-    services: [],
-  },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

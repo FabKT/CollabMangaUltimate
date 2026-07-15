@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
-import { listIllustrations } from "@/lib/db";
+import { addIllustration, listIllustrations } from "@/lib/db";
 import {
   X, Upload, Bookmark, BookmarkCheck, MessageSquare, Send, ChevronRight, ChevronLeft,
   LayoutGrid, Rows3, Columns3, Sparkles, Eye, Heart, Plus, Image as ImageIcon,
@@ -284,8 +284,8 @@ function IllustrationsPage() {
   const [portfolio, setPortfolio] = useState<Art | null>(null);
   const [realArts, setRealArts] = useState<Art[]>([]);
 
-  // Illustrations réelles (Supabase) affichées en tête de galerie
-  useEffect(() => {
+  // Illustrations réelles (Supabase) — seule source de la galerie
+  const refreshGallery = () => {
     listIllustrations()
       .then((rows) =>
         setRealArts(
@@ -308,9 +308,11 @@ function IllustrationsPage() {
         ),
       )
       .catch(() => setRealArts([]));
-  }, []);
+  };
+  useEffect(refreshGallery, []);
 
-  const gallery = [...realArts, ...ARTS];
+  // Production : uniquement les illustrations réelles (Supabase), plus d'exemples.
+  const gallery = [...realArts];
 
   function toggleSave(id: string) {
     setSaved((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -356,24 +358,38 @@ function IllustrationsPage() {
           </div>
 
           {/* Cards */}
-          <div
-            style={
-              view === "masonry"
-                ? { columnCount: 4, columnGap: 20 }
-                : view === "grid"
-                ? { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }
-                : { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }
-            }
-            className="cm-gallery"
-          >
-            {gallery.map((a) => (
-              <ArtCard
-                key={a.id} art={a} masonry={view === "masonry"} compact={view === "compact"}
-                liked={saved.has(a.id)} onLike={() => toggleSave(a.id)}
-                onOpen={() => setOpenArt(a)}
-              />
-            ))}
-          </div>
+          {gallery.length === 0 ? (
+            <div
+              style={{
+                border: `1px dashed ${C.border}`, borderRadius: 22, padding: "56px 24px",
+                textAlign: "center", background: C.panel,
+              }}
+            >
+              <div style={{ ...sora, fontSize: 20, fontWeight: 700 }}>Aucune illustration publiée</div>
+              <p style={{ ...manrope, fontSize: 14, color: C.text2, marginTop: 8 }}>
+                La galerie se remplit à mesure que les artistes publient. Publie la première depuis le bouton « Upload Artwork ».
+              </p>
+            </div>
+          ) : (
+            <div
+              style={
+                view === "masonry"
+                  ? { columnCount: 4, columnGap: 20 }
+                  : view === "grid"
+                  ? { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }
+                  : { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }
+              }
+              className="cm-gallery"
+            >
+              {gallery.map((a) => (
+                <ArtCard
+                  key={a.id} art={a} masonry={view === "masonry"} compact={view === "compact"}
+                  liked={saved.has(a.id)} onLike={() => toggleSave(a.id)}
+                  onOpen={() => setOpenArt(a)}
+                />
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
@@ -391,8 +407,15 @@ function IllustrationsPage() {
       )}
       {invite && <InviteModal art={invite} onClose={() => setInvite(null)} />}
       {contact && <ContactModal art={contact} onClose={() => setContact(null)} />}
-      {upload && <UploadModal onClose={() => setUpload(false)} />}
-      {portfolio && <PortfolioModal art={portfolio} onClose={() => setPortfolio(null)} onOpenArt={(a) => { setPortfolio(null); setOpenArt(a); }} />}
+      {upload && <UploadModal onClose={() => setUpload(false)} onPublished={refreshGallery} />}
+      {portfolio && (
+        <PortfolioModal
+          art={portfolio}
+          works={realArts.filter((a) => a.artist === portfolio.artist)}
+          onClose={() => setPortfolio(null)}
+          onOpenArt={(a) => { setPortfolio(null); setOpenArt(a); }}
+        />
+      )}
 
       {/* Responsive */}
       <style>{`
@@ -753,17 +776,43 @@ function ContactModal({ art, onClose }: { art: Art; onClose: () => void }) {
 }
 
 /* ---------------- Upload Modal ---------------- */
-function UploadModal({ onClose }: { onClose: () => void }) {
-  const [images, setImages] = useState<string[]>([]);
+function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublished?: () => void }) {
+  const [images, setImages] = useState<{ url: string; file: File }[]>([]);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputId = "showcase-upload-images";
-  const activeImage = images[0];
+  const activeImage = images[0]?.url;
 
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
-    const urls = Array.from(files)
+    const items = Array.from(files)
       .filter((file) => file.type.startsWith("image/"))
-      .map((file) => URL.createObjectURL(file));
-    setImages((current) => [...current, ...urls]);
+      .map((file) => ({ url: URL.createObjectURL(file), file }));
+    setImages((current) => [...current, ...items]);
+  };
+
+  const publish = async () => {
+    if (!title.trim()) {
+      setError("Donne un titre à ton illustration.");
+      return;
+    }
+    if (!images[0]) {
+      setError("Ajoute au moins une image.");
+      return;
+    }
+    setError(null);
+    setPublishing(true);
+    try {
+      await addIllustration({ title: title.trim(), description: description.trim(), file: images[0].file });
+      onPublished?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de la publication.");
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -792,14 +841,14 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         </label>
         <input id={inputId} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(event) => addFiles(event.currentTarget.files)} />
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, gridColumn: "1" }}>
-          {images.length > 0 ? images.map((src, index) => (
+          {images.length > 0 ? images.map((item, index) => (
             <button
-              key={`${src}-${index}`}
+              key={`${item.url}-${index}`}
               type="button"
               onClick={() => setImages((current) => [current[index], ...current.filter((_, i) => i !== index)])}
               style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", flex: "0 0 auto", border: `1px solid ${C.border}`, background: C.input }}
             >
-              <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </button>
           )) : (
             <div style={{ ...manrope, fontSize: 12, color: C.muted, background: C.input, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", width: "100%" }}>
@@ -809,17 +858,29 @@ function UploadModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div style={{ gridColumn: "2", gridRow: "1", display: "grid", gap: 12 }}>
-          <Field label="Artwork title *"><Input placeholder="Give your artwork a clear title" /></Field>
+          <Field label="Artwork title *">
+            <Input placeholder="Give your artwork a clear title" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
         </div>
 
         <Field label="Description">
-          <Textarea placeholder="Describe your artwork, intent, and technical focus…" />
+          <Textarea
+            placeholder="Describe your artwork, intent, and technical focus…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </Field>
       </div>
+      {error && (
+        <div style={{ margin: "0 24px", padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,95,126,0.4)", background: "rgba(255,95,126,0.10)", color: "#ff5f7e", ...manrope, fontSize: 13, fontWeight: 600 }}>
+          {error}
+        </div>
+      )}
       <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn variant="secondary">Save as draft</Btn>
-        <Btn variant="primary" icon={<Upload size={16} />} onClick={onClose}>Upload illustration</Btn>
+        <Btn variant="primary" icon={<Upload size={16} />} onClick={() => void publish()}>
+          {publishing ? "Publication…" : "Upload illustration"}
+        </Btn>
       </div>
     </ModalShell>
   );
@@ -851,8 +912,7 @@ function Toggle({ label, defaultOn }: { label: string; defaultOn?: boolean }) {
 }
 
 /* ---------------- Portfolio Modal ---------------- */
-function PortfolioModal({ art, onClose, onOpenArt }: { art: Art; onClose: () => void; onOpenArt: (a: Art) => void }) {
-  const works = ARTS.filter((_, i) => i % 2 === art.seed % 2).slice(0, 8);
+function PortfolioModal({ art, works, onClose, onOpenArt }: { art: Art; works: Art[]; onClose: () => void; onOpenArt: (a: Art) => void }) {
   return (
     <ModalShell onClose={onClose} width={1080}>
       <ModalHeader title="Artist portfolio" subtitle="Complete artist portfolio preview" onClose={onClose} />

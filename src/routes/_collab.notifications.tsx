@@ -4,7 +4,6 @@ import {
   clearWorkflowState,
   loadWorkflowState,
   markAllWorkflowNotificationsRead,
-  seedDemoWorkflowNotifications,
   setWorkflowNotificationRead,
   subscribeWorkflowState,
   type WorkflowNotification,
@@ -576,15 +575,6 @@ function PageTitle() {
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {/* DÉMO — génère un exemplaire de chaque type de notification (12) pour valider le design */}
-        <SecondaryButton
-          icon={<Sparkles className="h-4 w-4" />}
-          onClick={() => {
-            seedDemoWorkflowNotifications();
-          }}
-        >
-          Générer les notifications de démo
-        </SecondaryButton>
         <SecondaryButton
           icon={<CheckCheck className="h-4 w-4" />}
           onClick={() => {

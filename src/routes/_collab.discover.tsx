@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { listProfiles } from "@/lib/db";
 import {
   Search,
   SlidersHorizontal,
@@ -172,136 +173,28 @@ type Profile = {
   portfolioTiles?: number;
 };
 
-const PROFILES: Profile[] = [
-  {
-    id: "u1", username: "@inkwave_studio", initials: "IW", role: "Artist",
-    secondary: ["Illustrator"], languages: ["Français", "English"], rating: 4.8,
-    availability: "Open to projects",
-    bio: "Ink-heavy character work with a soft spot for seinen action beats and moody city panels.",
-    genres: ["Seinen", "Action"], skills: ["Character design", "Inking", "Cover art"],
-    projects: 12, verified: true, portfolioTiles: 3,
-  },
-  {
-    id: "u2", username: "@nova_scriptor", initials: "NS", role: "Writer",
-    secondary: ["Editor"], languages: ["English", "Español"], rating: 4.6,
-    availability: "Available now",
-    bio: "Long-form scenario writer building slow-burn shonen with layered power systems.",
-    genres: ["Shonen", "Fantasy"], skills: ["Scenario", "Worldbuilding", "Power systems"],
-    projects: 7,
-  },
-  {
-    id: "u3", username: "@panelpulse", initials: "PP", role: "Content creator",
-    secondary: ["Community manager"], languages: ["Français"], rating: 4.9,
-    availability: "Open to paid work",
-    bio: "Weekly manga review channel focused on new indie chapters and creator spotlights.",
-    genres: ["Shonen", "Seinen"], skills: ["Manga review", "Short videos", "Analysis"],
-    projects: 3, verified: true,
-    platforms: ["YouTube", "TikTok", "Instagram"], sponsorship: true, audience: "48k followers",
-    sponsorshipOptions: [
-      {
-        id: "pp-short",
-        title: "Short spotlight",
-        type: "Vidéo courte dédiée",
-        videoType: "Short videos",
-        duration: "30-60 s",
-        price: "€120",
-        paymentMode: "Paiement unique",
-        description: "Présentation rapide du projet avec accroche, visuels clés et appel à lecture.",
-      },
-      {
-        id: "pp-review",
-        title: "Chapter review",
-        type: "Review dédiée",
-        videoType: "Review",
-        duration: "3-5 min",
-        price: "€260",
-        paymentMode: "Paiement unique",
-        description: "Review structurée d'un chapitre avec points forts, public cible et lien du manga.",
-      },
-      {
-        id: "pp-monthly",
-        title: "Monthly creator boost",
-        type: "Pack communautaire",
-        videoType: "Presentation",
-        duration: "10+ min",
-        price: "€520",
-        paymentMode: "Abonnement",
-        description: "Mise en avant mensuelle avec short, post communautaire et mention en vidéo longue.",
-      },
-    ],
-  },
-  {
-    id: "u4", username: "@sakura_lines", initials: "SL", role: "Artist",
-    secondary: ["Assistant"], languages: ["日本語", "English"], rating: 4.4,
-    availability: "Open to unpaid collaboration",
-    bio: "Background specialist — Tokyo streetscapes, interiors and rainy alleyways in b&w.",
-    genres: ["Josei", "Slice of life"], skills: ["Backgrounds", "Manga pages"],
-    projects: 21, portfolioTiles: 3,
-  },
-  {
-    id: "u5", username: "@lorekeeper", initials: "LK", role: "Writer",
-    secondary: [], languages: ["Deutsch", "English"], rating: 4.2,
-    availability: "Open to projects",
-    bio: "Worldbuilding-first writer. Detailed lore bibles, factions, and long timelines.",
-    genres: ["Seinen", "Fantasy", "Historical"], skills: ["Worldbuilding", "Lore", "Character writing"],
-    projects: 5,
-  },
-  {
-    id: "u6", username: "@bento_reader", initials: "BR", role: "Reader",
-    secondary: [], languages: ["Italiano", "English"], rating: 4.7,
-    availability: "Available now",
-    bio: "Avid reader posting structured feedback and chapter-by-chapter notes for creators.",
-    genres: ["Shojo", "Romance", "Slice of life"], skills: ["Editing"],
+// Plus de profils fictifs : la page charge les utilisateurs réellement inscrits (Supabase).
+function initialsOf(name: string) {
+  return name.split(/[\s_.-]+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+}
+
+function profileFromDb(db: { id: string; username: string; display_name: string | null }): Profile {
+  const name = db.display_name || db.username;
+  return {
+    id: db.id,
+    username: db.username.startsWith("@") ? db.username : `@${db.username}`,
+    initials: initialsOf(name),
+    role: "Reader",
+    secondary: [],
+    languages: ["FR"],
+    rating: 0,
+    availability: "Disponible",
+    bio: "Profil CollabManga — bio à compléter.",
+    genres: [],
+    skills: [],
     projects: 0,
-  },
-  {
-    id: "u7", username: "@kaiju_hex", initials: "KH", role: "Illustrator",
-    secondary: ["Artist"], languages: ["Español"], rating: 4.5,
-    availability: "Open to paid work",
-    bio: "Creature and mecha designer. Bold silhouettes and fully rendered cover pieces.",
-    genres: ["Shonen", "Mecha"], skills: ["Creature design", "Cover art", "Coloring"],
-    projects: 9, portfolioTiles: 3,
-  },
-  {
-    id: "u8", username: "@storycraft_hq", initials: "SC", role: "Project owner",
-    secondary: ["Editor"], languages: ["English", "Nederlands"], rating: 4.3,
-    availability: "Open to projects",
-    bio: "Running a seinen anthology. Looking for line-artists and letterers for arc 2.",
-    genres: ["Seinen", "Thriller"], skills: ["Editing", "Chapter structure"],
-    projects: 4, verified: true,
-  },
-  {
-    id: "u9", username: "@midori_talks", initials: "MT", role: "Content creator",
-    secondary: [], languages: ["日本語", "English"], rating: 4.6,
-    availability: "Open to projects",
-    bio: "Long-form video essays on shojo classics and modern josei drama.",
-    genres: ["Shojo", "Josei", "Drama"], skills: ["Long videos", "Analysis", "Presentation"],
-    projects: 2,
-    platforms: ["YouTube", "Twitch"], sponsorship: true, audience: "12k followers",
-    sponsorshipOptions: [
-      {
-        id: "mt-essay",
-        title: "Video essay mention",
-        type: "Placement dans une vidéo",
-        videoType: "Analysis",
-        duration: "60-120 s",
-        price: "€180",
-        paymentMode: "Paiement unique",
-        description: "Mention éditoriale dans une vidéo longue autour du shojo ou du josei.",
-      },
-      {
-        id: "mt-deep",
-        title: "Long-form analysis",
-        type: "Vidéo longue dédiée",
-        videoType: "Long videos",
-        duration: "10+ min",
-        price: "€420",
-        paymentMode: "Négociable",
-        description: "Analyse complète du projet, de ses thèmes et de son positionnement lecteur.",
-      },
-    ],
-  },
-];
+  };
+}
 
 /* ---------------- helpers ---------------- */
 
@@ -535,6 +428,21 @@ function UsersPage() {
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listProfiles()
+      .then((rows) => {
+        if (!cancelled) setProfiles(rows.map(profileFromDb));
+      })
+      .catch(() => {
+        if (!cancelled) setProfiles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [creatorFilterOpen, setCreatorFilterOpen] = useState(false);
   const [creatorFilters, setCreatorFilters] = useState<CreatorAdvancedFilters>(EMPTY_CREATOR_FILTERS);
@@ -604,7 +512,7 @@ function UsersPage() {
     setMinRating(0); setMaxRating(5); setQuery("");
   };
 
-  const results = PROFILES.filter((p) => {
+  const results = profiles.filter((p) => {
     if (p.rating < minRating || p.rating > maxRating) return false;
     if (statuses.length && !statuses.includes(p.role)) return false;
     if (languages.length && !languages.some((language) => p.languages.includes(language))) return false;

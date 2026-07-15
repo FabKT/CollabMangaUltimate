@@ -26,32 +26,17 @@ type Conversation = {
   initials: string;
 };
 
+// Production : plus de conversations d'exemple — les fils réels arriveront avec la messagerie DB.
 const DATA: Record<TabId, Conversation[]> = {
-  projet: [
-    { id: "p1", name: "Project conversation", chip: "Project", preview: "Last message preview…", time: "12:42", unread: 3, subtitle: "Linked to project", initials: "PR", pinned: true },
-    { id: "p2", name: "Chapter review", chip: "Chapter", preview: "Last message preview…", time: "11:18", subtitle: "Linked to chapter", initials: "CH" },
-    { id: "p3", name: "Team room", chip: "Team", preview: "Last message preview…", time: "Yesterday", unread: 1, subtitle: "Linked to project", initials: "TM" },
-    { id: "p4", name: "Project conversation", chip: "Project", preview: "Last message preview…", time: "Mon", subtitle: "Linked to project", initials: "PJ" },
-    { id: "p5", name: "Chapter draft", chip: "Chapter", preview: "Last message preview…", time: "Sun", muted: true, subtitle: "Linked to chapter", initials: "CD" },
-  ],
-  amis: [
-    { id: "a1", name: "Friend name", chip: "Creator", preview: "Last message preview…", time: "09:04", online: true, unread: 2, subtitle: "Online", initials: "FN" },
-    { id: "a2", name: "Friend name", chip: "Dessinateur", preview: "Last message preview…", time: "08:22", online: true, subtitle: "Online", initials: "FD" },
-    { id: "a3", name: "Friend name", chip: "Scénariste", preview: "Last message preview…", time: "Yesterday", subtitle: "Offline", initials: "FS" },
-    { id: "a4", name: "Friend name", chip: "Friend", preview: "Last message preview…", time: "Tue", subtitle: "Offline", initials: "FR" },
-  ],
-  parrainage: [
-    { id: "s1", name: "Sponsorship discussion", chip: "Creator Offer", preview: "Last message preview…", time: "14:10", unread: 5, subtitle: "Linked to sponsorship announcement", initials: "SO" },
-    { id: "s2", name: "Sponsorship discussion", chip: "Project Request", preview: "Last message preview…", time: "10:47", subtitle: "Linked to sponsorship announcement", initials: "PR" },
-    { id: "s3", name: "Sponsorship discussion", chip: "Application", preview: "Last message preview…", time: "Yesterday", subtitle: "Linked to sponsorship announcement", initials: "AP" },
-    { id: "s4", name: "Sponsorship discussion", chip: "Sponsorship", preview: "Last message preview…", time: "Fri", pinned: true, subtitle: "Linked to sponsorship announcement", initials: "SP" },
-  ],
+  projet: [],
+  amis: [],
+  parrainage: [],
 };
 
 const TABS: { id: TabId; label: string; icon: typeof FolderKanban; unread: boolean }[] = [
-  { id: "projet", label: "Projet", icon: FolderKanban, unread: true },
-  { id: "amis", label: "Amis", icon: Users, unread: true },
-  { id: "parrainage", label: "Parrainage", icon: Handshake, unread: true },
+  { id: "projet", label: "Projet", icon: FolderKanban, unread: false },
+  { id: "amis", label: "Amis", icon: Users, unread: false },
+  { id: "parrainage", label: "Parrainage", icon: Handshake, unread: false },
 ];
 
 function MessagesPage() {

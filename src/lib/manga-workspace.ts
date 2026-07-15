@@ -5,6 +5,8 @@ export type MangaCharacterImage = {
   imageDataUrl: string;
   mimeType?: string;
   notes?: string;
+  /** Image utilisée lors de la génération (actif par défaut). */
+  enabled?: boolean;
 };
 
 export type MangaCharacterProfile = {
@@ -24,6 +26,8 @@ export type MangaCharacterProfile = {
   /** Carte de personnage consolidée (turnaround + expressions) générée à partir de la bibliothèque. */
   cardImageDataUrl?: string;
   cardImageGeneratedAt?: string;
+  /** Utiliser la carte comme référence unique en génération (actif par défaut si la carte existe). */
+  cardEnabled?: boolean;
 };
 
 const CHARACTER_STORAGE_KEY = "collabmanga.characterProfiles.v2";
@@ -87,6 +91,7 @@ function normalizeCharacterProfiles(value: unknown): MangaCharacterProfile[] {
         typeof character?.cardImageGeneratedAt === "string"
           ? character.cardImageGeneratedAt
           : undefined,
+      cardEnabled: typeof character?.cardEnabled === "boolean" ? character.cardEnabled : true,
       images: Array.isArray(character?.images)
         ? character.images
             .filter(
@@ -100,6 +105,7 @@ function normalizeCharacterProfiles(value: unknown): MangaCharacterProfile[] {
               imageDataUrl: image.imageDataUrl,
               mimeType: typeof image.mimeType === "string" ? image.mimeType : undefined,
               notes: typeof image.notes === "string" ? image.notes : "",
+              enabled: typeof image.enabled === "boolean" ? image.enabled : true,
             }))
         : [],
     }))

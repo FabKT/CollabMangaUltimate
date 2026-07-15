@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { addAnnouncement, addIllustration } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -64,10 +65,10 @@ export type PublicProfileIdentity = {
 };
 
 const DEFAULT_PROFILE_IDENTITY: PublicProfileIdentity = {
-  displayName: "Kaito Mori",
-  username: "@kaito_mori",
-  initials: "KM",
-  tagline: "Dessinateur manga spécialisé dans les personnages expressifs et les scènes d'action.",
+  displayName: "Mon profil",
+  username: "",
+  initials: "…",
+  tagline: "",
   profileType: "creator",
 };
 
@@ -191,6 +192,45 @@ function ProfilePage({
   const [profileType, setProfileType] = useState<ProfileType>(initialProfileType);
   const [mode, setMode] = useState<ViewMode>(initialMode);
   const [tab, setTab] = useState("overview");
+  // Identité réelle de l'utilisateur connecté (remplace l'identité de démonstration).
+  const [liveIdentity, setLiveIdentity] = useState<PublicProfileIdentity | null>(null);
+
+  useEffect(() => {
+    if (publicLocked) return; // profil public visité : identité fournie par la route
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (!supabase) return;
+        const { data } = await supabase.auth.getSession();
+        const user = data.session?.user;
+        if (!user || cancelled) return;
+        const meta = user.user_metadata as Record<string, string | undefined>;
+        const username = meta?.username || user.email?.split("@")[0] || "utilisateur";
+        const displayName = meta?.display_name || meta?.full_name || username;
+        const initials = displayName
+          .split(/[\s_.-]+/)
+          .filter(Boolean)
+          .map((w) => w[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase();
+        setLiveIdentity({
+          displayName,
+          username: username.startsWith("@") ? username : `@${username}`,
+          initials: initials || "?",
+          tagline: "",
+          profileType: "creator",
+        });
+      } catch {
+        /* identité par défaut conservée */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [publicLocked]);
+
+  const effectiveIdentity = liveIdentity ?? identity;
   const [editOpen, setEditOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState<null | { title: string; kind: string; source: "own" | "favorite" }>(null);
   const [addOpen, setAddOpen] = useState<AddKind | null>(null);
@@ -238,7 +278,7 @@ function ProfilePage({
         <ProfileHeader
           profileType={profileType}
           mode={mode}
-          identity={identity}
+          identity={effectiveIdentity}
           onEdit={() => setEditOpen(true)}
           onAdd={setAddOpen}
           available={available}
@@ -360,7 +400,7 @@ function ProfilePage({
         <ProfileWorkflowModal
           type={workflowOpen}
           profileType={profileType}
-          profileName={identity.displayName}
+          profileName={effectiveIdentity.displayName}
           onClose={() => setWorkflowOpen(null)}
           onDone={(message) => {
             setWorkflowOpen(null);
@@ -1029,11 +1069,8 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 /* ---------------- Project showcase ---------------- */
 
 function ProjectShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
-  const projects = [
-    { title: "Project title placeholder", role: "Dessinateur", status: "In production", chapters: "12 chapters" },
-    { title: "Project title placeholder", role: "Scénariste", status: "Ongoing", chapters: "4 chapters" },
-    { title: "Project title placeholder", role: "Créateur de contenu", status: "Recruiting", chapters: "Pre-production" },
-  ];
+  // Production : aucun projet d'exemple — la vitrine se remplit avec les vrais projets.
+  const projects: { title: string; role: string; status: string; chapters: string }[] = [];
 
   return (
     <Panel>
@@ -1106,29 +1143,8 @@ function ProjectCard({
 /* ---------------- Sponsorship showcase ---------------- */
 
 function SponsorshipShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
-  const options = [
-    {
-      title: "Short dedicated review",
-      price: "€180",
-      type: "Short dedicated video",
-      video: "Review",
-      duration: "2–5 min",
-    },
-    {
-      title: "Long-form manga analysis",
-      price: "€450",
-      type: "Long dedicated video",
-      video: "Analysis",
-      duration: "10+ min",
-    },
-    {
-      title: "Community post placement",
-      price: "Custom price",
-      type: "Community post",
-      video: "—",
-      duration: "—",
-    },
-  ];
+  // Production : aucune option d'exemple.
+  const options: { title: string; price: string; type: string; video: string; duration: string }[] = [];
   return (
     <Panel>
       <SectionTitle
@@ -1233,11 +1249,12 @@ function ProjectsTab({
   onAdd: () => void;
   onDetails: (title: string) => void;
 }) {
-  const projects = Array.from({ length: 4 }).map((_, i) => ({
-    title: profileType === "content" ? `Promoted project ${i + 1}` : `Project title ${i + 1}`,
-    role: profileType === "content" ? "Créateur de contenu" : ["Dessinateur", "Scénariste", "Lecteur", "Créateur de contenu"][i % 4],
-    status: ["Ongoing", "Recruiting", "In production", "Completed"][i % 4],
-    chapters: profileType === "content" ? "Long-form video" : `${(i + 1) * 3} chapters`,
+  // Production : aucun projet d'exemple.
+  const projects = ([] as { title: string; role: string; status: string; chapters: string }[]).map((p) => ({
+    title: p.title,
+    role: p.role,
+    status: p.status,
+    chapters: p.chapters,
   }));
 
   return (
@@ -1267,7 +1284,8 @@ function ProjectsTab({
 }
 
 function IllustrationsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
-  const items = Array.from({ length: 6 });
+  // Production : aucune illustration d'exemple.
+  const items: unknown[] = [];
   return (
     <Panel>
       <SectionTitle
@@ -1331,7 +1349,8 @@ function IllustrationCard({ mode, onDetails }: { mode: ViewMode; onDetails: () =
 }
 
 function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
-  const items = Array.from({ length: 4 });
+  // Production : aucune idée d'exemple.
+  const items: unknown[] = [];
   return (
     <Panel>
       <SectionTitle
@@ -1368,27 +1387,12 @@ function PropositionsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails
 }
 
 function FavoritesTab({ onDetails }: { onDetails: (title: string, kind: string) => void }) {
-  const groups = [
-    {
-      title: "Annonces",
-      kind: "Announcement",
-      items: ["Dessinateur pour manga shonen", "Scenariste pour one-shot seinen"],
-    },
-    {
-      title: "Idées",
-      kind: "Idée",
-      items: ["Systeme de pouvoir lie aux contrats", "Arc narratif du tournoi souterrain"],
-    },
-    {
-      title: "Illustrations",
-      kind: "Illustration",
-      items: ["Character sheet sombre", "Illustration action urbaine"],
-    },
-    {
-      title: "Parrainages",
-      kind: "Sponsorship option",
-      items: ["Short review manga", "Video analyse chapitre 1"],
-    },
+  // Production : les favoris démarrent vides et se remplissent au fil des sauvegardes.
+  const groups: { title: string; kind: string; items: string[] }[] = [
+    { title: "Annonces", kind: "Announcement", items: [] },
+    { title: "Idées", kind: "Idée", items: [] },
+    { title: "Illustrations", kind: "Illustration", items: [] },
+    { title: "Parrainages", kind: "Sponsorship option", items: [] },
   ];
 
   return (
@@ -1427,11 +1431,8 @@ function FavoritesTab({ onDetails }: { onDetails: (title: string, kind: string) 
 }
 
 function AnnouncementsTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails: (title: string) => void; onAdd: () => void }) {
-  const items = [
-    { kind: "project" as const, title: "Manga project looking for dessinateur", remuneration: true, engagement: "Long terme" },
-    { kind: "user" as const, title: "Scénariste looking for a serialized project", remuneration: false, engagement: "Ponctuel" },
-    { kind: "project" as const, title: "Seinen project seeking a reader", remuneration: true, engagement: "Ponctuel" },
-  ];
+  // Production : aucune annonce d'exemple.
+  const items: { kind: "project" | "user"; title: string; remuneration: boolean; engagement: string }[] = [];
   return (
     <Panel>
       <SectionTitle
@@ -1487,10 +1488,8 @@ function SponsorshipTab({ mode, onDetails, onAdd }: { mode: ViewMode; onDetails:
         action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Option</SecondaryButton>}
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {[
-          { title: "Short review", price: "€180", type: "Short dedicated video", video: "Review", duration: "2–5 min" },
-          { title: "Long analysis", price: "€450", type: "Long dedicated video", video: "Analysis", duration: "10+ min" },
-        ].map((o, i) => (
+        {/* Production : aucune option d'exemple — les options créées apparaîtront ici. */}
+        {([] as { title: string; price: string; type: string; video: string; duration: string }[]).map((o, i) => (
           <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.title)} />
         ))}
       </div>

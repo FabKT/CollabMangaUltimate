@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Plus, Search, LayoutGrid, List as ListIcon, MoreHorizontal,
   Edit3, Copy, Trash2, Check, Upload, Image as ImageIcon, Eye, Calendar as CalendarIcon,
@@ -12,11 +12,9 @@ import {
   createAnnouncementWorkflow,
   createProjectNote,
   createProjectWorkflow,
-  removeCollaborator,
   sendCollaborationInvitation,
-  sendPatronageRequest,
-  updateCollaboratorRole,
 } from "@/lib/user-workflows";
+import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
 
 export const Route = createFileRoute("/_collab/studio")({
   component: CollabMangaPage,
@@ -49,82 +47,34 @@ interface Sponsorship {
   platform: string; videoType: string; duration: string;
   subscribers: number; quantity: number; price: string; paymentMode: string;
 }
+interface RecruitAnnouncement {
+  id: string; role: string; status: "Ouverte" | "Brouillon";
+  description: string; commitment: string; compensation: string;
+  remunerated: boolean; created: string;
+}
 interface Project {
   id: string; title: string; synopsis: string; status: ProjectStatus;
   chaptersCount: number; validatedPages: number; totalPages: number;
   updated: string; genres: string[]; chapters: Chapter[]; notes: Note[]; sponsorships: Sponsorship[];
+  recruits?: RecruitAnnouncement[];
 }
 
 const COLLAB_ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"];
 
-const makePages = (n: number, seed: number): PageItem[] =>
+// Chaque nouvelle page démarre avec un seul candidat vide ; d'autres peuvent être ajoutés librement.
+const makeEmptyPages = (n: number): PageItem[] =>
   Array.from({ length: n }).map((_, i) => {
     const idx = i + 1;
-    const hasValidated = (idx + seed) % 4 !== 0 && idx <= n - 2;
-    // Each page starts with a single candidate; more can be added freely.
-    const cand: Candidate = {
-      id: `c-${seed}-${idx}`,
-      status: hasValidated ? "Validated" : idx % 3 === 0 ? "Empty" : "Imported",
-    };
     return {
-      id: `p-${seed}-${idx}`, number: idx,
+      id: `p-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+      number: idx,
       title: `Page ${idx}`,
-      description: "Production note to complete.",
-      candidates: [cand],
-      validatedCandidateId: hasValidated ? cand.id : null,
-      updated: "2 days ago",
+      description: "",
+      candidates: [{ id: `c-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`, status: "Empty" as CandidateStatus }],
+      validatedCandidateId: null,
+      updated: "À l'instant",
     };
   });
-
-const PROJECTS_SEED: Project[] = [
-  {
-    id: "prj-1", title: "Neon Ronin", synopsis: "A wandering swordsman searches for his sister across a rain-lit megacity.",
-    status: "In progress", chaptersCount: 4, validatedPages: 32, totalPages: 48, updated: "Today",
-    genres: ["Action", "Cyberpunk", "Drama"],
-    chapters: [
-      { id: "ch-1", number: 1, title: "The First Blade", status: "Published", objective: "Introduce protagonist and world.", pages: makePages(14, 1), updated: "3 days ago" },
-      { id: "ch-2", number: 2, title: "Neon Alleys", status: "Ready for review", objective: "Escalate the antagonist chase.", pages: makePages(12, 2), updated: "Yesterday" },
-      { id: "ch-3", number: 3, title: "Under the Rain", status: "In progress", objective: "Reveal sister's last known location.", pages: makePages(14, 3), updated: "Today" },
-      { id: "ch-4", number: 4, title: "Chapter title", status: "Draft", objective: "Objective to define.", pages: makePages(8, 4), updated: "Just now" },
-    ],
-    notes: [
-      { id: "n1", title: "Rain reflections study", preview: "Look at wet asphalt refs for chapter 3 splash pages.", content: "Notes to complete.", category: "Scene", date: "2026-07-10", priority: "High", status: "Open" },
-      { id: "n2", title: "Antagonist redesign", preview: "Consider colder palette, sharper silhouette.", content: "Notes to complete.", category: "Character", date: "2026-07-14", priority: "Medium", status: "Open" },
-      { id: "n3", title: "Sponsorship kickoff", preview: "Prepare visuals for sponsorship announcement.", content: "Notes to complete.", category: "Sponsorship", date: "2026-07-18", priority: "High", status: "Open" },
-      { id: "n4", title: "Chapter 4 outline", preview: "Beat sheet and page count draft.", content: "Notes to complete.", category: "Story", priority: "Low", status: "Open" },
-    ],
-    sponsorships: [
-      { id: "s1", title: "Vidéo longue dédiée", status: "Open", description: "Présentation dédiée du manga sur une vidéo longue format.", platform: "Youtube", videoType: "Review", duration: "10+ min", subscribers: 1000, quantity: 4, price: "20", paymentMode: "Abonnement", created: "La semaine dernière" },
-      { id: "s2", title: "Placement dans une vidéo", status: "Draft", description: "Concept en préparation.", platform: "Tiktok", videoType: "Présentation", duration: "0–30 s", subscribers: 500, quantity: 2, price: "10", paymentMode: "Paiement unique", created: "Aujourd'hui" },
-    ],
-  },
-  {
-    id: "prj-2", title: "Hollow Sky", synopsis: "Two rival pilots discover an island that shouldn't exist.",
-    status: "Draft", chaptersCount: 1, validatedPages: 3, totalPages: 12, updated: "Yesterday",
-    genres: ["Adventure", "Mystery"], chapters: [{ id: "hc1", number: 1, title: "Above the clouds", status: "Draft", objective: "Set the tone.", pages: makePages(12, 5), updated: "Yesterday" }],
-    notes: [], sponsorships: [],
-  },
-  {
-    id: "prj-3", title: "Ashen Bloom", synopsis: "A florist inherits a dying garden that whispers back.",
-    status: "In progress", chaptersCount: 2, validatedPages: 18, totalPages: 24, updated: "2 days ago",
-    genres: ["Slice of life", "Supernatural"], chapters: [], notes: [], sponsorships: [],
-  },
-  {
-    id: "prj-4", title: "Signal / Noise", synopsis: "A radio host receives broadcasts from her future self.",
-    status: "Published", chaptersCount: 8, validatedPages: 96, totalPages: 96, updated: "Last week",
-    genres: ["Sci-fi", "Thriller"], chapters: [], notes: [], sponsorships: [],
-  },
-  {
-    id: "prj-5", title: "Project title", synopsis: "Short synopsis preview to complete.",
-    status: "Draft", chaptersCount: 0, validatedPages: 0, totalPages: 0, updated: "Just now",
-    genres: ["Genre"], chapters: [], notes: [], sponsorships: [],
-  },
-  {
-    id: "prj-6", title: "Iron Lantern", synopsis: "A blacksmith's daughter forges weapons that remember their wielders.",
-    status: "Archived", chaptersCount: 12, validatedPages: 140, totalPages: 140, updated: "2 months ago",
-    genres: ["Fantasy", "Action"], chapters: [], notes: [], sponsorships: [],
-  },
-];
 
 /* ---------- Small UI primitives ---------- */
 
@@ -299,40 +249,22 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
   );
 }
 
-const PROJECT_RATING: Record<string, number> = {
-  "prj-1": 4.5, "prj-2": 4, "prj-3": 4.5, "prj-4": 5, "prj-5": 3.5, "prj-6": 4.5,
-};
+const PROJECT_RATING: Record<string, number> = {};
 
-const PROJECT_COLLABORATORS: Record<string, number> = {
-  "prj-1": 6, "prj-2": 2, "prj-3": 3, "prj-4": 8, "prj-5": 1, "prj-6": 5,
-};
+const PROJECT_COLLABORATORS: Record<string, number> = {};
 
 type Collaborator = { id: string; name: string; role: string; status: "Propriétaire" | "Actif" | "Invité" };
 
-const PROJECT_COLLAB_LIST: Record<string, Collaborator[]> = {
-  "prj-1": [
-    { id: "co1", name: "Vous", role: "Scénariste", status: "Propriétaire" },
-    { id: "co2", name: "Aiko Tanaka", role: "Dessinateur", status: "Actif" },
-    { id: "co3", name: "Ren Sato", role: "Scénariste", status: "Actif" },
-    { id: "co4", name: "Mika Ito", role: "Créateur de contenu", status: "Actif" },
-    { id: "co5", name: "Hana Kimura", role: "Lecteur", status: "Actif" },
-    { id: "co6", name: "Yui Nakamura", role: "Dessinateur", status: "Invité" },
-  ],
-};
+const PROJECT_COLLAB_LIST: Record<string, Collaborator[]> = {};
 
 const defaultCollaborators = (): Collaborator[] => [
   { id: "co-owner", name: "Vous", role: "Scénariste", status: "Propriétaire" },
 ];
 
-// Réalisés / en cours — parrainages liés au projet (les pages détaillées viendront plus tard).
+// Réalisés / en cours — parrainages liés au projet (alimentés quand des parrainages aboutissent).
 type RealizedParrainage = { id: string; creator: string; platform: string; status: "Terminé" | "En cours" | "Planifié"; price: string };
 
-const PROJECT_REALIZED_PARRAINAGES: Record<string, RealizedParrainage[]> = {
-  "prj-1": [
-    { id: "rp1", creator: "@mangareviews", platform: "Youtube", status: "Terminé", price: "20 €" },
-    { id: "rp2", creator: "@mangatiktok", platform: "Tiktok", status: "En cours", price: "10 €" },
-  ],
-};
+const PROJECT_REALIZED_PARRAINAGES: Record<string, RealizedParrainage[]> = {};
 
 function StarRating({ value }: { value: number }) {
   const full = Math.round(value);
@@ -373,11 +305,15 @@ function ProjectWorkspace({
   onBack,
   onOpenChapter,
   onWorkflow,
+  updateProject,
+  onDeleteProject,
 }: {
   project: Project;
   onBack: () => void;
   onOpenChapter: (id: string) => void;
   onWorkflow: (message: string) => void;
+  updateProject: (updater: (p: Project) => Project) => void;
+  onDeleteProject: () => void;
 }) {
   const [tab, setTab] = useState<ProjectTab>("Chapters");
   const editing = false;
@@ -476,33 +412,70 @@ function ProjectWorkspace({
         {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => setModal("chapter")} />}
         {tab === "Notes" && <NotesTab project={project} onAdd={() => openNote()} />}
         {tab === "Calendar" && <CalendarTab project={project} onAddNote={openNote} />}
-        {tab === "Recrutement" && <RecrutementTab onAddRecruit={() => setModal("recruit")} />}
+        {tab === "Recrutement" && <RecrutementTab project={project} onAddRecruit={() => setModal("recruit")} />}
         {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => setModal("parrainage")} />}
         {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} />}
-        {tab === "Settings" && <SettingsTab />}
+        {tab === "Settings" && <SettingsTab project={project} onDeleteProject={onDeleteProject} />}
       </div>
 
-      {modal === "chapter" && <AddChapterModal onClose={() => setModal(null)} />}
+      {modal === "chapter" && (
+        <AddChapterModal
+          onClose={() => setModal(null)}
+          onAdd={(chapter) => {
+            updateProject((p) => ({
+              ...p,
+              chapters: [...p.chapters, { ...chapter, number: p.chapters.length + 1 }],
+              chaptersCount: p.chapters.length + 1,
+              totalPages: p.totalPages + chapter.pages.length,
+              updated: "À l'instant",
+            }));
+            setModal(null);
+            onWorkflow(`Chapitre « ${chapter.title} » ajouté.`);
+          }}
+        />
+      )}
       {modal === "note" && (
         <AddNoteModal
-          project={project}
           onClose={() => setModal(null)}
           defaultDate={noteDate}
-          onDone={onWorkflow}
+          onAdd={(note) => {
+            updateProject((p) => ({ ...p, notes: [note, ...p.notes], updated: "À l'instant" }));
+            createProjectNote({ projectTitle: project.title, content: note.content || note.title });
+            setModal(null);
+            onWorkflow("Note ajoutée.");
+          }}
         />
       )}
       {modal === "parrainage" && (
         <AddParrainageModal
-          project={project}
           onClose={() => setModal(null)}
-          onDone={onWorkflow}
+          onAdd={(sponsorship) => {
+            updateProject((p) => ({ ...p, sponsorships: [sponsorship, ...p.sponsorships], updated: "À l'instant" }));
+            createAnnouncementWorkflow({
+              title: sponsorship.title,
+              category: "Parrainage",
+              description: sponsorship.description,
+              projectTitle: project.title,
+            });
+            setModal(null);
+            onWorkflow("Annonce de parrainage publiée.");
+          }}
         />
       )}
       {modal === "recruit" && (
         <AddRecruitModal
-          project={project}
           onClose={() => setModal(null)}
-          onDone={onWorkflow}
+          onAdd={(recruit) => {
+            updateProject((p) => ({ ...p, recruits: [recruit, ...(p.recruits ?? [])], updated: "À l'instant" }));
+            createAnnouncementWorkflow({
+              title: `${recruit.role} — ${project.title}`,
+              category: "Recrutement",
+              description: recruit.description,
+              projectTitle: project.title,
+            });
+            setModal(null);
+            onWorkflow("Annonce de recrutement publiée.");
+          }}
         />
       )}
     </div>
@@ -790,11 +763,8 @@ function AnnonceCard({
 
 /* ----- Recrutement tab ----- */
 
-function RecrutementTab({ onAddRecruit }: { onAddRecruit: () => void }) {
-  const recruit = [
-    { id: "r1", role: "Dessinateur", status: "Ouverte", description: "Recherche un dessinateur pour les planches des prochains chapitres.", commitment: "Long terme", compensation: "Revenue share", remunerated: true, created: "Cette semaine" },
-    { id: "r2", role: "Scénariste", status: "Brouillon", description: "Besoin d'un scénariste pour renforcer le rythme et les dialogues du projet.", commitment: "Ponctuel", compensation: "À définir", remunerated: false, created: "Aujourd'hui" },
-  ];
+function RecrutementTab({ project, onAddRecruit }: { project: Project; onAddRecruit: () => void }) {
+  const recruit = project.recruits ?? [];
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -804,6 +774,13 @@ function RecrutementTab({ onAddRecruit }: { onAddRecruit: () => void }) {
         </div>
         <PrimaryButton icon={Plus} onClick={onAddRecruit}>Nouvelle annonce de recrutement</PrimaryButton>
       </div>
+      {recruit.length === 0 && (
+        <div className="rounded-[22px] border border-dashed border-[var(--border-strong)] bg-[var(--panel)] p-8 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--elevated)]"><UserPlus className="h-5 w-5 text-[var(--neon)]" /></div>
+          <h3 className="mt-4 font-display text-[18px] font-bold">Aucune annonce de recrutement</h3>
+          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">Publiez une annonce pour attirer des collaborateurs sur ce projet.</p>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {recruit.map(r => (
           <AnnonceCard
@@ -934,7 +911,7 @@ function ParrainageTab({ project, onAddParrainage }: { project: Project; onAddPa
 
 /* ----- Collaborateurs tab ----- */
 
-function CollaborateursTab({ project }: { project: Project }) {
+function CollaborateursTab({ project, onWorkflow }: { project: Project; onWorkflow?: (message: string) => void }) {
   const collabs = PROJECT_COLLAB_LIST[project.id] ?? defaultCollaborators();
   const [inviteOpen, setInviteOpen] = useState(false);
   const initials = (name: string) => name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
@@ -959,23 +936,55 @@ function CollaborateursTab({ project }: { project: Project }) {
           </div>
         ))}
       </div>
-      {inviteOpen && <InviteCollaboratorModal onClose={() => setInviteOpen(false)} />}
+      {inviteOpen && (
+        <InviteCollaboratorModal
+          projectTitle={project.title}
+          onClose={() => setInviteOpen(false)}
+          onDone={(message) => {
+            setInviteOpen(false);
+            onWorkflow?.(message);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function InviteCollaboratorModal({ onClose }: { onClose: () => void }) {
+function InviteCollaboratorModal({
+  projectTitle,
+  onClose,
+  onDone,
+}: {
+  projectTitle: string;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [recipient, setRecipient] = useState("");
+  const [role, setRole] = useState<string[]>(["Dessinateur"]);
+  const [message, setMessage] = useState("");
+
+  const submit = () => {
+    if (!recipient.trim()) return;
+    sendCollaborationInvitation({
+      recipient: recipient.trim(),
+      projectTitle,
+      role: role[0] || "Dessinateur",
+      message: message.trim() || undefined,
+    });
+    onDone(`Invitation envoyée à ${recipient.trim()}.`);
+  };
+
   return (
     <StudioModal
       title="Inviter un collaborateur"
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={UserPlus} onClick={onClose}>Envoyer l'invitation</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={UserPlus} onClick={submit}>Envoyer l'invitation</PrimaryButton></>}
     >
       <div className="flex flex-col gap-5">
-        <ModalField label="Email ou pseudo"><TextInput placeholder="collaborateur@email.com ou @username" /></ModalField>
-        <ChoiceRow label="Rôle" defaultValue="Dessinateur" options={COLLAB_ROLES} />
+        <ModalField label="Email ou pseudo"><TextInput value={recipient} onChange={setRecipient} placeholder="collaborateur@email.com ou @username" /></ModalField>
+        <ChoiceRow label="Rôle" defaultValue="Dessinateur" options={COLLAB_ROLES} onChange={setRole} />
         <ChoiceRow label="Accès au projet" defaultValue="Collaborateur" options={["Collaborateur", "Lecture seule"]} />
-        <ModalField label="Message"><textarea placeholder="Expliquez le rôle attendu, le rythme et les prochaines étapes." className={modalTextarea} /></ModalField>
+        <ModalField label="Message"><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Expliquez le rôle attendu, le rythme et les prochaines étapes." className={modalTextarea} /></ModalField>
       </div>
     </StudioModal>
   );
@@ -1013,10 +1022,14 @@ function StudioModal({ title, onClose, children, footer }: { title: string; onCl
 }
 
 // One option row: title + all options shown at once as selectable chips (no dropdown).
-function ChoiceRow({ label, options, multi = false, defaultValue }: { label: string; options: string[]; multi?: boolean; defaultValue?: string }) {
+function ChoiceRow({ label, options, multi = false, defaultValue, onChange }: { label: string; options: string[]; multi?: boolean; defaultValue?: string; onChange?: (selected: string[]) => void }) {
   const [sel, setSel] = useState<string[]>(defaultValue ? [defaultValue] : []);
   const toggle = (o: string) =>
-    setSel(prev => (multi ? (prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]) : prev[0] === o ? [] : [o]));
+    setSel(prev => {
+      const next = multi ? (prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]) : prev[0] === o ? [] : [o];
+      onChange?.(next);
+      return next;
+    });
   return (
     <div>
       <div className="tiny-meta mb-2 text-[var(--text-muted)]">{label}</div>
@@ -1038,106 +1051,218 @@ function ModalField({ label, children }: { label: string; children: React.ReactN
 
 const modalTextarea = "min-h-[96px] w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]";
 
-function AddChapterModal({ onClose }: { onClose: () => void }) {
+function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chapter: Chapter) => void }) {
+  const [title, setTitle] = useState("");
+  const [objective, setObjective] = useState("");
+  const [pageCount, setPageCount] = useState("12");
+
+  const submit = () => {
+    if (!title.trim()) return;
+    const count = Math.max(1, Math.min(60, Number(pageCount) || 12));
+    onAdd({
+      id: `ch-${Date.now()}`,
+      number: 0, // renuméroté à l'affichage via l'index
+      title: title.trim(),
+      status: "Draft",
+      objective: objective.trim() || "Objectif à définir.",
+      pages: makeEmptyPages(count),
+      updated: "À l'instant",
+    });
+  };
+
   return (
     <StudioModal
       title="Ajouter un chapitre"
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={onClose}>Ajouter le chapitre</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Ajouter le chapitre</PrimaryButton></>}
     >
       <div className="flex flex-col gap-4">
-        <ModalField label="Titre du chapitre"><TextInput placeholder="Titre du chapitre" /></ModalField>
-        <ModalField label="Objectif"><textarea placeholder="Objectif du chapitre" className={modalTextarea} /></ModalField>
+        <ModalField label="Titre du chapitre"><TextInput value={title} onChange={setTitle} placeholder="Titre du chapitre" /></ModalField>
+        <ModalField label="Objectif"><textarea value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Objectif du chapitre" className={modalTextarea} /></ModalField>
+        <ModalField label="Nombre de pages"><TextInput value={pageCount} onChange={setPageCount} placeholder="12" /></ModalField>
       </div>
     </StudioModal>
   );
 }
 
-function CreateProjectModal({ onClose }: { onClose: () => void }) {
+function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCreate: (project: Project) => void }) {
+  const [title, setTitle] = useState("");
+  const [synopsis, setSynopsis] = useState("");
+  const [genres, setGenres] = useState<string[]>([]);
+  const [status, setStatus] = useState<string[]>(["Draft"]);
+  const [productionNote, setProductionNote] = useState("");
+
+  const submit = () => {
+    if (!title.trim()) return;
+    const project: Project = {
+      id: `prj-${Date.now()}`,
+      title: title.trim(),
+      synopsis: synopsis.trim() || "Synopsis à compléter.",
+      status: (status[0] as ProjectStatus) || "Draft",
+      chaptersCount: 0,
+      validatedPages: 0,
+      totalPages: 0,
+      updated: "À l'instant",
+      genres,
+      chapters: [],
+      notes: productionNote.trim()
+        ? [{
+            id: `n-${Date.now()}`,
+            title: "Note de production",
+            preview: productionNote.trim().slice(0, 120),
+            content: productionNote.trim(),
+            category: "Task",
+            priority: "Medium",
+            status: "Open",
+          }]
+        : [],
+      sponsorships: [],
+      recruits: [],
+    };
+    createProjectWorkflow({ title: project.title, synopsis: project.synopsis, genres: project.genres });
+    onCreate(project);
+  };
+
   return (
     <StudioModal
       title="Créer un projet"
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={onClose}>Créer le projet</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Créer le projet</PrimaryButton></>}
     >
       <div className="flex flex-col gap-5">
-        <ModalField label="Titre du projet"><TextInput placeholder="Nom du manga" /></ModalField>
-        <ModalField label="Synopsis"><textarea placeholder="Résumé court du projet, ton, objectif principal." className={modalTextarea} /></ModalField>
+        <ModalField label="Titre du projet"><TextInput value={title} onChange={setTitle} placeholder="Nom du manga" /></ModalField>
+        <ModalField label="Synopsis"><textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Résumé court du projet, ton, objectif principal." className={modalTextarea} /></ModalField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} />
-          <ChoiceRow label="Statut" defaultValue="Draft" options={["Draft", "In progress", "Published"]} />
+          <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
+          <ChoiceRow label="Statut" defaultValue="Draft" options={["Draft", "In progress", "Published"]} onChange={setStatus} />
         </div>
-        <ChoiceRow multi label="Rôles recherchés" options={COLLAB_ROLES} />
-        <ModalField label="Note de production"><textarea placeholder="Indiquez ce dont l'équipe aura besoin pour démarrer." className={modalTextarea} /></ModalField>
+        <ModalField label="Note de production"><textarea value={productionNote} onChange={(e) => setProductionNote(e.target.value)} placeholder="Indiquez ce dont l'équipe aura besoin pour démarrer." className={modalTextarea} /></ModalField>
       </div>
     </StudioModal>
   );
 }
 
-function AddNoteModal({ onClose, defaultDate }: { onClose: () => void; defaultDate?: string }) {
+function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; defaultDate?: string; onAdd: (note: Note) => void }) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
   const [date, setDate] = useState(defaultDate ?? "");
+  const [priority, setPriority] = useState<string[]>(["Medium"]);
+
+  const submit = () => {
+    if (!title.trim()) return;
+    onAdd({
+      id: `n-${Date.now()}`,
+      title: title.trim(),
+      preview: (content.trim() || title.trim()).slice(0, 120),
+      content: content.trim(),
+      category: "Other",
+      date: date.trim() || undefined,
+      priority: (priority[0] as Note["priority"]) || "Medium",
+      status: "Open",
+    });
+  };
+
   return (
     <StudioModal
       title="Ajouter une note"
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={onClose}>Ajouter la note</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Ajouter la note</PrimaryButton></>}
     >
       <div className="flex flex-col gap-4">
-        <ModalField label="Titre"><TextInput placeholder="Titre de la note" /></ModalField>
-        <ModalField label="Contenu"><textarea placeholder="Contenu de la note…" className={modalTextarea} /></ModalField>
+        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre de la note" /></ModalField>
+        <ModalField label="Contenu"><textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Contenu de la note…" className={modalTextarea} /></ModalField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ModalField label="Date liée"><TextInput placeholder="jj/mm/aaaa" value={date} onChange={setDate} /></ModalField>
-          <ChoiceRow label="Priorité" defaultValue="Medium" options={["Low", "Medium", "High"]} />
+          <ModalField label="Date liée"><TextInput placeholder="aaaa-mm-jj" value={date} onChange={setDate} /></ModalField>
+          <ChoiceRow label="Priorité" defaultValue="Medium" options={["Low", "Medium", "High"]} onChange={setPriority} />
         </div>
       </div>
     </StudioModal>
   );
 }
 
-function AddParrainageModal({ onClose }: { onClose: () => void }) {
+function AddParrainageModal({ onClose, onAdd }: { onClose: () => void; onAdd: (sponsorship: Sponsorship) => void }) {
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [formats, setFormats] = useState<string[]>([]);
+  const [videoTypes, setVideoTypes] = useState<string[]>([]);
+  const [durations, setDurations] = useState<string[]>([]);
+  const [payment, setPayment] = useState<string[]>([]);
+  const [quantity, setQuantity] = useState("");
+  const [price, setPrice] = useState("");
+  const [description, setDescription] = useState("");
+
+  const submit = () => {
+    const title = formats[0] || "Annonce de parrainage";
+    onAdd({
+      id: `s-${Date.now()}`,
+      title,
+      status: "Open",
+      description: description.trim(),
+      created: "À l'instant",
+      platform: platforms.join(", ") || "Toutes plateformes",
+      videoType: videoTypes[0] || "—",
+      duration: durations[0] || "—",
+      subscribers: 0,
+      quantity: Math.max(1, Number(quantity) || 1),
+      price: price.trim() || "0",
+      paymentMode: payment[0] || "Paiement unique",
+    });
+  };
+
   return (
     <StudioModal
       title="Nouvelle annonce de parrainage"
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Megaphone} onClick={onClose}>Confirmer</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Megaphone} onClick={submit}>Confirmer</PrimaryButton></>}
     >
       <div className="flex flex-col gap-6">
-        <ChoiceRow multi label="Plateforme" options={["Youtube", "Tiktok", "Instagram", "Twitter"]} />
-        <ChoiceRow multi label="Format de parrainage" options={["Post communautaire", "Vidéo longue dédiée", "Vidéo courte dédiée", "Placement dans une vidéo", "Story"]} />
-        <ChoiceRow label="Type de vidéo" options={["Analyse profonde", "Review", "Reaction", "Présentation"]} />
-        <ChoiceRow label="Durée de vidéo" options={["0–30 s", "30–60 s", "60–120 s", "2–3 min", "3–5 min", "5–10 min", "10+ min"]} />
-        <ChoiceRow label="Mode de paiement" options={["Abonnement", "Paiement unique"]} />
+        <ChoiceRow multi label="Plateforme" options={["Youtube", "Tiktok", "Instagram", "Twitter"]} onChange={setPlatforms} />
+        <ChoiceRow multi label="Format de parrainage" options={["Post communautaire", "Vidéo longue dédiée", "Vidéo courte dédiée", "Placement dans une vidéo", "Story"]} onChange={setFormats} />
+        <ChoiceRow label="Type de vidéo" options={["Analyse profonde", "Review", "Reaction", "Présentation"]} onChange={setVideoTypes} />
+        <ChoiceRow label="Durée de vidéo" options={["0–30 s", "30–60 s", "60–120 s", "2–3 min", "3–5 min", "5–10 min", "10+ min"]} onChange={setDurations} />
+        <ChoiceRow label="Mode de paiement" options={["Abonnement", "Paiement unique"]} onChange={setPayment} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ModalField label="Quantité"><TextInput placeholder="0" /></ModalField>
-          <ModalField label="Prix (€)"><TextInput placeholder="0" /></ModalField>
+          <ModalField label="Quantité"><TextInput value={quantity} onChange={setQuantity} placeholder="0" /></ModalField>
+          <ModalField label="Prix (€)"><TextInput value={price} onChange={setPrice} placeholder="0" /></ModalField>
         </div>
-        <ModalField label="Description"><textarea placeholder="Description" className={modalTextarea} /></ModalField>
-        <div className="rounded-[16px] border border-[var(--border-default)] bg-[var(--elevated)] p-4">
-          <div className="mb-3 font-display text-[15px] font-bold">Chapitres — Parrainage</div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <ModalField label="Nombre de chapitres minimum"><TextInput placeholder="0" /></ModalField>
-            <ModalField label="Nombre de chapitres maximal"><TextInput placeholder="0" /></ModalField>
-          </div>
-        </div>
+        <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className={modalTextarea} /></ModalField>
       </div>
     </StudioModal>
   );
 }
 
-function AddRecruitModal({ onClose }: { onClose: () => void }) {
+function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recruit: RecruitAnnouncement) => void }) {
   const [remuneration, setRemuneration] = useState(false);
+  const [title, setTitle] = useState("");
+  const [hook, setHook] = useState("");
+  const [description, setDescription] = useState("");
+  const [role, setRole] = useState<string[]>(["Scénariste"]);
+  const [engagement, setEngagement] = useState<string[]>(["Long terme"]);
+
+  const submit = () => {
+    onAdd({
+      id: `r-${Date.now()}`,
+      role: role[0] || "Scénariste",
+      status: "Ouverte",
+      description: description.trim() || hook.trim() || title.trim() || "Annonce de recrutement.",
+      commitment: engagement[0] || "Long terme",
+      compensation: remuneration ? "Rémunéré" : "Sans rémunération",
+      remunerated: remuneration,
+      created: "À l'instant",
+    });
+  };
+
   return (
     <StudioModal
       title="Nouvelle annonce de recrutement"
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={onClose}>Confirmer</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Confirmer</PrimaryButton></>}
     >
       <div className="flex flex-col gap-6">
         <ChoiceRow label="Langage" defaultValue="FR" options={["FR", "ENG"]} />
-        <ModalField label="Titre"><TextInput placeholder="Titre" /></ModalField>
-        <ModalField label="Accroche"><TextInput placeholder="Accroche" /></ModalField>
-        <ModalField label="Description"><textarea placeholder="Description" className={modalTextarea} /></ModalField>
-        <ChoiceRow label="Statut recherché" defaultValue="Scénariste" options={COLLAB_ROLES} />
+        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre" /></ModalField>
+        <ModalField label="Accroche"><TextInput value={hook} onChange={setHook} placeholder="Accroche" /></ModalField>
+        <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className={modalTextarea} /></ModalField>
+        <ChoiceRow label="Statut recherché" defaultValue="Scénariste" options={COLLAB_ROLES} onChange={setRole} />
         <button
           type="button"
           role="switch"
@@ -1157,7 +1282,7 @@ function AddRecruitModal({ onClose }: { onClose: () => void }) {
             />
           </span>
         </button>
-        <ChoiceRow label="Engagement" defaultValue="Long terme" options={["Long terme", "Ponctuel"]} />
+        <ChoiceRow label="Engagement" defaultValue="Long terme" options={["Long terme", "Ponctuel"]} onChange={setEngagement} />
         <div>
           <div className="mb-3 font-display text-[15px] font-bold">Type de projet favori</div>
           <div className="flex flex-col gap-4">
@@ -1170,23 +1295,34 @@ function AddRecruitModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SettingsTab() {
+function SettingsTab({ project, onDeleteProject }: { project: Project; onDeleteProject: () => void }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <SettingsSection title="Visibility & Collaboration" items={[
-        { label: "Project visibility", value: "Private" },
-        { label: "Collaboration permissions", value: "Invite only" },
-        { label: "Chapter publication", value: "Manual approval" },
-        { label: "Asset access", value: "Team members" },
+      <SettingsSection title="Projet" items={[
+        { label: "Titre", value: project.title },
+        { label: "Statut", value: project.status },
+        { label: "Genres", value: project.genres.join(", ") || "—" },
+        { label: "Chapitres", value: String(project.chapters.length) },
       ]} />
       <div className="flex flex-col gap-4">
-        <SettingsSection title="Archive" items={[
-          { label: "Archive project", value: "Move to archived list" },
-        ]} action={<SecondaryButton icon={Layers} className="!h-10 !px-3">Archive</SecondaryButton>} />
         <div className="rounded-[22px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.05)] p-5">
           <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-[var(--danger)]" /><h3 className="font-display text-[18px] font-bold text-[var(--danger)]">Danger zone</h3></div>
-          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">Deleting the project removes all chapters, pages and notes permanently.</p>
-          <div className="mt-4"><DangerButton icon={Trash2}>Delete Project</DangerButton></div>
+          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">
+            {confirmDelete
+              ? "Confirme la suppression : tous les chapitres, pages et notes seront définitivement perdus."
+              : "Deleting the project removes all chapters, pages and notes permanently."}
+          </p>
+          <div className="mt-4 flex items-center gap-2">
+            {confirmDelete ? (
+              <>
+                <DangerButton icon={Trash2} onClick={onDeleteProject}>Supprimer définitivement</DangerButton>
+                <GhostButton onClick={() => setConfirmDelete(false)}>Annuler</GhostButton>
+              </>
+            ) : (
+              <DangerButton icon={Trash2} onClick={() => setConfirmDelete(true)}>Delete Project</DangerButton>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1214,14 +1350,40 @@ function SettingsSection({ title, items, action }: { title: string; items: { lab
 
 /* ---------- STATE 3: Chapter Workspace ---------- */
 
-function ChapterWorkspace({ project, chapter, onBack }: { project: Project; chapter: Chapter; onBack: () => void }) {
+function ChapterWorkspace({
+  project,
+  chapter,
+  onBack,
+  onChapterChange,
+}: {
+  project: Project;
+  chapter: Chapter;
+  onBack: () => void;
+  onChapterChange: (updater: (c: Chapter) => Chapter) => void;
+}) {
   const [pageIndex, setPageIndex] = useState(0);
   const [pages, setPages] = useState<PageItem[]>(chapter.pages);
   const page = pages[pageIndex];
   const validatedCount = pages.filter(p => p.validatedCandidateId).length;
   const [selectedCand, setSelectedCand] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [published, setPublished] = useState(chapter.status === "Published");
+  const [published, setPublishedState] = useState(chapter.status === "Published");
+
+  // Persiste chaque modification de pages dans le projet (store IndexedDB).
+  useEffect(() => {
+    if (pages === chapter.pages) return;
+    onChapterChange((c) => ({ ...c, pages, updated: "À l'instant" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages]);
+
+  const setPublished = (value: boolean) => {
+    setPublishedState(value);
+    onChapterChange((c) => ({
+      ...c,
+      status: value ? "Published" : c.status === "Published" ? "In progress" : c.status,
+      updated: "À l'instant",
+    }));
+  };
 
   const setPage = (updater: (p: PageItem) => PageItem) => {
     setPages(prev => prev.map((p, i) => i === pageIndex ? updater(p) : p));
@@ -1596,10 +1758,51 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
 /* ---------- Root page ---------- */
 
 function CollabMangaPage() {
-  const [projects] = useState<Project[]>(PROJECTS_SEED);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadStudioProjects<Project>().then((saved) => {
+      if (cancelled) return;
+      setProjects(saved);
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    void saveStudioProjects(projects);
+  }, [projects, loaded]);
+
+  const showFeedback = (message: string) => {
+    setFeedback(message);
+    window.setTimeout(() => setFeedback(null), 3200);
+  };
+
+  const addProject = (project: Project) => {
+    setProjects((current) => [project, ...current]);
+    setSelectedProject(project.id);
+    showFeedback("Projet créé.");
+  };
+
+  const updateProject = (id: string, updater: (project: Project) => Project) => {
+    setProjects((current) => current.map((p) => (p.id === id ? updater(p) : p)));
+  };
+
+  const deleteProject = (id: string) => {
+    setProjects((current) => current.filter((p) => p.id !== id));
+    setSelectedProject(null);
+    setSelectedChapter(null);
+    showFeedback("Projet supprimé.");
+  };
 
   const project = useMemo(() => projects.find(p => p.id === selectedProject) ?? null, [projects, selectedProject]);
   const chapter = useMemo(() => project?.chapters.find(c => c.id === selectedChapter) ?? null, [project, selectedChapter]);
@@ -1609,12 +1812,42 @@ function CollabMangaPage() {
       <div className="mx-auto w-full max-w-[1440px]">
         {!project && <ProjectSelection projects={projects} onOpen={setSelectedProject} onCreate={() => setCreateProjectOpen(true)} />}
         {project && !chapter && (
-          <ProjectWorkspace project={project} onBack={() => setSelectedProject(null)} onOpenChapter={setSelectedChapter} />
+          <ProjectWorkspace
+            project={project}
+            onBack={() => setSelectedProject(null)}
+            onOpenChapter={setSelectedChapter}
+            onWorkflow={showFeedback}
+            updateProject={(updater) => updateProject(project.id, updater)}
+            onDeleteProject={() => deleteProject(project.id)}
+          />
         )}
         {project && chapter && (
-          <ChapterWorkspace project={project} chapter={chapter} onBack={() => setSelectedChapter(null)} />
+          <ChapterWorkspace
+            project={project}
+            chapter={chapter}
+            onBack={() => setSelectedChapter(null)}
+            onChapterChange={(updater) =>
+              updateProject(project.id, (p) => ({
+                ...p,
+                chapters: p.chapters.map((c) => (c.id === chapter.id ? updater(c) : c)),
+              }))
+            }
+          />
         )}
-        {createProjectOpen && <CreateProjectModal onClose={() => setCreateProjectOpen(false)} />}
+        {createProjectOpen && (
+          <CreateProjectModal
+            onClose={() => setCreateProjectOpen(false)}
+            onCreate={(newProject) => {
+              addProject(newProject);
+              setCreateProjectOpen(false);
+            }}
+          />
+        )}
+        {feedback && (
+          <div className="fixed bottom-6 right-6 z-[70] max-w-[420px] rounded-[16px] border border-[var(--neon-border)] bg-[var(--panel)] px-4 py-3 text-[14px] font-bold text-[var(--text-primary)] shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
+            {feedback}
+          </div>
+        )}
       </div>
     </main>
   );

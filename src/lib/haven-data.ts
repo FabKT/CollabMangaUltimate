@@ -8,8 +8,6 @@ import cover6 from "@/assets/haven/cover-6.jpg";
 import cover7 from "@/assets/haven/cover-7.jpg";
 import cover8 from "@/assets/haven/cover-8.jpg";
 import hero1 from "@/assets/haven/hero-1.jpg";
-import hero2 from "@/assets/haven/hero-2.jpg";
-import hero3 from "@/assets/haven/hero-3.jpg";
 
 export type Demographic = "Shonen" | "Seinen" | "Shojo" | "Josei";
 
@@ -29,41 +27,22 @@ export type CatalogManga = {
 
 const HAVEN_COVERS = [cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8];
 
-export const HERO_SLIDES = [
-  {
-    id: "h1",
-    title: "Verdant Blade",
-    rank: 1,
-    image: hero1,
-    demographic: "Shonen" as Demographic,
-    status: "Ongoing",
-    genres: ["Action", "Fantasy", "Supernatural"],
-    synopsis:
-      "A wandering swordsman channels the last breath of a fallen forest spirit — every strike costs him a memory he can never reclaim.",
-  },
-  {
-    id: "h2",
-    title: "Neon Requiem",
-    rank: 2,
-    image: hero2,
-    demographic: "Seinen" as Demographic,
-    status: "Recently updated",
-    genres: ["Sci-fi", "Mystery", "Drama"],
-    synopsis:
-      "In a rain-soaked megacity, a debt collector for memories hunts the ghost of the man he used to be.",
-  },
-  {
-    id: "h3",
-    title: "Under the Emerald Moon",
-    rank: 3,
-    image: hero3,
-    demographic: "Shojo" as Demographic,
-    status: "New",
-    genres: ["Fantasy", "Romance", "Adventure"],
-    synopsis:
-      "Two strangers meet only on the nights the moon burns green — and only for as long as it stays in the sky.",
-  },
-];
+export type HeroSlide = {
+  id: string;
+  title: string;
+  rank: number;
+  image: string;
+  demographic: Demographic;
+  status: string;
+  genres: string[];
+  synopsis: string;
+};
+
+/** Vide en production : le héros s'alimente quand des mangas sont publiés. */
+export const HERO_SLIDES: HeroSlide[] = [];
+
+/** Image de fond du héros générique (aucun manga publié pour l'instant). */
+export const HERO_FALLBACK_IMAGE = hero1;
 
 export const DEMOGRAPHICS: Demographic[] = [
   "Shonen",

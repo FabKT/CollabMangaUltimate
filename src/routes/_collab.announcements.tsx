@@ -983,12 +983,13 @@ function AnnouncementsPage() {
       });
   }, []);
 
+  // Production : uniquement les annonces réelles (Supabase), plus aucun exemple.
   const data: Announcement[] =
     filters.target === "project"
-      ? [...dbUsers, ...USERS]
+      ? [...dbUsers]
       : filters.target === "collaborator"
-        ? [...dbProjects, ...PROJECTS]
-        : [...dbProjects, ...dbUsers, ...PROJECTS, ...USERS];
+        ? [...dbProjects]
+        : [...dbProjects, ...dbUsers];
 
   const filtered = useMemo(() => {
     return data.filter((a) => {

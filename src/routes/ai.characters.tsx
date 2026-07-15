@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { PageHeader, Panel, Input, Textarea, SectionTitle } from "@/components/cma/Layout";
+import { PageHeader, Panel, Input, SectionTitle } from "@/components/cma/Layout";
 import {
   createBlankCharacter,
   createId,
@@ -79,6 +79,7 @@ async function readCharacterImage(file: File, view: string): Promise<MangaCharac
     imageDataUrl: image.dataUrl,
     mimeType: image.mimeType,
     notes: "",
+    enabled: true,
   };
 }
 
@@ -255,6 +256,7 @@ function CharacterStudio() {
       updateActiveCharacter({
         cardImageDataUrl: cardUrl,
         cardImageGeneratedAt: new Date().toISOString(),
+        cardEnabled: true,
       });
     } catch (error) {
       setCardError(error instanceof Error ? error.message : "Échec de la génération de carte.");
@@ -312,7 +314,7 @@ function CharacterStudio() {
         }}
       />
 
-      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(230px,0.75fr)_minmax(0,1.3fr)_minmax(300px,0.95fr)]">
+      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(230px,0.75fr)_minmax(0,3.2fr)]">
         <Panel className="min-w-0" padding={16}>
           <SectionTitle
             right={
@@ -362,102 +364,60 @@ function CharacterStudio() {
         </Panel>
 
         <Panel className="min-w-0">
-          <div
-            onDragOver={(event: DragEvent<HTMLDivElement>) => event.preventDefault()}
-            onDrop={(event: DragEvent<HTMLDivElement>) => {
-              event.preventDefault();
-              void importFiles(event.dataTransfer.files);
-            }}
-          >
-            <SectionTitle
-              right={
-                <select
-                  value={selectedView}
-                  onChange={(event) => setSelectedView(event.target.value)}
-                  className="cma-input h-9 max-w-[190px] py-0 text-[12px] font-semibold"
-                >
-                  {viewOptions.map((view) => (
-                    <option key={view} value={view}>
-                      {view}
-                    </option>
-                  ))}
-                </select>
-              }
-            >
-              Reference images
-            </SectionTitle>
-
-            <div
-              className="mb-4 rounded-[16px] border p-4"
-              style={{ background: "var(--bg-elevated)", borderColor: "var(--border-default)" }}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>
-                    Carte de personnage
-                  </div>
-                  <div className="mt-0.5 text-[12px]" style={{ color: "var(--text-secondary)" }}>
-                    Consolide la bibliothèque en une seule image (profils + expressions), utilisée
-                    comme référence unique dans la planche pour rester dans le budget de 16 images.
-                  </div>
+          {!activeCharacter ? (
+            <EmptyState icon={UserSquare2} title="Select or create a character" />
+          ) : (
+            <>
+              {/* Nom du personnage — seul champ de détails conservé */}
+              <div className="mb-6 flex items-end gap-3">
+                <div className="min-w-0 flex-1">
+                  <Field label="Nom du personnage">
+                    <Input
+                      value={activeCharacter.name}
+                      onChange={(event) => updateActiveCharacter({ name: event.target.value })}
+                      placeholder="Character name"
+                    />
+                  </Field>
                 </div>
                 <button
-                  className="cma-btn-secondary shrink-0"
+                  className="cma-icon-btn mb-0.5 shrink-0"
+                  onClick={deleteActiveCharacter}
                   type="button"
-                  onClick={generateCard}
-                  disabled={
-                    cardLoading ||
-                    !activeCharacter ||
-                    (activeCharacter.images ?? []).length === 0
-                  }
+                  aria-label="Delete character"
                 >
-                  {cardLoading
-                    ? "Génération..."
-                    : activeCharacter?.cardImageDataUrl
-                      ? "Régénérer la carte"
-                      : "Générer la carte"}
+                  <Trash2 size={15} />
                 </button>
               </div>
 
-              {cardError && (
-                <div className="mt-3 rounded-[10px] border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-semibold text-danger">
-                  {cardError}
-                </div>
-              )}
+              <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
+                {/* SECTION GAUCHE — images du personnage */}
+                <div
+                  className="min-w-0"
+                  onDragOver={(event: DragEvent<HTMLDivElement>) => event.preventDefault()}
+                  onDrop={(event: DragEvent<HTMLDivElement>) => {
+                    event.preventDefault();
+                    void importFiles(event.dataTransfer.files);
+                  }}
+                >
+                  <SectionTitle
+                    right={
+                      <select
+                        value={selectedView}
+                        onChange={(event) => setSelectedView(event.target.value)}
+                        className="cma-input h-9 max-w-[190px] py-0 text-[12px] font-semibold"
+                      >
+                        {viewOptions.map((view) => (
+                          <option key={view} value={view}>
+                            {view}
+                          </option>
+                        ))}
+                      </select>
+                    }
+                  >
+                    Images du personnage
+                  </SectionTitle>
 
-              {activeCharacter?.cardImageDataUrl && (
-                <div className="mt-3">
-                  <div className="overflow-hidden rounded-[12px] bg-black/20">
-                    <img
-                      src={activeCharacter.cardImageDataUrl}
-                      alt="Carte de personnage"
-                      className="w-full object-contain"
-                    />
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                      {activeCharacter.cardImageGeneratedAt
-                        ? `Générée le ${new Date(activeCharacter.cardImageGeneratedAt).toLocaleString()}`
-                        : "Carte active"}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-[12px] font-semibold text-danger"
-                      onClick={() =>
-                        updateActiveCharacter({
-                          cardImageDataUrl: undefined,
-                          cardImageGeneratedAt: undefined,
-                        })
-                      }
-                    >
-                      Supprimer la carte
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
+                  <button
               onClick={() => inputRef.current?.click()}
               disabled={isImporting}
               className="mb-4 grid min-h-[118px] w-full place-items-center rounded-[16px] border border-dashed px-4 text-center transition disabled:cursor-not-allowed disabled:opacity-60"
@@ -476,176 +436,163 @@ function CharacterStudio() {
               </span>
             </button>
 
-            {!activeCharacter ? (
-              <EmptyState icon={ImageIcon} title="Create a character to add images" />
-            ) : (activeCharacter.images ?? []).length === 0 ? (
-              <EmptyState icon={ImageIcon} title="No reference image yet" />
-            ) : (
-              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-                {(activeCharacter.images ?? []).map((image) => (
+                  {(activeCharacter.images ?? []).length === 0 ? (
+                    <EmptyState icon={ImageIcon} title="No reference image yet" />
+                  ) : (
+                    <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                      {(activeCharacter.images ?? []).map((image) => (
+                        <div
+                          key={image.id}
+                          className="min-w-0 rounded-[16px] border p-3 transition-opacity"
+                          style={{
+                            background: "var(--bg-elevated)",
+                            borderColor:
+                              image.enabled === false
+                                ? "var(--border-default)"
+                                : "var(--neon-soft-border)",
+                            opacity: image.enabled === false ? 0.55 : 1,
+                          }}
+                        >
+                          <div className="aspect-[3/4] overflow-hidden rounded-[12px] bg-black/20">
+                            <img
+                              src={image.imageDataUrl}
+                              alt={image.name}
+                              className="h-full w-full object-contain"
+                            />
+                          </div>
+                          <div className="mt-3 grid gap-2">
+                            <ToggleRow
+                              label={image.enabled === false ? "Désactivée" : "Utilisée"}
+                              checked={image.enabled !== false}
+                              onChange={(checked) => updateImage(image.id, { enabled: checked })}
+                            />
+                            <Input
+                              value={image.name}
+                              onChange={(event) =>
+                                updateImage(image.id, { name: event.target.value })
+                              }
+                              aria-label="Image name"
+                            />
+                            <select
+                              value={image.view}
+                              onChange={(event) =>
+                                updateImage(image.id, { view: event.target.value })
+                              }
+                              className="cma-input h-10 py-0 text-[13px] font-semibold"
+                            >
+                              {viewOptions.map((view) => (
+                                <option key={view} value={view}>
+                                  {view}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="cma-btn-secondary w-full justify-center"
+                              onClick={() => deleteImage(image.id)}
+                              type="button"
+                            >
+                              <Trash2 size={15} /> Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION DROITE — génération de la carte */}
+                <div className="min-w-0">
+                  <SectionTitle
+                    right={
+                      activeCharacter.cardImageDataUrl ? (
+                        <ToggleRow
+                          label={
+                            activeCharacter.cardEnabled !== false
+                              ? "Carte utilisée"
+                              : "Carte désactivée"
+                          }
+                          checked={activeCharacter.cardEnabled !== false}
+                          onChange={(checked) => updateActiveCharacter({ cardEnabled: checked })}
+                        />
+                      ) : null
+                    }
+                  >
+                    Carte de personnage
+                  </SectionTitle>
+
                   <div
-                    key={image.id}
-                    className="min-w-0 rounded-[16px] border p-3"
+                    className="rounded-[16px] border p-4"
                     style={{
                       background: "var(--bg-elevated)",
                       borderColor: "var(--border-default)",
                     }}
                   >
-                    <div className="aspect-[3/4] overflow-hidden rounded-[12px] bg-black/20">
-                      <img
-                        src={image.imageDataUrl}
-                        alt={image.name}
-                        className="h-full w-full object-contain"
-                      />
+                    <div className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                      Consolide la bibliothèque en une seule image (profils + expressions), utilisée
+                      comme référence unique dans la planche pour rester dans le budget de 16
+                      images. Si la carte est désactivée, ce sont les images actives de la
+                      bibliothèque qui sont envoyées.
                     </div>
-                    <div className="mt-3 grid gap-2">
-                      <Input
-                        value={image.name}
-                        onChange={(event) => updateImage(image.id, { name: event.target.value })}
-                        aria-label="Image name"
-                      />
-                      <select
-                        value={image.view}
-                        onChange={(event) => updateImage(image.id, { view: event.target.value })}
-                        className="cma-input h-10 py-0 text-[13px] font-semibold"
-                      >
-                        {viewOptions.map((view) => (
-                          <option key={view} value={view}>
-                            {view}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        className="cma-btn-secondary w-full justify-center"
-                        onClick={() => deleteImage(image.id)}
-                        type="button"
-                      >
-                        <Trash2 size={15} /> Remove
-                      </button>
-                    </div>
+
+                    <button
+                      className="cma-btn-secondary mt-3 w-full justify-center"
+                      type="button"
+                      onClick={generateCard}
+                      disabled={cardLoading || (activeCharacter.images ?? []).length === 0}
+                    >
+                      {cardLoading
+                        ? "Génération..."
+                        : activeCharacter.cardImageDataUrl
+                          ? "Régénérer la carte"
+                          : "Générer la carte"}
+                    </button>
+
+                    {cardError && (
+                      <div className="mt-3 rounded-[10px] border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-semibold text-danger">
+                        {cardError}
+                      </div>
+                    )}
+
+                    {activeCharacter.cardImageDataUrl && (
+                      <div className="mt-3">
+                        <div
+                          className="overflow-hidden rounded-[12px] bg-black/20 transition-opacity"
+                          style={{
+                            opacity: activeCharacter.cardEnabled === false ? 0.55 : 1,
+                          }}
+                        >
+                          <img
+                            src={activeCharacter.cardImageDataUrl}
+                            alt="Carte de personnage"
+                            className="w-full object-contain"
+                          />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                            {activeCharacter.cardImageGeneratedAt
+                              ? `Générée le ${new Date(activeCharacter.cardImageGeneratedAt).toLocaleString()}`
+                              : "Carte disponible"}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-[12px] font-semibold text-danger"
+                            onClick={() =>
+                              updateActiveCharacter({
+                                cardImageDataUrl: undefined,
+                                cardImageGeneratedAt: undefined,
+                                cardEnabled: true,
+                              })
+                            }
+                          >
+                            Supprimer la carte
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                </div>
               </div>
-            )}
-          </div>
-        </Panel>
-
-        <Panel className="min-w-0">
-          <SectionTitle
-            right={
-              activeCharacter ? (
-                <button
-                  className="cma-icon-btn"
-                  onClick={deleteActiveCharacter}
-                  type="button"
-                  aria-label="Delete character"
-                >
-                  <Trash2 size={15} />
-                </button>
-              ) : null
-            }
-          >
-            Character details
-          </SectionTitle>
-
-          {!activeCharacter ? (
-            <EmptyState icon={UserSquare2} title="Select or create a character" />
-          ) : (
-            <div className="flex flex-col gap-4">
-              <Field label="Name">
-                <Input
-                  value={activeCharacter.name}
-                  onChange={(event) => updateActiveCharacter({ name: event.target.value })}
-                  placeholder="Character name"
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Age">
-                  <Input
-                    value={activeCharacter.age ?? ""}
-                    onChange={(event) => updateActiveCharacter({ age: event.target.value })}
-                    placeholder="18"
-                  />
-                </Field>
-                <Field label="Height">
-                  <Input
-                    value={activeCharacter.height ?? ""}
-                    onChange={(event) => updateActiveCharacter({ height: event.target.value })}
-                    placeholder="172 cm"
-                  />
-                </Field>
-              </div>
-
-              <Field label="Narrative role">
-                <Input
-                  value={activeCharacter.storyRole}
-                  onChange={(event) => updateActiveCharacter({ storyRole: event.target.value })}
-                  placeholder="Hero, rival, mentor..."
-                />
-              </Field>
-
-              <Field label="Identity lock">
-                <Textarea
-                  value={activeCharacter.identityLock}
-                  onChange={(event) => updateActiveCharacter({ identityLock: event.target.value })}
-                  placeholder="Face, hair, silhouette, outfit details..."
-                />
-              </Field>
-
-              <Field label="Default expression">
-                <Textarea
-                  value={activeCharacter.defaultExpression}
-                  onChange={(event) =>
-                    updateActiveCharacter({ defaultExpression: event.target.value })
-                  }
-                  placeholder="Usual emotion, gaze, posture..."
-                  style={{ minHeight: 86 }}
-                />
-              </Field>
-
-              <Field label="Body proportions">
-                <Input
-                  value={activeCharacter.bodyProportions ?? ""}
-                  onChange={(event) =>
-                    updateActiveCharacter({ bodyProportions: event.target.value })
-                  }
-                  placeholder="Lean, athletic, tall..."
-                />
-              </Field>
-
-              <Field label="Outfit">
-                <Textarea
-                  value={activeCharacter.outfit ?? ""}
-                  onChange={(event) => updateActiveCharacter({ outfit: event.target.value })}
-                  placeholder="Primary outfit..."
-                />
-              </Field>
-
-              <Field label="Accessories">
-                <Input
-                  value={activeCharacter.accessories ?? ""}
-                  onChange={(event) => updateActiveCharacter({ accessories: event.target.value })}
-                  placeholder="Earring, scarf..."
-                />
-              </Field>
-
-              <Field label="Color notes">
-                <Input
-                  value={activeCharacter.colorNotes ?? ""}
-                  onChange={(event) => updateActiveCharacter({ colorNotes: event.target.value })}
-                  placeholder="Black hair, jade eyes..."
-                />
-              </Field>
-
-              <Field label="Personality">
-                <Textarea
-                  value={activeCharacter.personality ?? ""}
-                  onChange={(event) => updateActiveCharacter({ personality: event.target.value })}
-                  placeholder="Temperament, habits, voice..."
-                />
-              </Field>
-            </div>
+            </>
           )}
         </Panel>
       </div>
@@ -679,6 +626,48 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <div className="cma-label mb-2">{label}</div>
       {children}
     </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex items-center gap-2"
+    >
+      <span
+        className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors"
+        style={{
+          background: checked ? "var(--neon-soft)" : "var(--bg-stage)",
+          borderColor: checked ? "var(--neon-soft-border)" : "var(--border-default)",
+        }}
+      >
+        <span
+          className="absolute h-3.5 w-3.5 rounded-full transition-all"
+          style={{
+            left: checked ? "calc(100% - 18px)" : "3px",
+            background: checked ? "var(--neon)" : "var(--text-muted)",
+          }}
+        />
+      </span>
+      <span
+        className="text-[12px] font-semibold"
+        style={{ color: checked ? "var(--text-primary)" : "var(--text-muted)" }}
+      >
+        {label}
+      </span>
+    </button>
   );
 }
 

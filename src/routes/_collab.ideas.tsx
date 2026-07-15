@@ -293,7 +293,7 @@ function PropositionsPage() {
   const [sort, setSort] = useState("Most recent");
   const [view, setView] = useState<"cards"|"list"|"moodboard">("cards");
 
-  const [saved, setSaved] = useState<Set<string>>(new Set(["p3"]));
+  const [saved, setSaved] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Prop | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -345,7 +345,8 @@ function PropositionsPage() {
   }, [category,genre,tone,usage,complexity,format,visibility,status,search]);
 
   const results = useMemo(() => {
-    return [...dbProps, ...seedProps].filter(p => {
+    // Production : uniquement les idées réelles (Supabase), plus d'exemples.
+    return [...dbProps].filter(p => {
       if (category!=="All" && p.category!==category) return false;
       if (genre!=="All" && !p.genres.includes(genre)) return false;
       if (tone!=="All" && p.tone!==tone) return false;
@@ -435,7 +436,7 @@ function PropositionsPage() {
               <div>
                 <h2 className="font-display text-[20px] leading-[28px] font-bold text-[var(--text)]">Idées créatives</h2>
                 <p className="text-[13px] leading-[20px] text-[var(--text-muted)] mt-1">
-                  Showing {results.length} of {seedProps.length} ideas
+                  Showing {results.length} of {dbProps.length} ideas
                 </p>
               </div>
               <div className="inline-flex items-center gap-1 bg-[var(--panel)] border border-[var(--border)] rounded-[14px] p-1">

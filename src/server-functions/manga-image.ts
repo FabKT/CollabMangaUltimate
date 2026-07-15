@@ -131,6 +131,7 @@ export type MangaBackendStatusResult = {
     referenceImagesEnabled?: boolean;
     referenceImageAspectGuard?: boolean;
     generationEndpoint?: string;
+    error?: string;
   };
   error?: string;
   checkedAt: string;

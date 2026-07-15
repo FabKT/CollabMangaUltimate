@@ -269,6 +269,18 @@ export function subscribeMessages(conversationId: string, onInsert: (m: DbMessag
   };
 }
 
+/** Liste des profils inscrits (page Discover). */
+export async function listProfiles(limit = 60): Promise<DbProfile[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(PROFILE_COLS)
+    .order("username", { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DbProfile[];
+}
+
 /** Recherche de profils par pseudo (pour démarrer une conversation). */
 export async function searchProfiles(query: string): Promise<DbProfile[]> {
   if (!supabase) return [];
