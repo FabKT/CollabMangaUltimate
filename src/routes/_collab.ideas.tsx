@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect, type ReactNode } from "react";
 import { addIdea, listIdeas } from "@/lib/db";
+import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
   Search, X, Plus, Bookmark, MessageCircle, Copy,
   Sparkles, LayoutGrid, List, Images, ChevronDown, Filter, Check,
@@ -541,23 +542,29 @@ function PropCard({ p, saved, onSave, onOpen }: {
         <p className="mt-2 text-[14px] leading-[22px] text-[var(--text-secondary)] line-clamp-3">{p.description}</p>
       </div>
 
-      <div className="flex items-center justify-between gap-3 pt-3 border-t border-[var(--border)]">
+      <div className="pt-3 border-t border-[var(--border)]">
+        {/* Ligne 1 : auteur */}
         <div className="min-w-0 flex items-center gap-3">
           <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display text-[12px] font-bold text-[var(--neon)]">
             {p.author.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Profil</div>
-          <div className="text-[13px] font-semibold text-[var(--text-secondary)] truncate">
-            {p.author}{p.project && <span className="text-[var(--text-muted)]"> · {p.project}</span>}
+            <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Profil</div>
+            <div className="text-[13px] font-semibold text-[var(--text-secondary)] truncate">
+              {p.author}{p.project && <span className="text-[var(--text-muted)]"> · {p.project}</span>}
+            </div>
           </div>
         </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--text-muted)]">
-            <MessageCircle className="h-3.5 w-3.5"/>{p.comments}
-          </span>
+        {/* Ligne 2 : actions */}
+        <div className="mt-3 flex items-center gap-2">
           <PrimaryBtn className="!h-9 !px-3 !text-[13px]" onClick={onOpen}>View Details</PrimaryBtn>
+          <button
+            type="button"
+            onClick={onOpen}
+            className="inline-flex h-9 items-center gap-1.5 rounded-[12px] border border-[var(--border)] bg-[var(--input-bg)] px-3 text-[12px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--neon-border)] hover:text-[var(--text)]"
+          >
+            <MessageCircle className="h-3.5 w-3.5"/>{p.comments} commentaire{p.comments > 1 ? "s" : ""}
+          </button>
         </div>
       </div>
     </article>
@@ -836,13 +843,8 @@ function PropModal({ p, saved, onSave, onClose }: {
               <p className="mt-3 text-[14px] leading-[22px] text-[var(--text-secondary)]">{p.description}</p>
             </div>
           ) : (
-            <div className="mt-5 space-y-3">
-              {["Cette idée peut fonctionner comme point de départ.", "Le concept est clair, il faudrait préciser l'enjeu principal."].map((comment, index) => (
-                <div key={comment} className="rounded-[14px] bg-[var(--input-bg)] border border-[var(--border)] p-4">
-                  <div className="text-[12px] font-bold">Utilisateur {index + 1}</div>
-                  <p className="mt-1 text-[13px] leading-[20px] text-[var(--text-secondary)]">{comment}</p>
-                </div>
-              ))}
+            <div className="mt-5">
+              <CommentsPanel entityType="idea" entityId={p.id} />
             </div>
           )}
         </aside>

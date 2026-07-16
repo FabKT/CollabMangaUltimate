@@ -20,25 +20,90 @@ type LoaderData = {
 };
 
 export const Route = createFileRoute("/_collab/manga/$id/chapter/$chapterId")({
-  loader: ({ params }): LoaderData => {
-    const data = getChapter(params.id, params.chapterId);
-    if (!data) throw notFound();
-    return data as LoaderData;
+  loader: ({ params }) => {
+    // Les chapitres des projets Studio vivent en IndexedDB (client) : pas de notFound ici.
+    return { data: (getChapter(params.id, params.chapterId) ?? null) as LoaderData | null, id: params.id, chapterId: params.chapterId };
   },
   head: ({ loaderData }) => ({
-    meta: loaderData
+    meta: loaderData?.data
       ? [
-          { title: `${loaderData.chapter.title} — ${loaderData.manga.title}` },
-          { name: "description", content: `Read ${loaderData.chapter.title} of ${loaderData.manga.title} on CollabManga.` },
-          { property: "og:title", content: `${loaderData.chapter.title} — ${loaderData.manga.title}` },
-          { property: "og:image", content: loaderData.manga.cover },
-          { name: "twitter:image", content: loaderData.manga.cover },
+          { title: `${loaderData.data.chapter.title} — ${loaderData.data.manga.title}` },
+          { name: "description", content: `Read ${loaderData.data.chapter.title} of ${loaderData.data.manga.title} on CollabManga.` },
         ]
-      : [{ title: "Chapter not found — CollabManga" }, { name: "robots", content: "noindex" }],
+      : [{ title: "Chapitre — CollabManga" }],
   }),
   notFoundComponent: ChapterNotFound,
-  component: ChapterReader,
+  component: ChapterSwitch,
 });
+
+type StudioChapterView = {
+  projectTitle: string;
+  projectId: string;
+  chapterTitle: string;
+  chapterNumber: number;
+  images: string[];
+};
+
+function ChapterSwitch() {
+  const { data, id, chapterId } = Route.useLoaderData() as { data: LoaderData | null; id: string; chapterId: string };
+  const [studio, setStudio] = useState<StudioChapterView | null | "loading">(data ? null : "loading");
+
+  useEffect(() => {
+    if (data) return;
+    void import("@/lib/studio-projects").then(({ loadStudioProjects }) =>
+      loadStudioProjects<{
+        id: string;
+        title: string;
+        catalogVisible?: boolean;
+        chapters: { id: string; number: number; title: string; status: string; pages: { candidates: { id: string; image?: string }[]; validatedCandidateId: string | null }[] }[];
+      }>().then((rows) => {
+        const project = rows.find((p) => p.id === id && p.catalogVisible);
+        const chapter = project?.chapters.find((c) => c.id === chapterId && c.status === "Published");
+        if (!project || !chapter) {
+          setStudio(null);
+          return;
+        }
+        const images = chapter.pages
+          .map((p) => p.candidates.find((cd) => cd.id === p.validatedCandidateId)?.image)
+          .filter((img): img is string => Boolean(img));
+        setStudio({ projectTitle: project.title, projectId: project.id, chapterTitle: chapter.title, chapterNumber: chapter.number, images });
+      }),
+    ).catch(() => setStudio(null));
+  }, [data, id, chapterId]);
+
+  if (data) return <ChapterReader />;
+  if (studio === "loading") {
+    return <div className="mx-auto max-w-[600px] px-6 py-16 text-center text-[14px] text-[color:var(--color-text-secondary)]">Chargement…</div>;
+  }
+  if (!studio) return <ChapterNotFound />;
+  return <StudioChapterReader view={studio} />;
+}
+
+function StudioChapterReader({ view }: { view: StudioChapterView }) {
+  return (
+    <div className="mx-auto w-full max-w-[900px] px-4 py-6 md:px-6 md:py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <Link to="/manga/$id" params={{ id: view.projectId }} className="btn-ghost -ml-3 h-10">
+          <ArrowLeft className="h-4 w-4" /> {view.projectTitle}
+        </Link>
+        <span className="text-[13px] font-bold text-[color:var(--color-text-secondary)]">
+          Ch. {view.chapterNumber} — {view.chapterTitle}
+        </span>
+      </div>
+      {view.images.length === 0 ? (
+        <div className="rounded-2xl border p-10 text-center text-[14px] text-[color:var(--color-text-secondary)]" style={{ borderColor: "var(--color-border-default)" }}>
+          Aucune page validée avec image dans ce chapitre pour l'instant.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {view.images.map((src, i) => (
+            <img key={i} src={src} alt={`Page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--color-border-default)" }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ChapterNotFound() {
   return (
@@ -59,7 +124,8 @@ function ChapterNotFound() {
 type Mode = "vertical" | "pagination";
 
 function ChapterReader() {
-  const { manga, chapter, prev, next } = Route.useLoaderData() as LoaderData;
+  const loaderData = Route.useLoaderData() as { data: LoaderData | null };
+  const { manga, chapter, prev, next } = loaderData.data as LoaderData;
   const [mode, setMode] = useState<Mode>("vertical");
   const [page, setPage] = useState(0);
   const [saved, setSaved] = useState(false);

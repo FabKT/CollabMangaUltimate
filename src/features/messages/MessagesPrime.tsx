@@ -9,6 +9,10 @@ import {
   subscribeMessages,
   type DbProfile,
 } from "@/lib/db";
+import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
+import { getSnapshot } from "@/features/sponsorships/store";
+import { SponsorshipModal } from "@/features/sponsorships/SponsorshipModal";
+import { appendThreadMessage, listThreadMessages, threadKey } from "@/lib/local-threads";
 import {
   Home, Hash, Plus, Compass, Search, Users, FolderKanban, Handshake,
   Send, Paperclip, Image as ImageIcon, Smile, MoreVertical, FileText,
@@ -95,10 +99,9 @@ type UiMessage = {
   mention?: boolean;
 };
 
-// Production : les onglets Projets / Parrainages se rempliront quand les
-// serveurs liés seront branchés ; aucune conversation fictive.
-const PROJECTS: { id: string; name: string; label: string; preview: string; time: string; unread: number }[] = [];
-const SPONSORS: { id: string; name: string; chip: string; preview: string; time: string; unread: number }[] = [];
+// Conversations liées : projets (Studio) et parrainages (hub) — types dynamiques.
+type ProjectConv = { id: string; name: string; label: string; preview: string; time: string; unread: number };
+type SponsorConv = { id: string; name: string; chip: string; preview: string; time: string; unread: number };
 
 function timeLabel(iso: string) {
   const d = new Date(iso);
@@ -175,6 +178,23 @@ function MessagesPage() {
   const [uid, setUid] = useState<string | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [messages, setMessages] = useState<UiMessage[]>([]);
+  // Conversations liées : projets Studio + parrainages du hub.
+  const [projectConvs, setProjectConvs] = useState<ProjectConv[]>([]);
+  const [sponsorConvs, setSponsorConvs] = useState<SponsorConv[]>([]);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [sponsorModalOpen, setSponsorModalOpen] = useState(false);
+
+  const refreshLinked = () => {
+    void loadStudioProjects<{ id: string; title: string }>()
+      .then((rows) =>
+        setProjectConvs(rows.map((p) => ({ id: p.id, name: p.title, label: "# discussion", preview: "Espace de discussion du projet", time: "", unread: 0 }))),
+      )
+      .catch(() => setProjectConvs([]));
+    setSponsorConvs(
+      getSnapshot().map((s) => ({ id: s.id, name: s.name, chip: s.creator, preview: s.project, time: "", unread: 0 })),
+    );
+  };
+  useEffect(refreshLinked, []);
 
   const refreshConversations = () => {
     void listConversations()
@@ -212,6 +232,20 @@ function MessagesPage() {
 
   // Chargement + abonnement Realtime du fil actif.
   useEffect(() => {
+    if (activeConv && (baseTab === "projets" || baseTab === "parrainages")) {
+      // Fils locaux liés à un projet / parrainage.
+      const key = threadKey(baseTab === "projets" ? "project" : "sponsorship", activeConv);
+      setMessages(
+        listThreadMessages(key).map((m) => ({
+          id: m.id,
+          user: m.author,
+          time: timeLabel(m.createdAt),
+          text: m.content,
+          self: m.author === "Toi",
+        })),
+      );
+      return;
+    }
     if (!activeConv || baseTab !== "amis") {
       setMessages([]);
       return;
@@ -235,6 +269,12 @@ function MessagesPage() {
 
   const handleSend = (text: string) => {
     if (!activeConv || !text.trim()) return;
+    if (baseTab === "projets" || baseTab === "parrainages") {
+      const key = threadKey(baseTab === "projets" ? "project" : "sponsorship", activeConv);
+      const m = appendThreadMessage(key, "Toi", text.trim());
+      setMessages((current) => [...current, { id: m.id, user: "Toi", time: timeLabel(m.createdAt), text: m.content, self: true }]);
+      return;
+    }
     void sendMessage(activeConv, text.trim())
       .then((m) => {
         setMessages((current) => (current.some((x) => x.id === m.id) ? current : [...current, toUi(m)]));
@@ -272,8 +312,15 @@ function MessagesPage() {
             activeChannel={activeChannel}
             onConv={(id) => { setActiveConv(id); }}
             onChannel={() => {}}
-            onNewMessage={() => setNewMessageOpen(true)}
+            onNewMessage={() => {
+              // Le « + » dépend de l'onglet actif : ami → recherche, projet → création, parrainage → flux hub.
+              if (baseTab === "projets") setCreateProjectOpen(true);
+              else if (baseTab === "parrainages") setSponsorModalOpen(true);
+              else setNewMessageOpen(true);
+            }}
             friends={friends}
+            projects={projectConvs}
+            sponsors={sponsorConvs}
           />
 
           <ChatArea
@@ -284,6 +331,8 @@ function MessagesPage() {
             activeChannel={activeChannel}
             onOpenDetails={() => setDetailsOpen(true)}
             friends={friends}
+            projects={projectConvs}
+            sponsors={sponsorConvs}
             messages={messages}
             onSend={handleSend}
           />
@@ -299,8 +348,92 @@ function MessagesPage() {
           }}
         />
         <DetailsModal open={detailsOpen} onOpenChange={setDetailsOpen} name={activeFriend?.name} />
+        {createProjectOpen && (
+          <QuickProjectModal
+            onClose={() => setCreateProjectOpen(false)}
+            onCreated={(id) => {
+              setCreateProjectOpen(false);
+              refreshLinked();
+              setBaseTab("projets");
+              setActiveConv(id);
+            }}
+          />
+        )}
+        <SponsorshipModal
+          open={sponsorModalOpen}
+          onClose={() => {
+            setSponsorModalOpen(false);
+            refreshLinked();
+          }}
+        />
       </div>
     </TooltipProvider>
+  );
+}
+
+/** Création rapide d'un projet depuis l'onglet Projets de la messagerie. */
+function QuickProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const [name, setName] = useState("");
+  const [synopsis, setSynopsis] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const create = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const existing = await loadStudioProjects<Record<string, unknown>>();
+      const id = `prj-${Date.now()}`;
+      await saveStudioProjects([
+        {
+          id,
+          title: name.trim(),
+          synopsis: synopsis.trim() || "Synopsis à compléter.",
+          status: "Draft",
+          chaptersCount: 0,
+          validatedPages: 0,
+          totalPages: 0,
+          updated: "À l'instant",
+          genres: [],
+          chapters: [],
+          notes: [],
+          sponsorships: [],
+          recruits: [],
+        },
+        ...existing,
+      ]);
+      onCreated(id);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent style={{ background: "var(--cm-elevated)", border: "1px solid var(--cm-border-strong)", color: "var(--cm-text)" }}>
+        <DialogHeader>
+          <DialogTitle style={{ fontFamily: "var(--font-sora)" }}>Créer un projet</DialogTitle>
+          <DialogDescription style={{ color: "var(--cm-text-2)" }}>
+            Le projet sera créé dans le Studio et sa discussion ouverte ici.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 py-2">
+          <div className="grid gap-1.5">
+            <Label>Nom du projet</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du manga" style={{ background: "var(--cm-input)", border: "1px solid var(--cm-border)" }} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Synopsis</Label>
+            <Textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Résumé court…" style={{ background: "var(--cm-input)", border: "1px solid var(--cm-border)" }} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} style={{ color: "var(--cm-text-2)" }}>Annuler</Button>
+          <Button onClick={() => void create()} disabled={saving} style={{ background: "var(--cm-neon)", color: "#04111E" }}>
+            {saving ? "Création…" : "Créer le projet"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -437,8 +570,10 @@ function ConversationMenu(props: {
   onChannel: (c: string) => void;
   onNewMessage: () => void;
   friends: Friend[];
+  projects: ProjectConv[];
+  sponsors: SponsorConv[];
 }) {
-  const { rail, activeServer, baseTab, onBaseTab, activeConv, activeChannel, onConv, onChannel, onNewMessage, friends } = props;
+  const { rail, activeServer, baseTab, onBaseTab, activeConv, activeChannel, onConv, onChannel, onNewMessage, friends, projects, sponsors } = props;
 
   return (
     <nav
@@ -454,6 +589,8 @@ function ConversationMenu(props: {
           onConv={onConv}
           onNewMessage={onNewMessage}
           friends={friends}
+          projects={projects}
+          sponsors={sponsors}
         />
       ) : activeServer ? (
         <ServerMenu
@@ -545,11 +682,11 @@ function PlusBtn({ onClick, label }: { onClick: () => void; label: string }) {
 }
 
 function BaseMenu({
-  baseTab, onBaseTab, activeConv, onConv, onNewMessage, friends,
+  baseTab, onBaseTab, activeConv, onConv, onNewMessage, friends, projects, sponsors,
 }: {
   baseTab: BaseTab; onBaseTab: (t: BaseTab) => void;
   activeConv: string | null; onConv: (id: string) => void; onNewMessage: () => void;
-  friends: Friend[];
+  friends: Friend[]; projects: ProjectConv[]; sponsors: SponsorConv[];
 }) {
   return (
     <>
@@ -592,7 +729,8 @@ function BaseMenu({
             <SectionTitle action={<PlusBtn onClick={onNewMessage} label="Nouvelle discussion projet" />}>
               Discussions projets
             </SectionTitle>
-            {PROJECTS.map((p) => (
+            {projects.length === 0 && (<p className="px-3 py-2 text-[13px]" style={{ color: "var(--cm-muted)" }}>Aucun projet — clique sur + pour en créer un.</p>)}
+            {projects.map((p) => (
               <ConvRow
                 key={p.id}
                 active={activeConv === p.id}
@@ -613,7 +751,8 @@ function BaseMenu({
             <SectionTitle action={<PlusBtn onClick={onNewMessage} label="Nouvelle discussion parrainage" />}>
               Discussions parrainages
             </SectionTitle>
-            {SPONSORS.map((s) => (
+            {sponsors.length === 0 && (<p className="px-3 py-2 text-[13px]" style={{ color: "var(--cm-muted)" }}>Aucun parrainage — clique sur + pour en créer un.</p>)}
+            {sponsors.map((s) => (
               <ConvRow
                 key={s.id}
                 active={activeConv === s.id}
@@ -785,7 +924,7 @@ function ServerMenu({
 /* -------------------- Column 3: Active conversation ---------------------- */
 
 function ChatArea({
-  rail, activeServer, baseTab, activeConv, activeChannel, onOpenDetails, friends, messages, onSend,
+  rail, activeServer, baseTab, activeConv, activeChannel, onOpenDetails, friends, projects, sponsors, messages, onSend,
 }: {
   rail: RailKey;
   activeServer: ServerDef | null;
@@ -794,12 +933,14 @@ function ChatArea({
   activeChannel: string | null;
   onOpenDetails: () => void;
   friends: Friend[];
+  projects: ProjectConv[];
+  sponsors: SponsorConv[];
   messages: UiMessage[];
   onSend: (text: string) => void;
 }) {
   const context = useMemo(
-    () => resolveContext({ rail, activeServer, baseTab, activeConv, activeChannel, friends }),
-    [rail, activeServer, baseTab, activeConv, activeChannel, friends],
+    () => resolveContext({ rail, activeServer, baseTab, activeConv, activeChannel, friends, projects, sponsors }),
+    [rail, activeServer, baseTab, activeConv, activeChannel, friends, projects, sponsors],
   );
 
   return (
@@ -809,7 +950,7 @@ function ChatArea({
       aria-label="Active conversation"
     >
       <TopBar context={context} onOpenDetails={onOpenDetails} />
-      <MessageThread context={context} friends={friends} messages={messages} />
+      <MessageThread context={context} friends={friends} projects={projects} sponsors={sponsors} messages={messages} />
       {context.canCompose && <Composer placeholder={context.placeholder} onSend={onSend} />}
     </section>
   );
@@ -826,13 +967,13 @@ type Ctx = {
 
 function resolveContext(args: {
   rail: RailKey; activeServer: ServerDef | null; baseTab: BaseTab;
-  activeConv: string | null; activeChannel: string | null; friends: Friend[];
+  activeConv: string | null; activeChannel: string | null; friends: Friend[]; projects: ProjectConv[]; sponsors: SponsorConv[];
 }): Ctx {
-  const { rail, activeServer, baseTab, activeConv, activeChannel, friends } = args;
+  const { rail, activeServer, baseTab, activeConv, activeChannel, friends, projects, sponsors } = args;
 
   if (rail === "base") {
     if (activeConv) {
-      const src = baseTab === "amis" ? friends : baseTab === "projets" ? PROJECTS : SPONSORS;
+      const src = baseTab === "amis" ? friends : baseTab === "projets" ? projects : sponsors;
       const item = src.find((x) => x.id === activeConv);
       if (item) {
         const contextLabel =
@@ -950,7 +1091,7 @@ function IconBtn({ children, label, onClick }: { children: ReactNode; label: str
   );
 }
 
-function MessageThread({ context, friends, messages }: { context: Ctx; friends: Friend[]; messages: UiMessage[] }) {
+function MessageThread({ context, friends, projects, sponsors, messages }: { context: Ctx; friends: Friend[]; projects?: ProjectConv[]; sponsors?: SponsorConv[]; messages: UiMessage[] }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
@@ -965,8 +1106,8 @@ function MessageThread({ context, friends, messages }: { context: Ctx; friends: 
       )}
 
       {context.kind === "amis-overview" && <FriendsOverview friends={friends} />}
-      {context.kind === "projets-overview" && <ProjectsOverview />}
-      {context.kind === "parrainages-overview" && <SponsorsOverview />}
+      {context.kind === "projets-overview" && <ProjectsOverview projects={projects} />}
+      {context.kind === "parrainages-overview" && <SponsorsOverview sponsors={sponsors} />}
 
       {context.kind === "conversation" && <MessagesList messages={messages} />}
       <div ref={endRef} />
@@ -992,8 +1133,8 @@ function EmptyState({ title, text }: { title: string; text: string }) {
 }
 
 function FriendsOverview({ friends }: { friends: Friend[] }) {
-  const filters = ["En ligne", "Tous", "En attente", "Ajouter un ami"] as const;
-  const [f, setF] = useState<(typeof filters)[number]>("En ligne");
+  const filters = ["Tous", "En attente", "Ajouter un ami"] as const;
+  const [f, setF] = useState<(typeof filters)[number]>("Tous");
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Filtres amis">
@@ -1033,10 +1174,10 @@ function FriendsOverview({ friends }: { friends: Friend[] }) {
             style={{ borderTop: i === 0 ? "none" : "1px solid var(--cm-divider)" }}
           >
             <div className="flex items-center gap-3">
-              <Avatar label={fr.name} online={fr.online} size={36} />
+              <Avatar label={fr.name} size={36} />
               <div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: "var(--cm-text)" }}>{fr.name}</div>
-                <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{fr.online ? "En ligne" : "Hors ligne"}</div>
+                <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Membre CollabManga</div>
               </div>
             </div>
             <Button size="sm" variant="ghost" style={{ color: "var(--cm-text-2)" }}>Message</Button>
@@ -1047,10 +1188,13 @@ function FriendsOverview({ friends }: { friends: Friend[] }) {
   );
 }
 
-function ProjectsOverview() {
+function ProjectsOverview({ projects = [] }: { projects?: ProjectConv[] }) {
   return (
     <div className="mx-auto grid max-w-3xl gap-3">
-      {PROJECTS.map((p) => (
+      {projects.length === 0 && (
+        <EmptyState title="Aucun projet" text="Crée un projet avec le + de la colonne de gauche : sa discussion apparaîtra ici." />
+      )}
+      {projects.map((p) => (
         <div key={p.id} className="flex items-center justify-between rounded-xl p-4" style={{ background: "var(--cm-elevated)", border: "1px solid var(--cm-border)" }}>
           <div className="flex items-center gap-3">
             <ThumbTile label={p.name} icon={<Palette className="h-4 w-4" />} />
@@ -1066,10 +1210,13 @@ function ProjectsOverview() {
   );
 }
 
-function SponsorsOverview() {
+function SponsorsOverview({ sponsors = [] }: { sponsors?: SponsorConv[] }) {
   return (
     <div className="mx-auto grid max-w-3xl gap-3">
-      {SPONSORS.map((s) => (
+      {sponsors.length === 0 && (
+        <EmptyState title="Aucun parrainage" text="Crée un parrainage avec le + de la colonne de gauche : sa discussion apparaîtra ici." />
+      )}
+      {sponsors.map((s) => (
         <div key={s.id} className="flex items-center justify-between rounded-xl p-4" style={{ background: "var(--cm-elevated)", border: "1px solid var(--cm-border)" }}>
           <div className="flex items-center gap-3">
             <ThumbTile label={s.name} icon={<Megaphone className="h-4 w-4" />} />

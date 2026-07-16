@@ -297,6 +297,152 @@ export function subscribeMessages(conversationId: string, onInsert: (m: DbMessag
   };
 }
 
+/* ---------------- amis (workflow_records + notifications) ---------------- */
+
+export type DbFriendRequest = {
+  id: string;
+  status: string;
+  initiator_id: string;
+  recipient_id: string | null;
+  created_at: string;
+  initiator: DbProfile | null;
+  recipient: DbProfile | null;
+};
+
+/** Envoie une vraie demande d'ami (record + notification au destinataire). */
+export async function sendFriendRequestDb(recipientId: string): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour envoyer une demande d'ami.");
+  if (uid === recipientId) throw new Error("Tu ne peux pas t'ajouter toi-même.");
+  const { data: me } = await sb.from("profiles").select("display_name, username").eq("id", uid).single();
+  const senderName = me?.display_name || me?.username || "Un membre";
+  const { data: record, error } = await sb
+    .from("workflow_records")
+    .insert({
+      kind: "friend_request",
+      status: "pending",
+      initiator_id: uid,
+      recipient_id: recipientId,
+      title: `Demande d'ami de ${senderName}`,
+      entity_type: "Amis",
+      entity_title: senderName,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  await sb.from("notifications").insert({
+    record_id: record.id,
+    recipient_id: recipientId,
+    actor_id: uid,
+    category: "friend",
+    type: "demande_ami",
+    title: `${senderName} t'a envoyé une demande d'ami`,
+    content: "Accepte ou refuse la demande depuis ton profil, onglet Amis.",
+    entity_type: "friend_request",
+    entity_title: senderName,
+  });
+}
+
+/** Demandes d'ami en attente reçues par l'utilisateur connecté. */
+export async function listPendingFriendRequests(): Promise<DbFriendRequest[]> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return [];
+  const { data, error } = await sb
+    .from("workflow_records")
+    .select(`id, status, initiator_id, recipient_id, created_at, initiator:profiles!workflow_records_initiator_id_fkey(${PROFILE_COLS}), recipient:profiles!workflow_records_recipient_id_fkey(${PROFILE_COLS})`)
+    .eq("kind", "friend_request")
+    .eq("status", "pending")
+    .eq("recipient_id", uid);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as DbFriendRequest[];
+}
+
+/** Accepte ou refuse une demande d'ami, et notifie l'initiateur. */
+export async function respondFriendRequestDb(recordId: string, accept: boolean): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi.");
+  const { data: record, error } = await sb
+    .from("workflow_records")
+    .update({ status: accept ? "accepted" : "declined", updated_at: new Date().toISOString() })
+    .eq("id", recordId)
+    .select("initiator_id")
+    .single();
+  if (error) throw new Error(error.message);
+  const { data: me } = await sb.from("profiles").select("display_name, username").eq("id", uid).single();
+  const myName = me?.display_name || me?.username || "Un membre";
+  await sb.from("notifications").insert({
+    record_id: recordId,
+    recipient_id: record.initiator_id,
+    actor_id: uid,
+    category: "friend",
+    type: accept ? "ami_accepte" : "ami_refuse",
+    title: accept ? `${myName} a accepté ta demande d'ami` : `${myName} a refusé ta demande d'ami`,
+    content: accept ? "Vous êtes maintenant amis." : "",
+    entity_type: "friend_request",
+    entity_title: myName,
+  });
+}
+
+/** Liste des amis (demandes acceptées, dans les deux sens). */
+export async function listFriendsDb(): Promise<DbProfile[]> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return [];
+  const { data, error } = await sb
+    .from("workflow_records")
+    .select(`initiator_id, recipient_id, initiator:profiles!workflow_records_initiator_id_fkey(${PROFILE_COLS}), recipient:profiles!workflow_records_recipient_id_fkey(${PROFILE_COLS})`)
+    .eq("kind", "friend_request")
+    .eq("status", "accepted")
+    .or(`initiator_id.eq.${uid},recipient_id.eq.${uid}`);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as unknown as DbFriendRequest[];
+  return rows
+    .map((r) => (r.initiator_id === uid ? r.recipient : r.initiator))
+    .filter((p): p is DbProfile => Boolean(p));
+}
+
+/* ---------------- commentaires ---------------- */
+
+export type DbComment = {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  author: DbProfile | null;
+};
+
+export type CommentEntityType = "illustration" | "idea" | "announcement" | "manga_chapter" | "sponsor_option";
+
+export async function listComments(entityType: CommentEntityType, entityId: string): Promise<DbComment[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("comments")
+    .select(`*, author:profiles(${PROFILE_COLS})`)
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DbComment[];
+}
+
+export async function addComment(entityType: CommentEntityType, entityId: string, content: string): Promise<DbComment> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour commenter.");
+  const { data, error } = await sb
+    .from("comments")
+    .insert({ entity_type: entityType, entity_id: entityId, author_id: uid, content: content.trim() })
+    .select(`*, author:profiles(${PROFILE_COLS})`)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as DbComment;
+}
+
 /** Liste des profils inscrits (page Discover). */
 export async function listProfiles(limit = 60): Promise<DbProfile[]> {
   if (!supabase) return [];

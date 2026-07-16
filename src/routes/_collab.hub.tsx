@@ -9,8 +9,49 @@ import {
   ArrowRight,
   BookOpen,
 } from "lucide-react";
-import { HERO_SLIDES, HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS } from "@/lib/haven-data";
+import { HERO_SLIDES, HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS, type CatalogManga } from "@/lib/haven-data";
 import { MangaCard } from "@/components/haven/MangaCard";
+import { loadStudioProjects } from "@/lib/studio-projects";
+
+type StudioCatalogProject = {
+  id: string;
+  title: string;
+  synopsis: string;
+  status: string;
+  genres: string[];
+  chapters: unknown[];
+  coverDataUrl?: string;
+  catalogVisible?: boolean;
+};
+
+/** Projets Studio rendus visibles → affichés sur la page d'accueil. */
+function useVisibleStudioEntries(): CatalogManga[] {
+  const [entries, setEntries] = useState<CatalogManga[]>([]);
+  useEffect(() => {
+    void loadStudioProjects<StudioCatalogProject>()
+      .then((rows) =>
+        setEntries(
+          rows
+            .filter((p) => p.catalogVisible)
+            .map((p) => ({
+              id: p.id,
+              title: p.title,
+              creator: "Toi",
+              cover: p.coverDataUrl || "",
+              demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
+              genres: p.genres,
+              rating: 0,
+              chapters: p.chapters.length,
+              status: p.status,
+              synopsis: p.synopsis,
+              language: "FR",
+            })),
+        ),
+      )
+      .catch(() => setEntries([]));
+  }, []);
+  return entries;
+}
 
 export const Route = createFileRoute("/_collab/hub")({
   head: () => ({
@@ -215,10 +256,12 @@ function NewChapterRow() {
 }
 
 function HomePage() {
-  const byRating = [...CATALOG_MANGA].sort((a, b) => b.rating - a.rating);
+  const studioEntries = useVisibleStudioEntries();
+  const all = [...studioEntries, ...CATALOG_MANGA];
+  const byRating = [...all].sort((a, b) => b.rating - a.rating);
   const favorites = byRating.slice(0, 4);
-  const gems = [...CATALOG_MANGA].sort((a, b) => a.chapters - b.chapters).slice(0, 4);
-  const hasCatalog = CATALOG_MANGA.length > 0;
+  const gems = [...all].sort((a, b) => a.chapters - b.chapters).slice(0, 4);
+  const hasCatalog = all.length > 0;
 
   return (
     <div>

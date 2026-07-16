@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { listProfiles } from "@/lib/db";
+import { listProfiles, sendFriendRequestDb } from "@/lib/db";
 import { SITE_LANGUAGES } from "@/lib/languages";
 import {
   Search,
@@ -1340,9 +1340,13 @@ function CreatorNumberField({
 
 function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: () => void }) {
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const confirm = () => {
+    // Vraie demande d'ami (Supabase) : le destinataire la reçoit dans son onglet Amis.
+    sendFriendRequestDb(profile.id)
+      .then(() => setSent(true))
+      .catch((err) => setError(err instanceof Error ? err.message : "Envoi impossible."));
     sendFriendRequest({ recipient: profile.username });
-    setSent(true);
   };
   return (
     <div

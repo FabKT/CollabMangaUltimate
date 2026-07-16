@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_collab/studio")({
 
 /* ---------- Types & mock data ---------- */
 
-type ProjectStatus = "Draft" | "In progress" | "Published" | "Archived";
+type ProjectStatus = "Draft" | "In progress" | "Paused" | "Finished";
 type ChapterStatus = "Draft" | "In progress" | "Ready for review" | "Published";
 type CandidateStatus = "Empty" | "Imported" | "Selected" | "Validated";
 type NoteCategory = "Story" | "Character" | "Scene" | "Task" | "Reminder" | "Sponsorship" | "Other";
@@ -69,6 +69,30 @@ interface Project {
 
 const COLLAB_ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"];
 
+function hasPublishedChapter(p: Project) {
+  return p.chapters.some((c) => c.status === "Published");
+}
+
+/**
+ * Règles de statut du projet :
+ * - aucun chapitre publié → Draft, jamais visible dans le catalogue ;
+ * - ≥1 chapitre publié + visible → In progress ;
+ * - ≥1 chapitre publié + masqué → Paused ;
+ * - Finished (choisi dans les paramètres) → reste visible dans le catalogue.
+ */
+function normalizeProjectState(p: Project): Project {
+  const published = hasPublishedChapter(p);
+  if (!published) {
+    if (p.status === "Draft" && !p.catalogVisible) return p;
+    return { ...p, status: "Draft", catalogVisible: false };
+  }
+  if (p.status === "Finished") {
+    return p.catalogVisible ? p : { ...p, catalogVisible: true };
+  }
+  const status: ProjectStatus = p.catalogVisible ? "In progress" : "Paused";
+  return p.status === status ? p : { ...p, status };
+}
+
 // Chaque nouvelle page démarre avec un seul candidat vide ; d'autres peuvent être ajoutés librement.
 const makeEmptyPages = (n: number): PageItem[] =>
   Array.from({ length: n }).map((_, i) => {
@@ -103,7 +127,7 @@ function StatusChip({ label, tone = "neutral" }: { label: string; tone?: "neutra
 }
 
 function toneForProjectStatus(s: ProjectStatus) {
-  return s === "Published" ? "neon" : s === "In progress" ? "info" : s === "Draft" ? "neutral" : "warn";
+  return s === "Finished" ? "neon" : s === "In progress" ? "info" : s === "Draft" ? "neutral" : "warn";
 }
 function toneForChapterStatus(s: ChapterStatus) {
   return s === "Published" ? "neon" : s === "Ready for review" ? "info" : s === "In progress" ? "warn" : "neutral";
@@ -328,9 +352,19 @@ function ProjectWorkspace({
   const [modal, setModal] = useState<"chapter" | "note" | "parrainage" | "recruit" | null>(null);
   const [noteDate, setNoteDate] = useState<string | undefined>(undefined);
   const tabsRef = useRef<HTMLDivElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const openNote = (date?: string) => {
     setNoteDate(date);
     setModal("note");
+  };
+  const onCoverFile = (file: File | undefined) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateProject((p) => ({ ...p, coverDataUrl: String(reader.result), updated: "À l'instant" }));
+      onWorkflow("Couverture mise à jour.");
+    };
+    reader.readAsDataURL(file);
   };
   const openCalendar = () => {
     setTab("Calendar");
@@ -352,8 +386,23 @@ function ProjectWorkspace({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_1fr_280px]">
           {/* Left: cover */}
           <div className="flex flex-col gap-3">
-            <CoverPlaceholder title={project.title} className="aspect-[3/4] w-full max-w-[200px]" />
-            <SecondaryButton icon={Upload} className="!h-10 !px-3">Replace Cover</SecondaryButton>
+            {project.coverDataUrl ? (
+              <img
+                src={project.coverDataUrl}
+                alt={`Couverture de ${project.title}`}
+                className="aspect-[3/4] w-full max-w-[200px] rounded-[14px] border border-[var(--border-default)] object-cover"
+              />
+            ) : (
+              <CoverPlaceholder title={project.title} className="aspect-[3/4] w-full max-w-[200px]" />
+            )}
+            <SecondaryButton icon={Upload} className="!h-10 !px-3" onClick={() => coverInputRef.current?.click()}>Replace Cover</SecondaryButton>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { onCoverFile(e.currentTarget.files?.[0]); e.currentTarget.value = ""; }}
+            />
             <StatusChip label={project.status} tone={toneForProjectStatus(project.status)} />
           </div>
 
@@ -1278,7 +1327,6 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
   const [synopsis, setSynopsis] = useState("");
   const [genres, setGenres] = useState<string[]>([]);
   const [subgenres, setSubgenres] = useState<string[]>([]);
-  const [status, setStatus] = useState<string[]>(["Draft"]);
   const [productionNote, setProductionNote] = useState("");
 
   const submit = () => {
@@ -1287,7 +1335,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
       id: `prj-${Date.now()}`,
       title: title.trim(),
       synopsis: synopsis.trim() || "Synopsis à compléter.",
-      status: (status[0] as ProjectStatus) || "Draft",
+      status: "Draft",
       chaptersCount: 0,
       validatedPages: 0,
       totalPages: 0,
@@ -1322,10 +1370,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
       <div className="flex flex-col gap-5">
         <ModalField label="Titre du projet"><TextInput value={title} onChange={setTitle} placeholder="Nom du manga" /></ModalField>
         <ModalField label="Synopsis"><textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Résumé court du projet, ton, objectif principal." className={modalTextarea} /></ModalField>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
-          <ChoiceRow label="Statut" defaultValue="Draft" options={["Draft", "In progress", "Published"]} onChange={setStatus} />
-        </div>
+        <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
         <ChoiceRow
           multi
           label="Sous-genres"
@@ -1580,16 +1625,21 @@ function SettingsTab({
       <div className="flex flex-col gap-4">
         <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
           <h3 className="font-display text-[18px] font-bold">Statut du projet</h3>
-          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">Contrôle la visibilité du projet dans le catalogue public.</p>
+          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">
+            {hasPublishedChapter(project)
+              ? "Contrôle la visibilité du projet dans le catalogue public."
+              : "Publie au moins un chapitre pour rendre le projet visible dans le catalogue."}
+          </p>
           <button
             type="button"
             role="switch"
             aria-checked={catalogVisible}
+            disabled={!hasPublishedChapter(project) || project.status === "Finished"}
             onClick={() => {
               updateProject((p) => ({ ...p, catalogVisible: !catalogVisible, updated: "À l'instant" }));
-              onWorkflow(catalogVisible ? "Projet masqué du catalogue." : "Projet visible dans le catalogue.");
+              onWorkflow(catalogVisible ? "Projet masqué du catalogue (Paused)." : "Projet visible dans le catalogue (In progress).");
             }}
-            className="mt-4 flex w-full items-center justify-between rounded-[14px] border px-4 py-3 text-left"
+            className="mt-4 flex w-full items-center justify-between rounded-[14px] border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
             style={{
               borderColor: catalogVisible ? "rgba(57,255,136,0.45)" : "var(--border-default)",
               background: catalogVisible ? "rgba(57,255,136,0.12)" : "var(--input-bg)",
@@ -1605,6 +1655,42 @@ function SettingsTab({
               />
             </span>
           </button>
+
+          {hasPublishedChapter(project) && (
+            <div className="mt-3 flex items-center justify-between rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 py-3">
+              <div>
+                <div className="text-[13px] font-bold text-[var(--text-primary)]">
+                  {project.status === "Finished" ? "Projet terminé (Finished)" : "Marquer comme terminé"}
+                </div>
+                <div className="tiny-meta mt-0.5 text-[var(--text-muted)]">
+                  {project.status === "Finished"
+                    ? "Le projet reste visible dans le catalogue."
+                    : "Le projet sera considéré comme terminé et restera visible."}
+                </div>
+              </div>
+              {project.status === "Finished" ? (
+                <SecondaryButton
+                  className="!h-9 !px-3"
+                  onClick={() => {
+                    updateProject((p) => ({ ...p, status: p.catalogVisible ? "In progress" : "Paused", updated: "À l'instant" }));
+                    onWorkflow("Production reprise.");
+                  }}
+                >
+                  Reprendre
+                </SecondaryButton>
+              ) : (
+                <PrimaryButton
+                  className="!h-9 !px-3"
+                  onClick={() => {
+                    updateProject((p) => ({ ...p, status: "Finished", catalogVisible: true, updated: "À l'instant" }));
+                    onWorkflow("Projet marqué comme terminé.");
+                  }}
+                >
+                  Finished
+                </PrimaryButton>
+              )}
+            </div>
+          )}
         </div>
         <div className="rounded-[22px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.05)] p-5">
           <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-[var(--danger)]" /><h3 className="font-display text-[18px] font-bold text-[var(--danger)]">Danger zone</h3></div>
@@ -2069,7 +2155,7 @@ function CollabMangaPage() {
     let cancelled = false;
     void loadStudioProjects<Project>().then((saved) => {
       if (cancelled) return;
-      setProjects(saved);
+      setProjects(saved.map(normalizeProjectState));
       setLoaded(true);
     });
     return () => {
@@ -2094,7 +2180,7 @@ function CollabMangaPage() {
   };
 
   const updateProject = (id: string, updater: (project: Project) => Project) => {
-    setProjects((current) => current.map((p) => (p.id === id ? updater(p) : p)));
+    setProjects((current) => current.map((p) => (p.id === id ? normalizeProjectState(updater(p)) : p)));
   };
 
   const deleteProject = (id: string) => {
@@ -2127,10 +2213,16 @@ function CollabMangaPage() {
             chapter={chapter}
             onBack={() => setSelectedChapter(null)}
             onChapterChange={(updater) =>
-              updateProject(project.id, (p) => ({
-                ...p,
-                chapters: p.chapters.map((c) => (c.id === chapter.id ? updater(c) : c)),
-              }))
+              updateProject(project.id, (p) => {
+                const publishedBefore = hasPublishedChapter(p);
+                const next = {
+                  ...p,
+                  chapters: p.chapters.map((c) => (c.id === chapter.id ? updater(c) : c)),
+                };
+                // Première publication d'un chapitre → le projet devient visible dans le catalogue.
+                if (!publishedBefore && hasPublishedChapter(next)) next.catalogVisible = true;
+                return next;
+              })
             }
           />
         )}

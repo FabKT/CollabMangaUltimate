@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   addAnnouncement,
@@ -6,12 +6,18 @@ import {
   addIllustration,
   currentUserId,
   listAnnouncements,
+  listFriendsDb,
   listIdeas,
   listIllustrations,
+  listPendingFriendRequests,
+  respondFriendRequestDb,
+  startConversationWith,
   uploadImage,
   type DbAnnouncement,
+  type DbFriendRequest,
   type DbIdea,
   type DbIllustration,
+  type DbProfile,
 } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
 import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
@@ -310,7 +316,7 @@ function ProfilePage({
             { id: "projects", label: "Projects Promoted" },
             { id: "propositions", label: "Idées" },
           ];
-    if (mode === "own") base.push({ id: "favorites", label: "Favoris" }, { id: "account", label: "Account" });
+    if (mode === "own") base.push({ id: "friends", label: "Amis" }, { id: "favorites", label: "Favoris" }, { id: "account", label: "Account" });
     return base;
   }, [profileType, mode]);
 
@@ -413,6 +419,9 @@ function ProfilePage({
               </Tabs.Content>
               {mode === "own" && (
                 <>
+                  <Tabs.Content value="friends">
+                    <ProfileFriendsTab />
+                  </Tabs.Content>
                   <Tabs.Content value="favorites">
                     <FavoritesTab favorites={favorites} onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "favorite" })} />
                   </Tabs.Content>
@@ -1476,6 +1485,111 @@ function PropositionsTab({ mode, ideas, onDetails, onAdd }: { mode: ViewMode; id
   );
 }
 
+/** Onglet Amis : demandes reçues (accepter/refuser) + liste des amis réels. */
+function ProfileFriendsTab() {
+  const navigate = useNavigate();
+  const [pending, setPending] = useState<DbFriendRequest[]>([]);
+  const [friends, setFriends] = useState<DbProfile[]>([]);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const refresh = () => {
+    void listPendingFriendRequests().then(setPending).catch(() => setPending([]));
+    void listFriendsDb().then(setFriends).catch(() => setFriends([]));
+  };
+  useEffect(refresh, []);
+
+  const respond = async (id: string, accept: boolean) => {
+    try {
+      await respondFriendRequestDb(id, accept);
+      setFeedback(accept ? "Demande acceptée — vous êtes amis." : "Demande refusée.");
+      refresh();
+      window.setTimeout(() => setFeedback(null), 2600);
+    } catch {
+      setFeedback("Action impossible.");
+    }
+  };
+
+  const contact = async (profileId: string) => {
+    try {
+      await startConversationWith(profileId);
+      void navigate({ to: "/messages" });
+    } catch {
+      setFeedback("Impossible d'ouvrir la conversation.");
+    }
+  };
+
+  return (
+    <Panel>
+      <SectionTitle title="Amis" subtitle="Demandes reçues et liste de tes amis CollabManga." />
+      {feedback && (
+        <div className="mb-4 rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.4)", color: "#39FF88" }}>
+          {feedback}
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-3 text-[14px] font-extrabold" style={{ color: "#F7FAFF" }}>Demandes en attente</h3>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {pending.map((r) => {
+              const p = r.initiator;
+              const name = p?.display_name || p?.username || "Membre";
+              return (
+                <Card key={r.id}>
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#101B3F", border: "1px solid rgba(133,154,206,0.22)" }}>
+                      {p?.avatar_url ? <img src={p.avatar_url} alt={name} className="h-full w-full object-cover" /> : <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name.slice(0, 2).toUpperCase()}</span>}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name}</p>
+                      <p className="text-[12px]" style={{ color: "#7F8CB3" }}>souhaite devenir ami</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <PrimaryButton onClick={() => void respond(r.id, true)}>Accepter</PrimaryButton>
+                    <SecondaryButton onClick={() => void respond(r.id, false)}>Refuser</SecondaryButton>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {friends.length === 0 ? (
+        <EmptyState title="Aucun ami pour l'instant" text="Envoie des demandes d'ami depuis la page Discover — elles apparaîtront ici." />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {friends.map((p) => {
+            const name = p.display_name || p.username;
+            return (
+              <Card key={p.id}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 text-left"
+                  onClick={() => void navigate({ to: "/profile/$profileId", params: { profileId: p.username } })}
+                >
+                  <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#101B3F", border: "1px solid rgba(133,154,206,0.22)" }}>
+                    {p.avatar_url ? <img src={p.avatar_url} alt={name} className="h-full w-full object-cover" /> : <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name.slice(0, 2).toUpperCase()}</span>}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name}</p>
+                    <p className="truncate text-[12px]" style={{ color: "#7F8CB3" }}>@{p.username}</p>
+                  </div>
+                </button>
+                <div className="mt-3 flex items-center gap-2">
+                  <PrimaryButton icon={<MessageSquare size={16} />} onClick={() => void contact(p.id)}>Contacter</PrimaryButton>
+                  <SecondaryButton onClick={() => void navigate({ to: "/profile/$profileId", params: { profileId: p.username } })}>Voir le profil</SecondaryButton>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function FavoritesTab({ favorites, onDetails }: { favorites?: Favorite[]; onDetails: (title: string, kind: string) => void }) {
   // Favoris réels (store local) — chaque publication créée y est ajoutée.
   const all = favorites ?? [];
@@ -2119,24 +2233,55 @@ function ClassicImageUploader({
 }) {
   const [images, setImages] = useState<string[]>([]);
   const filesRef = useRef<File[]>([]);
-  const inputId = useMemo(() => `classic-upload-${Math.random().toString(36).slice(2)}`, []);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  // Index en cours de remplacement (null = ajout d'une nouvelle image).
+  const replaceIndexRef = useRef<number | null>(null);
   const activeImage = images[0];
 
-  const addFiles = (fileList: FileList | null) => {
-    if (!fileList?.length) return;
-    const incoming = Array.from(fileList).filter((file) => file.type.startsWith("image/"));
-    const urls = incoming.map((file) => URL.createObjectURL(file));
-    filesRef.current = multiple ? [...filesRef.current, ...incoming] : incoming.slice(0, 1);
-    onFiles?.(filesRef.current);
-    setImages((current) => (multiple ? [...current, ...urls] : urls.slice(0, 1)));
+  const sync = (files: File[], urls: string[]) => {
+    filesRef.current = files;
+    setImages(urls);
+    onFiles?.(files);
+  };
+
+  const handleChosen = (fileList: FileList | null) => {
+    const incoming = Array.from(fileList ?? []).filter((f) => f.type.startsWith("image/"));
+    if (!incoming.length) return;
+    const idx = replaceIndexRef.current;
+    replaceIndexRef.current = null;
+    if (!multiple) {
+      sync(incoming.slice(0, 1), incoming.slice(0, 1).map((f) => URL.createObjectURL(f)));
+      return;
+    }
+    if (idx !== null && idx < filesRef.current.length) {
+      // Remplacement de l'image cliquée par la nouvelle.
+      const files = [...filesRef.current];
+      const urls = [...images];
+      files[idx] = incoming[0];
+      urls[idx] = URL.createObjectURL(incoming[0]);
+      sync(files, urls);
+    } else {
+      sync([...filesRef.current, ...incoming], [...images, ...incoming.map((f) => URL.createObjectURL(f))]);
+    }
+  };
+
+  const openPicker = (replaceIndex: number | null) => {
+    replaceIndexRef.current = replaceIndex;
+    inputRef.current?.click();
+  };
+
+  const removeAt = (index: number) => {
+    sync(filesRef.current.filter((_, i) => i !== index), images.filter((_, i) => i !== index));
   };
 
   return (
     <div className="min-w-0">
-      <label
-        htmlFor={inputId}
-        className="group grid aspect-[4/3] cursor-pointer place-items-center overflow-hidden rounded-[18px] text-center"
+      <button
+        type="button"
+        onClick={() => openPicker(activeImage ? 0 : null)}
+        className="group grid aspect-[4/3] w-full cursor-pointer place-items-center overflow-hidden rounded-[18px] text-center"
         style={{ background: "#08112B", border: "1px dashed rgba(133,154,206,0.32)", color: "#B8C4E5" }}
+        title={activeImage ? "Cliquer pour remplacer cette image" : label}
       >
         {activeImage ? (
           <img src={activeImage} alt="" className="h-full w-full object-cover" />
@@ -2152,35 +2297,52 @@ function ClassicImageUploader({
             <span className="text-[12px]" style={{ color: "#7F8CB3" }}>PNG, JPG, WEBP</span>
           </div>
         )}
-      </label>
+      </button>
       <input
-        id={inputId}
+        ref={inputRef}
         type="file"
         accept="image/*"
-        multiple={multiple}
+        multiple={false}
         className="hidden"
-        onChange={(event) => addFiles(event.currentTarget.files)}
+        onChange={(event) => {
+          handleChosen(event.currentTarget.files);
+          event.currentTarget.value = "";
+        }}
       />
       {multiple && (
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-          {images.length > 0 ? (
-            images.map((src, index) => (
+          {images.map((src, index) => (
+            <div key={`${src}-${index}`} className="relative shrink-0">
               <button
-                key={`${src}-${index}`}
                 type="button"
-                onClick={() => setImages((current) => [current[index], ...current.filter((_, i) => i !== index)])}
-                className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px]"
+                onClick={() => openPicker(index)}
+                title="Cliquer pour remplacer cette image"
+                className="h-16 w-16 overflow-hidden rounded-[12px]"
                 style={{ border: "1px solid rgba(133,154,206,0.22)", background: "#0E193A" }}
               >
                 <img src={src} alt="" className="h-full w-full object-cover" />
               </button>
-            ))
-          ) : (
-            <div className="h-16 w-full rounded-[12px] px-3 text-[12px] font-semibold flex items-center"
-              style={{ border: "1px solid rgba(133,154,206,0.18)", color: "#7F8CB3", background: "#0E193A" }}>
-              Les images importées apparaîtront ici.
+              <button
+                type="button"
+                aria-label="Supprimer cette image"
+                onClick={() => removeAt(index)}
+                className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full text-[11px] font-black"
+                style={{ background: "#FF5F7E", color: "#04111E", border: "2px solid #0B1430" }}
+              >
+                ✕
+              </button>
             </div>
-          )}
+          ))}
+          {/* Cadre « + » permanent pour ajouter une nouvelle image */}
+          <button
+            type="button"
+            aria-label="Ajouter une image"
+            onClick={() => openPicker(null)}
+            className="grid h-16 w-16 shrink-0 place-items-center rounded-[12px] text-[22px] font-black transition-colors"
+            style={{ border: "1px dashed rgba(57,255,136,0.45)", color: "#39FF88", background: "rgba(57,255,136,0.06)" }}
+          >
+            +
+          </button>
         </div>
       )}
     </div>

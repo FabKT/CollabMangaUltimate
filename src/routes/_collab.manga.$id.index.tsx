@@ -1,17 +1,36 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Bookmark, Play, Star, ArrowLeft, Search } from "lucide-react";
 import { getManga, type Chapter, type Manga } from "@/lib/manga-data";
 import { ChapterRow } from "@/components/manga/ChapterRow";
+import { loadStudioProjects } from "@/lib/studio-projects";
+
+/** Projet Studio lisible depuis le catalogue. */
+type StudioReadableProject = {
+  id: string;
+  title: string;
+  synopsis: string;
+  status: string;
+  genres: string[];
+  subgenres?: string[];
+  coverDataUrl?: string;
+  catalogVisible?: boolean;
+  chapters: {
+    id: string;
+    number: number;
+    title: string;
+    status: string;
+    pages: { id: string; candidates: { id: string; image?: string }[]; validatedCandidateId: string | null }[];
+  }[];
+};
 
 export const Route = createFileRoute("/_collab/manga/$id/")({
   loader: ({ params }) => {
-    const manga = getManga(params.id);
-    if (!manga) throw notFound();
-    return { manga: manga as Manga };
+    // Les projets Studio vivent en IndexedDB (client) : ne pas jeter notFound ici.
+    return { manga: (getManga(params.id) ?? null) as Manga | null, id: params.id };
   },
   head: ({ loaderData }) => ({
-    meta: loaderData
+    meta: loaderData?.manga
       ? [
           { title: `${loaderData.manga.title} — CollabManga` },
           { name: "description", content: `${loaderData.manga.title} on CollabManga. Read the latest chapters, synopsis, and reader reviews.` },
@@ -20,11 +39,119 @@ export const Route = createFileRoute("/_collab/manga/$id/")({
           { property: "og:image", content: loaderData.manga.cover },
           { name: "twitter:image", content: loaderData.manga.cover },
         ]
-      : [{ title: "Manga not found — CollabManga" }, { name: "robots", content: "noindex" }],
+      : [{ title: "Manga — CollabManga" }],
   }),
   notFoundComponent: NotFound,
-  component: MangaDetail,
+  component: MangaDetailSwitch,
 });
+
+function MangaDetailSwitch() {
+  const { manga, id } = Route.useLoaderData() as { manga: Manga | null; id: string };
+  const [studio, setStudio] = useState<StudioReadableProject | null | "loading">(manga ? null : "loading");
+
+  useEffect(() => {
+    if (manga) return;
+    void loadStudioProjects<StudioReadableProject>()
+      .then((rows) => setStudio(rows.find((p) => p.id === id && p.catalogVisible) ?? null))
+      .catch(() => setStudio(null));
+  }, [manga, id]);
+
+  if (manga) return <MangaDetail />;
+  if (studio === "loading") {
+    return (
+      <div className="mx-auto max-w-[600px] px-6 py-16 text-center text-[14px] text-[color:var(--color-text-secondary)]">
+        Chargement…
+      </div>
+    );
+  }
+  if (!studio) return <NotFound />;
+  return <StudioMangaDetail project={studio} />;
+}
+
+function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
+  const published = project.chapters.filter((c) => c.status === "Published");
+  return (
+    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
+      <div className="mb-6">
+        <Link to="/manga" className="btn-ghost -ml-3 h-10">
+          <ArrowLeft className="h-4 w-4" /> Back to catalog
+        </Link>
+      </div>
+
+      <section
+        className="mb-8 p-6 md:p-8"
+        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)", borderRadius: 28 }}
+      >
+        <div className="grid gap-6 md:grid-cols-[minmax(200px,260px)_1fr] md:gap-8">
+          <div className="mx-auto w-full max-w-[260px] md:mx-0">
+            <div className="aspect-[3/4] overflow-hidden rounded-2xl" style={{ border: "1px solid var(--color-border-default)" }}>
+              {project.coverDataUrl ? (
+                <img src={project.coverDataUrl} alt={`${project.title} cover`} className="h-full w-full object-cover" />
+              ) : (
+                <div className="grid h-full w-full place-items-center text-[13px] font-bold uppercase tracking-widest text-[color:var(--color-text-muted)]" style={{ background: "linear-gradient(160deg,#0E1736,#050B1D)" }}>
+                  Cover pending
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="chip-active">{project.status}</span>
+              <span className="chip-neutral">FR</span>
+            </div>
+            <h1 className="mt-3 font-display text-[28px] font-extrabold leading-[36px] md:text-[34px] md:leading-[42px]">
+              {project.title}
+            </h1>
+            <p className="mt-4 max-w-3xl text-[15px] leading-[25px] text-[color:var(--color-text-secondary)]">
+              {project.synopsis}
+            </p>
+            <div className="mt-5">
+              <p className="meta-label mb-2">Genre & sous-genres</p>
+              <div className="flex flex-wrap gap-1.5">
+                {project.genres.map((g) => <span key={g} className="chip-active">{g}</span>)}
+                {(project.subgenres ?? []).map((g) => <span key={g} className="chip-neutral">{g}</span>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="p-6 md:p-8"
+        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)", borderRadius: 28 }}
+      >
+        <h2 className="font-display text-[20px] font-extrabold">Chapitres publiés</h2>
+        {published.length === 0 ? (
+          <p className="mt-3 text-[14px] text-[color:var(--color-text-secondary)]">Aucun chapitre publié pour l'instant.</p>
+        ) : (
+          <div className="mt-4 grid gap-2">
+            {published.map((c) => {
+              const readablePages = c.pages.filter(
+                (p) => p.validatedCandidateId && p.candidates.find((cd) => cd.id === p.validatedCandidateId)?.image,
+              ).length;
+              return (
+                <Link
+                  key={c.id}
+                  to="/manga/$id/chapter/$chapterId"
+                  params={{ id: project.id, chapterId: c.id }}
+                  className="flex items-center justify-between rounded-2xl border px-4 py-3 transition-colors hover:border-[color:var(--color-neon,#39ff88)]"
+                  style={{ borderColor: "var(--color-border-default)", background: "var(--color-card, rgba(255,255,255,0.02))" }}
+                >
+                  <div>
+                    <div className="text-[14px] font-bold">Ch. {c.number} — {c.title}</div>
+                    <div className="text-[12px] text-[color:var(--color-text-muted)]">{readablePages} page{readablePages > 1 ? "s" : ""} lisible{readablePages > 1 ? "s" : ""}</div>
+                  </div>
+                  <Play className="h-4 w-4 text-[color:var(--color-text-secondary)]" />
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
 
 function NotFound() {
   return (

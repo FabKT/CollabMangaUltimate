@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { addIllustration, listIllustrations } from "@/lib/db";
+import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
   X, Upload, Bookmark, BookmarkCheck, MessageSquare, Send, ChevronRight, ChevronLeft,
   LayoutGrid, Rows3, Columns3, Sparkles, Eye, Heart, Plus, Image as ImageIcon,
@@ -397,12 +398,14 @@ function IllustrationsPage() {
       {openArt && (
         <DetailModal
           art={openArt}
+          works={realArts.filter((a) => a.artist === openArt.artist && a.id !== openArt.id)}
           onClose={() => setOpenArt(null)}
           onInvite={() => setInvite(openArt)}
           onContact={() => setContact(openArt)}
           onPortfolio={() => setPortfolio(openArt)}
           saved={saved.has(openArt.id)}
           onSave={() => toggleSave(openArt.id)}
+          onOpenArt={(a) => setOpenArt(a)}
         />
       )}
       {invite && <InviteModal art={invite} onClose={() => setInvite(null)} />}
@@ -552,10 +555,10 @@ function ModalHeader({ title, onClose, subtitle }: { title: string; subtitle?: s
 
 /* ---------------- Detail Modal ---------------- */
 function DetailModal({
-  art, onClose, onInvite, onContact, onPortfolio, saved, onSave,
+  art, works = [], onClose, onInvite, onContact, onPortfolio, saved, onSave, onOpenArt,
 }: {
-  art: Art; onClose: () => void; onInvite: () => void; onContact: () => void;
-  onPortfolio: () => void; saved: boolean; onSave: () => void;
+  art: Art; works?: Art[]; onClose: () => void; onInvite: () => void; onContact: () => void;
+  onPortfolio: () => void; saved: boolean; onSave: () => void; onOpenArt?: (a: Art) => void;
 }) {
   const [tab, setTab] = useState<"profile" | "comments">("profile");
 
@@ -624,30 +627,17 @@ function DetailModal({
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <div style={{
-                width: 48, height: 48, borderRadius: "50%",
+                width: 48, height: 48, minWidth: 48, flexShrink: 0, borderRadius: "50%",
                 background: `linear-gradient(135deg, hsl(${(art.seed * 47) % 360} 60% 40%), hsl(${(art.seed * 73) % 360} 60% 25%))`,
                 border: `1px solid ${C.border}`, display: "inline-flex", alignItems: "center",
                 justifyContent: "center", ...manrope, fontSize: 16, fontWeight: 800,
-              }}>A</div>
+              }}>{art.artist.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}</div>
               <div>
                 <div style={{ ...manrope, fontSize: 14, fontWeight: 800, color: C.text }}>{art.artist}</div>
                 <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginTop: 2 }}>Artist</div>
               </div>
             </div>
             <Chip tone={art.availability === "Available now" ? "neon" : "info"}>{art.availability}</Chip>
-          </div>
-
-          <div>
-            <h2 style={{ ...sora, fontSize: 20, fontWeight: 700, lineHeight: "28px", margin: 0 }}>{art.title}</h2>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-              <Chip>{art.type}</Chip>
-              <Chip>{art.style}</Chip>
-              <Chip>Fantasy</Chip>
-              <Chip>Digital</Chip>
-            </div>
-            <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginTop: 10 }}>
-              Uploaded · date placeholder · linked project placeholder
-            </div>
           </div>
 
           {/* Actions */}
@@ -662,31 +652,31 @@ function DetailModal({
 
           <Section title="Artwork description">
             <p style={{ ...manrope, fontSize: 14, color: C.text2, lineHeight: "22px", margin: 0 }}>
-              Full artwork description placeholder. Artists can share the intent behind the piece, the manga context it belongs to, the tools used, and how it demonstrates a specific illustration skill for potential collaborators.
+              {art.description || "Aucune description fournie."}
             </p>
           </Section>
 
           <Section title="More from this artist">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-              {[art.seed + 1, art.seed + 2, art.seed + 3, art.seed + 4].map((s) => (
-                <div key={s}><ArtworkPlaceholder seed={s} ratio="square" /></div>
-              ))}
-            </div>
+            {works.length === 0 ? (
+              <p style={{ ...manrope, fontSize: 13, color: C.muted, margin: 0 }}>Aucune autre illustration de cet artiste pour l'instant.</p>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                {works.slice(0, 8).map((w) => (
+                  <button key={w.id} type="button" onClick={() => onOpenArt?.(w)} style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}>
+                    {w.imageUrl ? (
+                      <img src={w.imageUrl} alt={w.title} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10, border: `1px solid ${C.border}` }} />
+                    ) : (
+                      <ArtworkPlaceholder seed={w.seed} ratio="square" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </Section>
             </>
           ) : (
             <Section title="Commentaires">
-              <div style={{ display: "grid", gap: 12 }}>
-                {[
-                  "Composition très lisible, idéale pour présenter le style de l'artiste.",
-                  "Les valeurs et la silhouette fonctionnent bien pour une fiche portfolio.",
-                ].map((comment, index) => (
-                  <div key={comment} style={{ background: C.input, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12 }}>
-                    <div style={{ ...manrope, fontSize: 12, fontWeight: 800, color: C.text }}>Utilisateur {index + 1}</div>
-                    <p style={{ ...manrope, fontSize: 13, color: C.text2, lineHeight: "20px", margin: "4px 0 0" }}>{comment}</p>
-                  </div>
-                ))}
-              </div>
+              <CommentsPanel entityType="illustration" entityId={art.id} />
             </Section>
           )}
         </div>
@@ -784,13 +774,29 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
   const [error, setError] = useState<string | null>(null);
   const inputId = "showcase-upload-images";
   const activeImage = images[0]?.url;
+  const replaceIndexRef = useRef<number | null>(null);
+  const pickerRef = useRef<HTMLInputElement | null>(null);
 
   const addFiles = (files: FileList | null) => {
-    if (!files?.length) return;
-    const items = Array.from(files)
+    const incoming = Array.from(files ?? [])
       .filter((file) => file.type.startsWith("image/"))
       .map((file) => ({ url: URL.createObjectURL(file), file }));
-    setImages((current) => [...current, ...items]);
+    if (!incoming.length) return;
+    const idx = replaceIndexRef.current;
+    replaceIndexRef.current = null;
+    setImages((current) => {
+      if (idx !== null && idx < current.length) {
+        const next = [...current];
+        next[idx] = incoming[0];
+        return next;
+      }
+      return [...current, ...incoming];
+    });
+  };
+
+  const openPicker = (replaceIndex: number | null) => {
+    replaceIndexRef.current = replaceIndex;
+    pickerRef.current?.click();
   };
 
   const publish = async () => {
@@ -839,22 +845,36 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
           <div style={{ ...manrope, fontSize: 12, color: C.muted }}>Accepted formats placeholder · JPG, PNG, WEBP · up to placeholder size</div>
           <Btn variant="secondary" size="sm" style={{ marginTop: 6 }}>Choose file</Btn>
         </label>
-        <input id={inputId} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(event) => addFiles(event.currentTarget.files)} />
+        <input ref={pickerRef} id={inputId} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(event) => { addFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, gridColumn: "1" }}>
-          {images.length > 0 ? images.map((item, index) => (
-            <button
-              key={`${item.url}-${index}`}
-              type="button"
-              onClick={() => setImages((current) => [current[index], ...current.filter((_, i) => i !== index)])}
-              style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", flex: "0 0 auto", border: `1px solid ${C.border}`, background: C.input }}
-            >
-              <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            </button>
-          )) : (
-            <div style={{ ...manrope, fontSize: 12, color: C.muted, background: C.input, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", width: "100%" }}>
-              Selected images will appear here.
+          {images.map((item, index) => (
+            <div key={`${item.url}-${index}`} style={{ position: "relative", flex: "0 0 auto" }}>
+              <button
+                type="button"
+                title="Cliquer pour remplacer cette image"
+                onClick={() => openPicker(index)}
+                style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}`, background: C.input }}
+              >
+                <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </button>
+              <button
+                type="button"
+                aria-label="Supprimer cette image"
+                onClick={() => setImages((current) => current.filter((_, i) => i !== index))}
+                style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#FF5F7E", color: "#04111E", border: "2px solid #0B1430", fontSize: 11, fontWeight: 900, display: "grid", placeItems: "center", cursor: "pointer" }}
+              >
+                ✕
+              </button>
             </div>
-          )}
+          ))}
+          <button
+            type="button"
+            aria-label="Ajouter une image"
+            onClick={() => openPicker(null)}
+            style={{ width: 64, height: 64, flex: "0 0 auto", borderRadius: 12, border: "1px dashed rgba(57,255,136,0.45)", background: "rgba(57,255,136,0.06)", color: "#39FF88", fontSize: 22, fontWeight: 900, cursor: "pointer" }}
+          >
+            +
+          </button>
         </div>
 
         <div style={{ gridColumn: "2", gridRow: "1", display: "grid", gap: 12 }}>
