@@ -3,6 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { btnPrimary, btnSecondary, inputCls } from "./ui";
 import type { AnnouncementMode } from "@/lib/sponsorship-data";
+import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 
 /* Filter state shared with the sponsorship page. */
 export type SponsorFilters = {
@@ -13,6 +14,7 @@ export type SponsorFilters = {
   subGenres: string[];
   platforms: string[];
   paymentModes: string[];
+  languages: string[];
   minPrice: string;
   maxPrice: string;
   minChapters: string;
@@ -29,6 +31,7 @@ export const emptyFilters: SponsorFilters = {
   subGenres: [],
   platforms: [],
   paymentModes: [],
+  languages: [],
   minPrice: "",
   maxPrice: "",
   minChapters: "",
@@ -134,6 +137,35 @@ export function AdvancedFiltersDialog({
               <Section title="Parrainage">
                 <ChipRow label="Type de vidéo" options={VIDEO_TYPES} selected={filters.videoTypes} onToggle={(v) => toggle("videoTypes", v)} />
                 <ChipRow label="Durée de vidéo" options={DURATIONS} selected={filters.durations} onToggle={(v) => toggle("durations", v)} />
+                <div>
+                  <FieldLabel>Langue</FieldLabel>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        if (code && !filters.languages.includes(code)) toggle("languages", code);
+                      }}
+                      aria-label="Ajouter une langue au filtre"
+                      className={cn(inputCls, "h-10 w-auto min-w-[220px]")}
+                    >
+                      <option value="">Ajouter une langue…</option>
+                      {SITE_LANGUAGES.map((l) => (
+                        <option key={l.code} value={l.code}>{l.label}</option>
+                      ))}
+                    </select>
+                    {filters.languages.map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => toggle("languages", code)}
+                        className="rounded-full border border-transparent bg-cm-neon px-3 py-1.5 font-manrope text-[13px] font-medium text-[#04111e]"
+                      >
+                        {languageLabel(code)} ✕
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </Section>
 
               {mode === "project" ? (

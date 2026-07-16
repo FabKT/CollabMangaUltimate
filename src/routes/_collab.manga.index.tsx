@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, Star, X, ChevronDown } from "lucide-react";
 import {
   CATALOG_MANGA,
@@ -7,9 +7,12 @@ import {
   GENRES,
   STATUSES,
   SORTS,
+  type CatalogManga,
   type Demographic,
   type SortOption,
 } from "@/lib/haven-data";
+import { loadStudioProjects } from "@/lib/studio-projects";
+import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { MangaCard } from "@/components/haven/MangaCard";
 
 export const Route = createFileRoute("/_collab/manga/")({
@@ -50,6 +53,18 @@ const SUBGENRE_MATCH: Record<string, string[]> = {
   "Psychologique": ["Psychological"],
 };
 
+/** Projet Studio rendu visible dans le catalogue (paramètres du projet). */
+type StudioCatalogProject = {
+  id: string;
+  title: string;
+  synopsis: string;
+  status: string;
+  genres: string[];
+  chapters: unknown[];
+  coverDataUrl?: string;
+  catalogVisible?: boolean;
+};
+
 function CatalogPage() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortOption>("Avis décroissants");
@@ -60,6 +75,31 @@ function CatalogPage() {
   const [maxChapters, setMaxChapters] = useState("");
   const [demos, setDemos] = useState<string[]>([]);
   const [subgenres, setSubgenres] = useState<string[]>([]);
+  const [studioEntries, setStudioEntries] = useState<CatalogManga[]>([]);
+
+  useEffect(() => {
+    void loadStudioProjects<StudioCatalogProject>()
+      .then((rows) =>
+        setStudioEntries(
+          rows
+            .filter((p) => p.catalogVisible)
+            .map((p) => ({
+              id: p.id,
+              title: p.title,
+              creator: "Toi",
+              cover: p.coverDataUrl || "",
+              demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
+              genres: p.genres,
+              rating: 0,
+              chapters: p.chapters.length,
+              status: p.status,
+              synopsis: p.synopsis,
+              language: "FR",
+            })),
+        ),
+      )
+      .catch(() => setStudioEntries([]));
+  }, []);
 
   const toggle = (list: string[], value: string, setter: (v: string[]) => void) => {
     setter(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
@@ -68,7 +108,7 @@ function CatalogPage() {
   const filtered = useMemo(() => {
     const minC = Number(minChapters) || 0;
     const maxC = Number(maxChapters) || 0;
-    let list = CATALOG_MANGA.filter((m) => {
+    let list = [...studioEntries, ...CATALOG_MANGA].filter((m) => {
       if (query && !m.title.toLowerCase().includes(query.toLowerCase())) return false;
       if (languages.length && !languages.includes(m.language)) return false;
       if (demos.length && !demos.includes(m.demographic)) return false;
@@ -88,7 +128,7 @@ function CatalogPage() {
         break;
     }
     return list;
-  }, [query, languages, demos, subgenres, minRating, maxRating, minChapters, maxChapters, sort]);
+  }, [query, languages, demos, subgenres, minRating, maxRating, minChapters, maxChapters, sort, studioEntries]);
 
   const activeChips: { label: string; onRemove: () => void }[] = [
     ...(query ? [{ label: `“${query}”`, onRemove: () => setQuery("") }] : []),
@@ -152,10 +192,24 @@ function CatalogPage() {
 
       <div className="mb-6 grid gap-5 rounded-2xl border border-border bg-surface p-5 md:grid-cols-2">
         <FilterGroup title="Language">
-          <div className="flex flex-wrap gap-2">
-            {LANGUAGES.map((l) => (
-              <ChipBtn key={l} active={languages.includes(l)} onClick={() => toggle(languages, l, setLanguages)}>
-                {l}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value=""
+              onChange={(e) => {
+                const code = e.target.value;
+                if (code && !languages.includes(code)) setLanguages([...languages, code]);
+              }}
+              className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-primary/60 focus:outline-none"
+              aria-label="Ajouter une langue au filtre"
+            >
+              <option value="">Ajouter une langue…</option>
+              {SITE_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>{l.label}</option>
+              ))}
+            </select>
+            {languages.map((code) => (
+              <ChipBtn key={code} active onClick={() => toggle(languages, code, setLanguages)}>
+                {languageLabel(code)} ✕
               </ChipBtn>
             ))}
           </div>

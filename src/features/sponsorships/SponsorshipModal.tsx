@@ -70,13 +70,13 @@ function service(
 }
 
 export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [project, setProject] = useState("Neon Ronin");
+  const [project, setProject] = useState("");
   const [query, setQuery] = useState("");
   const [creatorId, setCreatorId] = useState(creatorOptions[0]?.id ?? "");
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [customServices, setCustomServices] = useState<Service[]>([]);
-  const [deadline, setDeadline] = useState("");
-  const [currency, setCurrency] = useState("EUR");
+  const [currency] = useState("EUR");
+  const [messageTitle, setMessageTitle] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
@@ -95,13 +95,12 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
   const total = selectedServices.reduce((sum, item) => sum + item.price, 0);
 
   const reset = () => {
-    setProject("Neon Ronin");
+    setProject("");
     setQuery("");
     setCreatorId(creatorOptions[0]?.id ?? "");
     setSelectedServiceIds([]);
     setCustomServices([]);
-    setDeadline("");
-    setCurrency("EUR");
+    setMessageTitle("");
     setMessage("");
     setError("");
     setServiceModalOpen(false);
@@ -132,10 +131,18 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
       setError("Sélectionne au moins une option de parrainage.");
       return;
     }
+    if (!messageTitle.trim()) {
+      setError("Donne un titre à ton message.");
+      return;
+    }
     if (!message.trim()) {
       setError("Écris le message à envoyer au créateur de contenu.");
       return;
     }
+
+    // Les options créées à la volée sont marquées « option supplémentaire ».
+    const customIds = new Set(customServices.map((s) => s.id));
+    const serviceLabel = (s: Service) => (customIds.has(s.id) ? `${s.name} (option supplémentaire)` : s.name);
 
     createSponsorship({
       name: `${project.trim()} - ${selectedCreator.name}`,
@@ -145,8 +152,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
       currency,
       status: "pending",
       paymentType: selectedServices[0]?.paymentType ?? "one_time",
-      deadline: deadline || undefined,
-      notes: message.trim(),
+      notes: messageTitle.trim() ? `${messageTitle.trim()} — ${message.trim()}` : message.trim(),
       conditions: "En attente de validation par le créateur de contenu.",
       services: selectedServices,
       participants: [
@@ -168,12 +174,12 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
     });
 
     sendSponsorshipContact({
-      announcementTitle: `Demande de parrainage - ${project.trim()}`,
+      announcementTitle: messageTitle.trim() || `Demande de parrainage - ${project.trim()}`,
       announcementMode: "creator",
       owner: selectedCreator.name,
       linked: project.trim(),
       budgetOrPrice: formatMoney(total, currency),
-      sponsorshipType: selectedServices.map((item) => item.name).join(", "),
+      sponsorshipType: selectedServices.map(serviceLabel).join(", "),
       message: message.trim(),
     });
 
@@ -186,7 +192,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
         open={open}
         onClose={close}
         title="Ajouter un parrainage"
-        size="lg"
+        size="xl"
         footer={
           <>
             <button className="btn-ghost rounded-lg px-4 py-2 text-sm font-medium" onClick={close}>
@@ -198,28 +204,23 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
           </>
         }
       >
-        <div className="space-y-5">
-          <div className="rounded-xl border border-border bg-surface/60 p-4">
-            <h3 className="font-display text-base font-semibold text-foreground">1. Projet à promouvoir</h3>
-            <p className="mt-1 text-sm text-text-secondary">
-              Le parrainage sera créé en attente, puis activé seulement si le créateur de contenu accepte.
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Projet manga" required>
-                <input className={inputCls} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Neon Ronin" />
-              </Field>
-              <Field label="Date souhaitée">
-                <input type="date" className={inputCls} value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-              </Field>
+        {/* 3 colonnes égales séparées par des lignes verticales. */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1px_1fr_1px_1fr]">
+          {/* Colonne 1 — projet + créateur */}
+          <div className="min-w-0 space-y-4">
+            <div>
+              <h3 className="font-display text-base font-semibold text-foreground">1. Projet & créateur</h3>
+              <p className="mt-1 text-sm text-text-secondary">
+                Le parrainage sera créé en attente, puis activé si le créateur accepte.
+              </p>
             </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-surface/60 p-4">
-            <h3 className="font-display text-base font-semibold text-foreground">2. Rechercher un créateur de contenu</h3>
-            <Field label="Recherche">
+            <Field label="Projet manga à parrainer" required>
+              <input className={inputCls} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Nom du projet" />
+            </Field>
+            <Field label="Rechercher un créateur de contenu">
               <input className={inputCls} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nom, plateforme, audience..." />
             </Field>
-            <div className="mt-3 grid gap-2">
+            <div className="grid max-h-[380px] gap-2 overflow-y-auto pr-1">
               {creators.map((creator) => {
                 const active = creator.id === creatorId;
                 return (
@@ -241,7 +242,6 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
                     <span className="min-w-0">
                       <span className="block font-semibold text-foreground">{creator.name}</span>
                       <span className="mt-0.5 block text-xs text-text-muted">{creator.meta}</span>
-                      <span className="mt-1 block text-sm text-text-secondary">{creator.bio}</span>
                     </span>
                   </button>
                 );
@@ -249,21 +249,23 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-surface/60 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-display text-base font-semibold text-foreground">3. Options de parrainage</h3>
-                <p className="mt-1 text-sm text-text-secondary">
-                  Sélectionne les options configurées par le créateur, ou crée une option personnalisée.
-                </p>
-              </div>
-              <button className="btn-ghost rounded-lg border border-border px-3 py-2 text-sm font-semibold" onClick={() => setServiceModalOpen(true)}>
-                Créer une autre option
+          <div className="hidden bg-border lg:block" aria-hidden />
+
+          {/* Colonne 2 — options du créateur + ajout */}
+          <div className="min-w-0 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-display text-base font-semibold text-foreground">2. Services du créateur</h3>
+              <button className="btn-ghost rounded-lg border border-border px-3 py-1.5 text-sm font-semibold" onClick={() => setServiceModalOpen(true)}>
+                Add service
               </button>
             </div>
-            <div className="mt-4 grid gap-3">
+            <div className="grid max-h-[420px] gap-3 overflow-y-auto pr-1">
+              {availableServices.length === 0 && (
+                <p className="text-sm text-text-secondary">Ce créateur n'a pas encore de service configuré — ajoute une option supplémentaire.</p>
+              )}
               {availableServices.map((item) => {
                 const active = selectedServiceIds.includes(item.id);
+                const isCustom = customServices.some((s) => s.id === item.id);
                 return (
                   <button
                     key={item.id}
@@ -276,6 +278,11 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
                     <span className="flex items-start justify-between gap-3">
                       <span>
                         <span className="block font-semibold text-foreground">{item.name}</span>
+                        {isCustom && (
+                          <span className="mt-0.5 inline-block rounded-full border border-neon/45 bg-neon-soft px-2 py-0.5 text-[11px] font-bold text-neon">
+                            Option supplémentaire
+                          </span>
+                        )}
                         <span className="mt-1 block text-xs text-text-muted">
                           {item.format} - {item.duration} - {item.platforms.join(", ")}
                         </span>
@@ -289,28 +296,41 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
                 );
               })}
             </div>
-            <div className="mt-3 flex items-center justify-between rounded-lg border border-border bg-surface-3 px-3 py-2">
+            <div className="flex items-center justify-between rounded-lg border border-border bg-surface-3 px-3 py-2">
               <span className="text-sm font-semibold text-text-secondary">Total proposé</span>
               <span className="font-display text-lg font-bold text-neon">{formatMoney(total, currency)}</span>
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-surface/60 p-4">
-            <h3 className="font-display text-base font-semibold text-foreground">4. Message à envoyer</h3>
-            <textarea
-              className={`${inputCls} mt-3 min-h-[120px]`}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Présente ton projet, la période souhaitée, les objectifs de promotion et les éléments disponibles."
-            />
-          </div>
+          <div className="hidden bg-border lg:block" aria-hidden />
 
-          {error && (
-            <div className="rounded-lg border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-3 py-2 text-sm font-semibold text-[#FF5F7E]">
-              {error}
-            </div>
-          )}
+          {/* Colonne 3 — message */}
+          <div className="min-w-0 space-y-4">
+            <h3 className="font-display text-base font-semibold text-foreground">3. Message à envoyer</h3>
+            <Field label="Titre" required>
+              <input
+                className={inputCls}
+                value={messageTitle}
+                onChange={(e) => setMessageTitle(e.target.value)}
+                placeholder="Objet de la demande"
+              />
+            </Field>
+            <Field label="Description" required>
+              <textarea
+                className={`${inputCls} min-h-[240px]`}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Présente ton projet, la période souhaitée, les objectifs de promotion et les éléments disponibles."
+              />
+            </Field>
+          </div>
         </div>
+
+        {error && (
+          <div className="mt-4 rounded-lg border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-3 py-2 text-sm font-semibold text-[#FF5F7E]">
+            {error}
+          </div>
+        )}
       </Modal>
 
       <ServiceModal

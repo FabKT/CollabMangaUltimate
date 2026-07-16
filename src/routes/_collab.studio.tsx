@@ -9,6 +9,7 @@ import {
   Users, UserPlus, Rocket, Undo2, Handshake,
 } from "lucide-react";
 import { addSponsorOption } from "@/lib/sponsorship-options";
+import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
 import {
   createAnnouncementWorkflow,
   createProjectNote,
@@ -58,6 +59,12 @@ interface Project {
   chaptersCount: number; validatedPages: number; totalPages: number;
   updated: string; genres: string[]; chapters: Chapter[]; notes: Note[]; sponsorships: Sponsorship[];
   recruits?: RecruitAnnouncement[];
+  /** Sous-genres favoris du projet. */
+  subgenres?: string[];
+  /** Couverture importée (data URL). */
+  coverDataUrl?: string;
+  /** Projet visible dans le catalogue public (masquable dans les paramètres). */
+  catalogVisible?: boolean;
 }
 
 const COLLAB_ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"];
@@ -410,13 +417,13 @@ function ProjectWorkspace({
           icons={{ Recrutement: Megaphone, Parrainage: Handshake, Collaborateurs: Users }}
         />
 
-        {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => setModal("chapter")} />}
+        {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => setModal("chapter")} updateProject={updateProject} onWorkflow={onWorkflow} />}
         {tab === "Notes" && <NotesTab project={project} onAdd={() => openNote()} />}
         {tab === "Calendar" && <CalendarTab project={project} onAddNote={openNote} />}
         {tab === "Recrutement" && <RecrutementTab project={project} onAddRecruit={() => setModal("recruit")} />}
         {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => setModal("parrainage")} />}
         {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} />}
-        {tab === "Settings" && <SettingsTab project={project} onDeleteProject={onDeleteProject} />}
+        {tab === "Settings" && <SettingsTab project={project} updateProject={updateProject} onDeleteProject={onDeleteProject} onWorkflow={onWorkflow} />}
       </div>
 
       {modal === "chapter" && (
@@ -524,7 +531,62 @@ function Tabs<T extends string>({ value, onChange, items, icons }: { value: T; o
 
 /* ----- Chapters tab ----- */
 
-function ChaptersTab({ project, onOpenChapter, onAdd }: { project: Project; onOpenChapter: (id: string) => void; onAdd: () => void }) {
+function ChaptersTab({
+  project,
+  onOpenChapter,
+  onAdd,
+  updateProject,
+  onWorkflow,
+}: {
+  project: Project;
+  onOpenChapter: (id: string) => void;
+  onAdd: () => void;
+  updateProject?: (updater: (p: Project) => Project) => void;
+  onWorkflow?: (message: string) => void;
+}) {
+  const [editChapter, setEditChapter] = useState<Chapter | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const duplicateChapter = (ch: Chapter) => {
+    if (!updateProject) return;
+    const stamp = Date.now();
+    const copy: Chapter = {
+      ...ch,
+      id: `ch-${stamp}`,
+      number: project.chapters.length + 1,
+      title: `${ch.title} (copie)`,
+      status: "Draft",
+      updated: "À l'instant",
+      pages: ch.pages.map((p, i) => ({
+        ...p,
+        id: `p-${stamp}-${i}`,
+        candidates: p.candidates.map((c, j) => ({ ...c, id: `c-${stamp}-${i}-${j}` })),
+        validatedCandidateId: null,
+      })),
+    };
+    updateProject((prev) => ({
+      ...prev,
+      chapters: [...prev.chapters, copy],
+      chaptersCount: prev.chapters.length + 1,
+      totalPages: prev.totalPages + copy.pages.length,
+      updated: "À l'instant",
+    }));
+    onWorkflow?.(`Chapitre « ${ch.title} » dupliqué.`);
+  };
+
+  const deleteChapter = (ch: Chapter) => {
+    if (!updateProject) return;
+    updateProject((prev) => ({
+      ...prev,
+      chapters: prev.chapters.filter((c) => c.id !== ch.id),
+      chaptersCount: Math.max(0, prev.chapters.length - 1),
+      totalPages: Math.max(0, prev.totalPages - ch.pages.length),
+      updated: "À l'instant",
+    }));
+    setConfirmDeleteId(null);
+    onWorkflow?.(`Chapitre « ${ch.title} » supprimé.`);
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -565,9 +627,18 @@ function ChaptersTab({ project, onOpenChapter, onAdd }: { project: Project; onOp
                 <div className="flex items-center gap-2 md:flex-col md:items-stretch">
                   <PrimaryButton onClick={() => onOpenChapter(ch.id)} className="!h-10 !px-4">Open</PrimaryButton>
                   <div className="flex items-center gap-1.5">
-                    <IconButton ariaLabel="Edit"><Edit3 className="h-4 w-4" /></IconButton>
-                    <IconButton ariaLabel="Duplicate"><Copy className="h-4 w-4" /></IconButton>
-                    <IconButton ariaLabel="Delete"><Trash2 className="h-4 w-4" /></IconButton>
+                    <IconButton ariaLabel="Edit" onClick={() => setEditChapter(ch)}><Edit3 className="h-4 w-4" /></IconButton>
+                    <IconButton ariaLabel="Duplicate" onClick={() => duplicateChapter(ch)}><Copy className="h-4 w-4" /></IconButton>
+                    {confirmDeleteId === ch.id ? (
+                      <button
+                        onClick={() => deleteChapter(ch)}
+                        className="rounded-[12px] border border-[rgba(255,95,126,0.45)] bg-[rgba(255,95,126,0.12)] px-2.5 py-2 text-[12px] font-bold text-[var(--danger)]"
+                      >
+                        Confirmer
+                      </button>
+                    ) : (
+                      <IconButton ariaLabel="Delete" onClick={() => setConfirmDeleteId(ch.id)}><Trash2 className="h-4 w-4" /></IconButton>
+                    )}
                   </div>
                 </div>
               </div>
@@ -575,7 +646,56 @@ function ChaptersTab({ project, onOpenChapter, onAdd }: { project: Project; onOp
           );
         })}
       </div>
+      {editChapter && updateProject && (
+        <EditChapterModal
+          chapter={editChapter}
+          onClose={() => setEditChapter(null)}
+          onSave={(patch) => {
+            updateProject((prev) => ({
+              ...prev,
+              chapters: prev.chapters.map((c) => (c.id === editChapter.id ? { ...c, ...patch, updated: "À l'instant" } : c)),
+              updated: "À l'instant",
+            }));
+            setEditChapter(null);
+            onWorkflow?.("Chapitre modifié.");
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function EditChapterModal({
+  chapter,
+  onClose,
+  onSave,
+}: {
+  chapter: Chapter;
+  onClose: () => void;
+  onSave: (patch: Partial<Chapter>) => void;
+}) {
+  const [title, setTitle] = useState(chapter.title);
+  const [objective, setObjective] = useState(chapter.objective);
+  const [status, setStatus] = useState<string[]>([chapter.status]);
+  return (
+    <StudioModal
+      title="Modifier le chapitre"
+      onClose={onClose}
+      footer={
+        <>
+          <GhostButton onClick={onClose}>Annuler</GhostButton>
+          <PrimaryButton icon={Save} onClick={() => title.trim() && onSave({ title: title.trim(), objective: objective.trim(), status: (status[0] as ChapterStatus) || chapter.status })}>
+            Enregistrer
+          </PrimaryButton>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <ModalField label="Titre du chapitre"><TextInput value={title} onChange={setTitle} placeholder="Titre" /></ModalField>
+        <ModalField label="Objectif"><textarea value={objective} onChange={(e) => setObjective(e.target.value)} className={modalTextarea} /></ModalField>
+        <ChoiceRow label="Statut" defaultValue={chapter.status} options={["Draft", "In progress", "Ready for review", "Published"]} onChange={setStatus} />
+      </div>
+    </StudioModal>
   );
 }
 
@@ -667,9 +787,11 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
   while (cells.length % 7 !== 0) cells.push(null);
 
   const events = project.notes.filter(n => n.date);
-  const eventDays = new Set(
-    events.filter(n => n.date!.startsWith(`${year}-${pad(month + 1)}-`)).map(n => Number(n.date!.slice(-2))),
-  );
+  const notesForDay = (day: number) =>
+    events.filter(n => n.date === dateStr(day));
+
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const selectedNote = project.notes.find(n => n.id === selectedNoteId) ?? null;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
@@ -683,7 +805,7 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
               <button onClick={() => setMonthOffset(0)} className="text-[12px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Aujourd'hui</button>
             )}
           </div>
-          <span className="tiny-meta text-[var(--text-muted)]">Cliquez une date pour ajouter une note</span>
+          <span className="tiny-meta text-[var(--text-muted)]">Clique le + pour ajouter, une note pour la consulter</span>
         </div>
         <div className="grid grid-cols-7 gap-1 tiny-meta text-[var(--text-muted)]">
           {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d => <div key={d} className="p-2">{d}</div>)}
@@ -691,43 +813,95 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
         <div className="mt-1 grid grid-cols-7 gap-1">
           {cells.map((day, i) => {
             if (day === null) return <div key={`empty-${i}`} className="min-h-[92px] rounded-[12px] border border-transparent" />;
-            const hasEvent = eventDays.has(day);
+            const dayNotes = notesForDay(day);
             return (
-              <button
+              <div
                 key={day}
-                onClick={() => onAddNote(dateStr(day))}
-                aria-label={`Ajouter une note le ${dateStr(day)}`}
                 className="group min-h-[92px] rounded-[12px] border border-[var(--border-default)] bg-[var(--elevated)] p-2 text-left transition-colors hover:border-[var(--neon-border)]"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] font-bold text-[var(--text-primary)]">{day}</span>
-                  <Plus className="h-3.5 w-3.5 text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100" />
+                  <button
+                    type="button"
+                    aria-label={`Ajouter une note le ${dateStr(day)}`}
+                    onClick={() => onAddNote(dateStr(day))}
+                    className="rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:text-[var(--neon)] group-hover:opacity-100"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                {hasEvent && (
-                  <div className="mt-1.5 rounded-md border border-[var(--neon-border)] bg-[var(--neon-soft)] px-1.5 py-1 text-[11px] font-bold text-[var(--neon)]">Deadline</div>
-                )}
-              </button>
+                {dayNotes.map(n => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => setSelectedNoteId(n.id)}
+                    className={`mt-1.5 block w-full truncate rounded-md border px-1.5 py-1 text-left text-[11px] font-bold transition-colors ${
+                      selectedNoteId === n.id
+                        ? "border-[var(--neon)] bg-[var(--neon-soft)] text-[var(--neon)]"
+                        : "border-[var(--neon-border)] bg-[var(--neon-soft)] text-[var(--neon)] hover:border-[var(--neon)]"
+                    }`}
+                    title={n.title}
+                  >
+                    {n.title}
+                  </button>
+                ))}
+              </div>
             );
           })}
         </div>
       </div>
       <div className="flex flex-col gap-3 rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-[18px] font-bold">Upcoming</h2>
-          <IconButton ariaLabel="Notifications"><Bell className="h-4 w-4" /></IconButton>
-        </div>
-        {events.map(ev => (
-          <div key={ev.id} className="rounded-[14px] border border-[var(--border-default)] bg-[var(--elevated)] p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-[14px] font-bold">{ev.title}</span>
-              <StatusChip label={ev.priority} tone={ev.priority === "High" ? "warn" : "info"} />
+        {selectedNote ? (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-[18px] font-bold">Note</h2>
+              <button
+                onClick={() => setSelectedNoteId(null)}
+                className="text-[12px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              >
+                ← Upcoming
+              </button>
             </div>
-            <div className="mt-1.5 flex items-center gap-3 tiny-meta text-[var(--text-muted)]">
-              <span className="inline-flex items-center gap-1"><CalendarIcon className="h-3 w-3" />{ev.date}</span>
+            <div className="rounded-[14px] border border-[var(--neon-border)] bg-[var(--elevated)] p-4">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-[15px] font-bold text-[var(--text-primary)]">{selectedNote.title}</span>
+                <StatusChip label={selectedNote.priority} tone={selectedNote.priority === "High" ? "warn" : "info"} />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-3 tiny-meta text-[var(--text-muted)]">
+                <span className="inline-flex items-center gap-1"><CalendarIcon className="h-3 w-3" />{selectedNote.date ?? "Sans date"}</span>
+                <span>{selectedNote.category}</span>
+                <span>{selectedNote.status}</span>
+              </div>
+              <p className="mt-3 text-[13px] leading-5 text-[var(--text-secondary)]">
+                {selectedNote.content || selectedNote.preview || "Aucun contenu."}
+              </p>
             </div>
-          </div>
-        ))}
-        {events.length === 0 && <p className="text-[14px] text-[var(--text-muted)]">No deadlines yet.</p>}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-[18px] font-bold">Upcoming</h2>
+              <IconButton ariaLabel="Notifications"><Bell className="h-4 w-4" /></IconButton>
+            </div>
+            {events.map(ev => (
+              <button
+                key={ev.id}
+                type="button"
+                onClick={() => setSelectedNoteId(ev.id)}
+                className="rounded-[14px] border border-[var(--border-default)] bg-[var(--elevated)] p-3 text-left transition-colors hover:border-[var(--neon-border)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-[14px] font-bold">{ev.title}</span>
+                  <StatusChip label={ev.priority} tone={ev.priority === "High" ? "warn" : "info"} />
+                </div>
+                <div className="mt-1.5 flex items-center gap-3 tiny-meta text-[var(--text-muted)]">
+                  <span className="inline-flex items-center gap-1"><CalendarIcon className="h-3 w-3" />{ev.date}</span>
+                </div>
+              </button>
+            ))}
+            {events.length === 0 && <p className="text-[14px] text-[var(--text-muted)]">No deadlines yet.</p>}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1103,6 +1277,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
   const [title, setTitle] = useState("");
   const [synopsis, setSynopsis] = useState("");
   const [genres, setGenres] = useState<string[]>([]);
+  const [subgenres, setSubgenres] = useState<string[]>([]);
   const [status, setStatus] = useState<string[]>(["Draft"]);
   const [productionNote, setProductionNote] = useState("");
 
@@ -1118,6 +1293,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
       totalPages: 0,
       updated: "À l'instant",
       genres,
+      subgenres,
       chapters: [],
       notes: productionNote.trim()
         ? [{
@@ -1150,6 +1326,12 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
           <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
           <ChoiceRow label="Statut" defaultValue="Draft" options={["Draft", "In progress", "Published"]} onChange={setStatus} />
         </div>
+        <ChoiceRow
+          multi
+          label="Sous-genres"
+          options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
+          onChange={setSubgenres}
+        />
         <ModalField label="Note de production"><textarea value={productionNote} onChange={(e) => setProductionNote(e.target.value)} placeholder="Indiquez ce dont l'équipe aura besoin pour démarrer." className={modalTextarea} /></ModalField>
       </div>
     </StudioModal>
@@ -1203,52 +1385,29 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
 }
 
 function AddParrainageModal({ onClose, onAdd }: { onClose: () => void; onAdd: (sponsorship: Sponsorship) => void }) {
-  const [platforms, setPlatforms] = useState<string[]>([]);
-  const [formats, setFormats] = useState<string[]>([]);
-  const [videoTypes, setVideoTypes] = useState<string[]>([]);
-  const [durations, setDurations] = useState<string[]>([]);
-  const [payment, setPayment] = useState<string[]>([]);
-  const [quantity, setQuantity] = useState("");
-  const [price, setPrice] = useState("");
-  const [description, setDescription] = useState("");
-
-  const submit = () => {
-    const title = formats[0] || "Annonce de parrainage";
-    onAdd({
-      id: `s-${Date.now()}`,
-      title,
-      status: "Open",
-      description: description.trim(),
-      created: "À l'instant",
-      platform: platforms.join(", ") || "Toutes plateformes",
-      videoType: videoTypes[0] || "—",
-      duration: durations[0] || "—",
-      subscribers: 0,
-      quantity: Math.max(1, Number(quantity) || 1),
-      price: price.trim() || "0",
-      paymentMode: payment[0] || "Paiement unique",
-    });
-  };
-
+  // Popup service unifié (le même que sur la page profil).
   return (
-    <StudioModal
-      title="Nouvelle annonce de parrainage"
+    <ServiceFormModal
+      open
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Megaphone} onClick={submit}>Confirmer</PrimaryButton></>}
-    >
-      <div className="flex flex-col gap-6">
-        <ChoiceRow multi label="Plateforme" options={["Youtube", "Tiktok", "Instagram", "Twitter"]} onChange={setPlatforms} />
-        <ChoiceRow multi label="Format de parrainage" options={["Post communautaire", "Vidéo longue dédiée", "Vidéo courte dédiée", "Placement dans une vidéo", "Story"]} onChange={setFormats} />
-        <ChoiceRow label="Type de vidéo" options={["Analyse profonde", "Review", "Reaction", "Présentation"]} onChange={setVideoTypes} />
-        <ChoiceRow label="Durée de vidéo" options={["0–30 s", "30–60 s", "60–120 s", "2–3 min", "3–5 min", "5–10 min", "10+ min"]} onChange={setDurations} />
-        <ChoiceRow label="Mode de paiement" options={["Abonnement", "Paiement unique"]} onChange={setPayment} />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ModalField label="Quantité"><TextInput value={quantity} onChange={setQuantity} placeholder="0" /></ModalField>
-          <ModalField label="Prix (€)"><TextInput value={price} onChange={setPrice} placeholder="0" /></ModalField>
-        </div>
-        <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className={modalTextarea} /></ModalField>
-      </div>
-    </StudioModal>
+      title="Nouvelle annonce de parrainage"
+      onSubmit={(values) => {
+        onAdd({
+          id: `s-${Date.now()}`,
+          title: values.format,
+          status: "Open",
+          description: values.description,
+          created: "À l'instant",
+          platform: values.platforms.join(", ") || "Toutes plateformes",
+          videoType: values.videoType,
+          duration: values.duration,
+          subscribers: 0,
+          quantity: values.quantity,
+          price: values.price,
+          paymentMode: values.paymentMode,
+        });
+      }}
+    />
   );
 }
 
@@ -1317,17 +1476,136 @@ function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recr
   );
 }
 
-function SettingsTab({ project, onDeleteProject }: { project: Project; onDeleteProject: () => void }) {
+function SettingsTab({
+  project,
+  updateProject,
+  onDeleteProject,
+  onWorkflow,
+}: {
+  project: Project;
+  updateProject: (updater: (p: Project) => Project) => void;
+  onDeleteProject: () => void;
+  onWorkflow: (message: string) => void;
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(project.title);
+  const [synopsis, setSynopsis] = useState(project.synopsis);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
+  const catalogVisible = project.catalogVisible ?? false;
+
+  const saveEdits = () => {
+    if (!title.trim()) return;
+    updateProject((p) => ({ ...p, title: title.trim(), synopsis: synopsis.trim(), updated: "À l'instant" }));
+    setEditing(false);
+    onWorkflow("Paramètres du projet enregistrés.");
+  };
+
+  const onCoverChosen = (file: File | undefined) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateProject((p) => ({ ...p, coverDataUrl: String(reader.result), updated: "À l'instant" }));
+      onWorkflow("Couverture mise à jour.");
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <SettingsSection title="Projet" items={[
-        { label: "Titre", value: project.title },
-        { label: "Statut", value: project.status },
-        { label: "Genres", value: project.genres.join(", ") || "—" },
-        { label: "Chapitres", value: String(project.chapters.length) },
-      ]} />
       <div className="flex flex-col gap-4">
+        <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-display text-[18px] font-bold">Projet</h3>
+            {editing ? (
+              <div className="flex items-center gap-2">
+                <GhostButton onClick={() => { setEditing(false); setTitle(project.title); setSynopsis(project.synopsis); }}>Annuler</GhostButton>
+                <PrimaryButton icon={Save} className="!h-10 !px-3" onClick={saveEdits}>Enregistrer</PrimaryButton>
+              </div>
+            ) : (
+              <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => setEditing(true)}>Modifier</SecondaryButton>
+            )}
+          </div>
+          {editing ? (
+            <div className="flex flex-col gap-3">
+              <div>
+                <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Titre</div>
+                <TextInput value={title} onChange={setTitle} placeholder="Titre du projet" />
+              </div>
+              <div>
+                <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Synopsis</div>
+                <textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} className={modalTextarea} />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col divide-y divide-[var(--border-default)]">
+              {[
+                { label: "Titre", value: project.title },
+                { label: "Statut", value: project.status },
+                { label: "Genres", value: project.genres.join(", ") || "—" },
+                { label: "Chapitres", value: String(project.chapters.length) },
+              ].map(i => (
+                <div key={i.label} className="flex items-center justify-between py-3">
+                  <span className="text-[13px] font-semibold text-[var(--text-secondary)]">{i.label}</span>
+                  <span className="text-[14px] font-bold">{i.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
+          <h3 className="font-display text-[18px] font-bold">Couverture</h3>
+          <div className="mt-3 flex items-center gap-4">
+            {project.coverDataUrl ? (
+              <img src={project.coverDataUrl} alt="Couverture" className="aspect-[3/4] w-24 rounded-[12px] border border-[var(--border-default)] object-cover" />
+            ) : (
+              <CoverPlaceholder title={project.title} className="aspect-[3/4] w-24" />
+            )}
+            <div className="flex flex-col gap-2">
+              <SecondaryButton icon={Upload} className="!h-10 !px-3" onClick={() => coverInputRef.current?.click()}>
+                {project.coverDataUrl ? "Remplacer la couverture" : "Uploader une couverture"}
+              </SecondaryButton>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { onCoverChosen(e.currentTarget.files?.[0]); e.currentTarget.value = ""; }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-4">
+        <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
+          <h3 className="font-display text-[18px] font-bold">Statut du projet</h3>
+          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">Contrôle la visibilité du projet dans le catalogue public.</p>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={catalogVisible}
+            onClick={() => {
+              updateProject((p) => ({ ...p, catalogVisible: !catalogVisible, updated: "À l'instant" }));
+              onWorkflow(catalogVisible ? "Projet masqué du catalogue." : "Projet visible dans le catalogue.");
+            }}
+            className="mt-4 flex w-full items-center justify-between rounded-[14px] border px-4 py-3 text-left"
+            style={{
+              borderColor: catalogVisible ? "rgba(57,255,136,0.45)" : "var(--border-default)",
+              background: catalogVisible ? "rgba(57,255,136,0.12)" : "var(--input-bg)",
+            }}
+          >
+            <span className="text-[13px] font-bold text-[var(--text-primary)]">
+              {catalogVisible ? "Visible dans le catalogue" : "Masqué du catalogue"}
+            </span>
+            <span className="relative h-6 w-11 rounded-full border border-[var(--border-default)] bg-[var(--elevated)]">
+              <span
+                className="absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all"
+                style={{ left: catalogVisible ? 22 : 2, background: catalogVisible ? "var(--neon)" : "var(--text-secondary)" }}
+              />
+            </span>
+          </button>
+        </div>
         <div className="rounded-[22px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.05)] p-5">
           <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-[var(--danger)]" /><h3 className="font-display text-[18px] font-bold text-[var(--danger)]">Danger zone</h3></div>
           <p className="mt-1 text-[14px] text-[var(--text-secondary)]">

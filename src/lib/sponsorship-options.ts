@@ -25,6 +25,8 @@ export type SponsorOption = {
   ownerName: string;
   chaptersMin?: number;
   chaptersMax?: number;
+  /** Langue du service (code site, ex. FR). */
+  language?: string;
   createdAt: string;
 };
 

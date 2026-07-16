@@ -41,6 +41,7 @@ function announcementFromOption(o: SponsorOption): Announcement {
     contactInstructions: "",
     linked: "",
     accent: "#39ff88",
+    language: o.language ?? "FR",
   };
 }
 import { btnSecondary, inputCls, metaLabel } from "@/components/sponsorship/ui";
@@ -160,6 +161,7 @@ function SponsorshipPage() {
         if (!filters.platforms.some((p) => have.some((h) => h.startsWith(normPlatform(p))))) return false;
       }
       if (filters.paymentModes.length && !filters.paymentModes.includes(a.paymentMode)) return false;
+      if (filters.languages.length && !filters.languages.includes(a.language ?? "FR")) return false;
       if (minS > 0 && (a.subscribers ?? 0) < minS) return false;
       if (maxS > 0 && (a.subscribers ?? Infinity) > maxS) return false;
 

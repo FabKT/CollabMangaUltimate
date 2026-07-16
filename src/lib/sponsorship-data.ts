@@ -54,6 +54,8 @@ export interface Announcement {
   contactInstructions: string;
   linked: string;
   accent: string;
+  /** Langue de l'annonce (code site, ex. FR). */
+  language?: string;
 }
 
 export const PLATFORMS: Platform[] = [

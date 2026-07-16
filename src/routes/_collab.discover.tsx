@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { listProfiles } from "@/lib/db";
+import { SITE_LANGUAGES } from "@/lib/languages";
 import {
   Search,
   SlidersHorizontal,
@@ -186,7 +187,7 @@ function profileFromDb(db: { id: string; username: string; display_name: string 
     initials: initialsOf(name),
     role: "Reader",
     secondary: [],
-    languages: ["FR"],
+    languages: ["Français"],
     rating: 0,
     availability: "Disponible",
     bio: "Profil CollabManga — bio à compléter.",
@@ -547,14 +548,29 @@ function UsersPage() {
 
       <div className="cm-scroll flex-1 overflow-y-auto px-5 pb-4">
         <FilterGroup title="Language" count={languages.length || undefined}>
-          <div className="flex flex-wrap gap-1.5">
-            {LANGUAGES.map((l) => (
-              <Chip
-                key={l.code}
-                active={languages.includes(l.label)}
-                onClick={() => setLanguages(toggle(languages, l.label))}
-              >
-                <span aria-hidden>{l.flag}</span> {l.label}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <select
+              value=""
+              onChange={(e) => {
+                const label = e.target.value;
+                if (label && !languages.includes(label)) setLanguages([...languages, label]);
+              }}
+              aria-label="Ajouter une langue au filtre"
+              className="h-9 w-full rounded-[10px] border px-3 text-[13px] font-semibold"
+              style={{
+                background: "var(--cm-input)",
+                borderColor: "var(--cm-border)",
+                color: "var(--cm-text)",
+              }}
+            >
+              <option value="">Ajouter une langue…</option>
+              {SITE_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.label}>{l.label}</option>
+              ))}
+            </select>
+            {languages.map((label) => (
+              <Chip key={label} active onClick={() => setLanguages(toggle(languages, label))}>
+                {label} ✕
               </Chip>
             ))}
           </div>

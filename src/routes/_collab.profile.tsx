@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
 import { addSponsorOption, listSponsorOptions, type SponsorOption } from "@/lib/sponsorship-options";
+import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
 import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
 
 /** Projection minimale d'un projet Studio (stocké en IndexedDB). */
@@ -2200,86 +2201,34 @@ function AddSponsorshipModal({
   onCreated?: () => void;
 }) {
   const isEdit = editTitle !== null;
-  const [platforms, setPlatforms] = useState<string[]>([]);
-  // Un seul format par option : pour proposer deux formats, créer deux services.
-  const [format, setFormat] = useState<string[]>([]);
-  const [videoType, setVideoType] = useState<string[]>([]);
-  const [duration, setDuration] = useState<string[]>([]);
-  const [payment, setPayment] = useState<string[]>([]);
-  const [quantity, setQuantity] = useState("");
-  const [price, setPrice] = useState("");
-  const [description, setDescription] = useState(editTitle ?? "");
-  const [chaptersMin, setChaptersMin] = useState("");
-  const [chaptersMax, setChaptersMax] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = () => {
-    if (!format[0]) {
-      setError("Choisis un format de parrainage (un seul par service).");
-      return;
-    }
-    setError(null);
-    addSponsorOption({
-      mode: "creator",
-      format: format[0],
-      platforms,
-      videoType: videoType[0] ?? "—",
-      duration: duration[0] ?? "—",
-      paymentMode: payment[0] ?? "Paiement unique",
-      price: price.trim() || "0",
-      quantity: Math.max(1, Number(quantity) || 1),
-      description: description.trim(),
-      ownerName,
-      chaptersMin: Number(chaptersMin) || undefined,
-      chaptersMax: Number(chaptersMax) || undefined,
-    });
-    addFavorite("Sponsorship option", format[0]);
-    onCreated?.();
-    onClose();
-  };
-
   return (
-    <ModalShell
+    <ServiceFormModal
       open={open}
       onClose={onClose}
       title={isEdit ? "Modifier le service" : "Add service"}
-      width={860}
-      footer={
-        <>
-          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={submit}>{isEdit ? "Enregistrer" : "Confirmer"}</PrimaryButton>
-        </>
-      }
-    >
-      <div className="space-y-6">
-        <ChoiceRow multi label="Plateforme" options={["Youtube", "Tiktok", "Instagram", "Twitter"]} onChange={setPlatforms} />
-        <ChoiceRow
-          label="Format de parrainage (un seul par service)"
-          options={["Post communautaire", "Vidéo longue dédiée", "Vidéo courte dédiée", "Placement dans une vidéo", "Story"]}
-          onChange={setFormat}
-        />
-        <ChoiceRow label="Type de vidéo" options={["Analyse profonde", "Review", "Reaction", "Présentation"]} onChange={setVideoType} />
-        <ChoiceRow label="Durée de vidéo" options={["0–30 s", "30–60 s", "60–120 s", "2–3 min", "3–5 min", "5–10 min", "10+ min"]} onChange={setDuration} />
-        <ChoiceRow label="Mode de paiement" options={["Abonnement", "Paiement unique"]} onChange={setPayment} />
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field label="Quantité"><input type="number" min={0} className="cm-input" placeholder="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></Field>
-          <Field label="Prix (€)"><input type="number" min={0} className="cm-input" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} /></Field>
-        </div>
-        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
-        <div className="rounded-[16px] p-4" style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)" }}>
-          <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Chapitres du projet</div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Nombre de chapitres minimum"><input type="number" min={0} className="cm-input" placeholder="0" value={chaptersMin} onChange={(e) => setChaptersMin(e.target.value)} /></Field>
-            <Field label="Nombre de chapitres maximal"><input type="number" min={0} className="cm-input" placeholder="0" value={chaptersMax} onChange={(e) => setChaptersMax(e.target.value)} /></Field>
-          </div>
-        </div>
-        {error && (
-          <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
-            {error}
-          </div>
-        )}
-      </div>
-    </ModalShell>
+      submitLabel={isEdit ? "Enregistrer" : "Confirmer"}
+      initial={isEdit ? { description: editTitle ?? "" } : undefined}
+      onSubmit={(values) => {
+        addSponsorOption({
+          mode: "creator",
+          format: values.format,
+          platforms: values.platforms,
+          videoType: values.videoType,
+          duration: values.duration,
+          paymentMode: values.paymentMode,
+          price: values.price,
+          quantity: values.quantity,
+          description: values.description,
+          ownerName,
+          chaptersMin: values.chaptersMin,
+          chaptersMax: values.chaptersMax,
+          language: values.language,
+        });
+        addFavorite("Sponsorship option", values.format);
+        onCreated?.();
+        onClose();
+      }}
+    />
   );
 }
 
@@ -2536,6 +2485,8 @@ function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onCl
 function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [name, setName] = useState("");
   const [synopsis, setSynopsis] = useState("");
+  const [genres, setGenres] = useState<string[]>([]);
+  const [subgenres, setSubgenres] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -2555,7 +2506,8 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
         validatedPages: 0,
         totalPages: 0,
         updated: "À l'instant",
-        genres: [] as string[],
+        genres,
+        subgenres,
         chapters: [] as unknown[],
         notes: [] as unknown[],
         sponsorships: [] as unknown[],
@@ -2591,6 +2543,13 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
         <div className="space-y-4">
           <Field label="Nom du projet"><input className="cm-input" placeholder="Nom du projet" value={name} onChange={(e) => setName(e.target.value)} /></Field>
           <Field label="Synopsis"><textarea className="cm-textarea" placeholder="Synopsis du projet" value={synopsis} onChange={(e) => setSynopsis(e.target.value)} /></Field>
+          <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
+          <ChoiceRow
+            multi
+            label="Sous-genres"
+            options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
+            onChange={setSubgenres}
+          />
           {error && (
             <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
               {error}

@@ -15,7 +15,7 @@ export function StatusBadge({ status, size = "sm" }: { status: SponsorshipStatus
   );
 }
 
-export function Modal({ open, onClose, title, children, footer, size = "md" }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; size?: "md" | "lg" }) {
+export function Modal({ open, onClose, title, children, footer, size = "md" }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; size?: "md" | "lg" | "xl" }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -39,7 +39,7 @@ export function Modal({ open, onClose, title, children, footer, size = "md" }: {
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; prev?.focus(); };
   }, [open, onClose]);
   if (!open) return null;
-  const w = size === "lg" ? "max-w-3xl" : "max-w-xl";
+  const w = size === "xl" ? "max-w-[1240px]" : size === "lg" ? "max-w-3xl" : "max-w-xl";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 bg-[#020616]/80 backdrop-blur-sm" onClick={onClose} />

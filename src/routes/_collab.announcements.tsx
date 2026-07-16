@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listAnnouncements } from "@/lib/db";
+import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import {
   Bookmark,
   Plus,
@@ -1238,8 +1239,31 @@ function AnnouncementFilters({
       }}
     >
       <FilterChipRow label="Language">
-        {LANGUES.map((l) => (
-          <FilterChip key={l} label={l} active={filters.langue.includes(l)} onClick={() => toggleArr("langue", l)} />
+        <select
+          value=""
+          onChange={(e) => {
+            const code = e.target.value;
+            if (code && !filters.langue.includes(code)) toggleArr("langue", code);
+          }}
+          aria-label="Ajouter une langue au filtre"
+          style={{
+            height: 38,
+            borderRadius: 12,
+            background: C.input,
+            border: `1px solid ${C.border}`,
+            color: C.text,
+            padding: "0 12px",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <option value="">Ajouter une langue…</option>
+          {SITE_LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>{l.label}</option>
+          ))}
+        </select>
+        {filters.langue.map((l) => (
+          <FilterChip key={l} label={`${languageLabel(l)} ✕`} active onClick={() => toggleArr("langue", l)} />
         ))}
       </FilterChipRow>
 
@@ -2641,11 +2665,34 @@ function AnnouncementAdvancedFiltersModal({
       <ModalHeader title="Filtres avancés" subtitle="Affinez par langue, genre et sous-genre." onClose={onClose} />
       <div style={{ overflow: "auto", padding: 24, background: C.details }}>
         <FilterChipRow label="Langage">
-          {LANGUES.map((language) => (
+          <select
+            value=""
+            onChange={(e) => {
+              const code = e.target.value;
+              if (code && !filters.langue.includes(code)) toggleArr("langue", code);
+            }}
+            aria-label="Ajouter une langue au filtre"
+            style={{
+              height: 38,
+              borderRadius: 12,
+              background: C.input,
+              border: `1px solid ${C.border}`,
+              color: C.text,
+              padding: "0 12px",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            <option value="">Ajouter une langue…</option>
+            {SITE_LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+          {filters.langue.map((language) => (
             <FilterChip
               key={language}
-              label={language}
-              active={filters.langue.includes(language)}
+              label={`${languageLabel(language)} ✕`}
+              active
               onClick={() => toggleArr("langue", language)}
             />
           ))}
