@@ -6,6 +6,7 @@ import { createId } from "@/lib/manga-workspace";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import type { SketchFinalResult } from "@/server-functions/sketch-final-image";
 import { authJsonHeaders } from "@/lib/auth-header";
+import { notifyCreditsChanged } from "@/lib/credits-events";
 import {
   Check,
   Download,
@@ -188,6 +189,7 @@ function SketchFinalPage() {
         throw new Error(payload.error || `Sketch finishing failed (${response.status}).`);
       }
       setResult(payload as SketchFinalResult);
+      notifyCreditsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sketch finishing failed.");
     } finally {

@@ -5,6 +5,7 @@ import { loadSession, saveSession } from "@/lib/manga-session";
 import { MANGA_STYLES } from "@/lib/manga-styles";
 import type { StyleTransferResult } from "@/server-functions/style-transfer-image";
 import { authJsonHeaders } from "@/lib/auth-header";
+import { notifyCreditsChanged } from "@/lib/credits-events";
 import {
   Wand2,
   Upload,
@@ -109,6 +110,7 @@ function StyleTransferPage() {
         throw new Error(payload.error || `Style transfer failed (${response.status}).`);
       }
       setResult(payload as StyleTransferResult);
+      notifyCreditsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Style transfer failed.");
     } finally {

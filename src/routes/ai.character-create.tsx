@@ -5,6 +5,7 @@ import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { CharacterImageResult } from "@/server-functions/character-image";
 import { authJsonHeaders } from "@/lib/auth-header";
+import { notifyCreditsChanged } from "@/lib/credits-events";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import {
   Palette,
@@ -193,6 +194,7 @@ function CharacterCreatePage() {
         throw new Error(payload.error || `Character generation failed (${response.status}).`);
       }
       setResult(payload as CharacterImageResult);
+      notifyCreditsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Character generation failed.");
     } finally {

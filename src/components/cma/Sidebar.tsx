@@ -20,6 +20,9 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { amIAdmin } from "@/server-functions/admin-billing";
+import { getMyBilling } from "@/server-functions/stripe-billing";
+import { onCreditsChanged } from "@/lib/credits-events";
+import { PLANS } from "@/lib/billing-plans";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -78,6 +81,39 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
           : g,
       )
     : groups;
+
+  // Quota réel de l'abonnement (crédits restants), rafraîchi à la navigation,
+  // au retour de focus et après chaque génération.
+  const [quota, setQuota] = useState<{ plan: string; remaining: number; total: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
+      try {
+        const res = await getMyBilling({ data: { accessToken: token } });
+        if (cancelled) return;
+        if (res.configured && res.subscription?.plan && res.period) {
+          setQuota({ plan: res.subscription.plan, remaining: res.period.remaining, total: res.period.quota });
+        } else {
+          setQuota(null);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    void load();
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    const off = onCreditsChanged(() => void load());
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      off();
+    };
+  }, [pathname]);
 
   return (
     <aside
@@ -247,7 +283,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         ))}
       </nav>
 
-      {/* Compact usage */}
+      {/* Quota réel de l'abonnement (crédits restants) */}
       <div
         className="mt-2"
         style={{
@@ -258,23 +294,29 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         }}
       >
         <div className="flex items-center justify-between mb-1">
-          <span style={{ font: "700 12px/16px var(--font-sans)" }}>Starter</span>
-          <span className="cma-chip cma-chip-active" style={{ height: 18, padding: "0 6px", fontSize: 10 }}>
-            Active
-          </span>
+          <span style={{ font: "700 12px/16px var(--font-sans)" }}>{quota ? PLANS[quota.plan as keyof typeof PLANS]?.label ?? quota.plan : "Aucun plan"}</span>
+          {quota && (
+            <span className="cma-chip cma-chip-active" style={{ height: 18, padding: "0 6px", fontSize: 10 }}>
+              Active
+            </span>
+          )}
         </div>
         <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Credits <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>000</span> / 000
+          {quota ? (
+            <>Crédits <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{quota.remaining}</span> / {quota.total}</>
+          ) : (
+            "Aucun abonnement actif"
+          )}
         </div>
         <div
           className="my-2"
           style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}
         >
-          <div style={{ width: "42%", height: "100%", background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
+          <div style={{ width: `${quota && quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0}%`, height: "100%", background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
         </div>
-        <button className="cma-btn-primary w-full justify-center" style={{ height: 32, fontSize: 12 }}>
-          Upgrade
-        </button>
+        <Link to="/ai/plan" className="cma-btn-primary w-full justify-center" style={{ height: 32, fontSize: 12 }}>
+          {quota ? "Gérer le plan" : "Choisir un plan"}
+        </Link>
       </div>
     </aside>
   );

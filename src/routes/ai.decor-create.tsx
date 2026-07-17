@@ -5,6 +5,7 @@ import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { DecorImageResult } from "@/server-functions/decor-image";
 import { authJsonHeaders } from "@/lib/auth-header";
+import { notifyCreditsChanged } from "@/lib/credits-events";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import { addCreatedDecor } from "@/lib/decor-store";
 import {
@@ -148,6 +149,7 @@ function DecorCreatePage() {
       }
       const decorResult = payload as DecorImageResult;
       setResult(decorResult);
+      notifyCreditsChanged();
       void addCreatedDecor({
         name: prompt.trim().slice(0, 60) || "Décor",
         imageUrl: decorResult.imageUrl,

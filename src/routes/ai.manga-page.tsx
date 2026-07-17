@@ -22,6 +22,7 @@ import {
 } from "@/lib/manga-history";
 import { PlancheCanvas } from "@/components/canvas/PlancheCanvas";
 import { bearerHeader } from "@/lib/auth-header";
+import { notifyCreditsChanged } from "@/lib/credits-events";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import {
   BookImage,
@@ -857,6 +858,7 @@ function CollabMangaAIPage() {
         size: generatedImageDimensions[aspectRatio].size,
       };
       setGenerationResult(normalizedResult);
+      notifyCreditsChanged();
       void addHistoryEntry({
         imageUrl: normalizedResult.imageUrl,
         prompt,

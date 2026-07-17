@@ -36,7 +36,16 @@ const checkoutSchema = z.object({
   plan: z.string(),
   accessToken: z.string().min(1),
   ip: z.string().optional(),
+  /** Origine du client (window.location.origin) → on y renvoie après paiement,
+   *  pour rester sur la même origine et préserver la session. */
+  origin: z.string().optional(),
 });
+
+/** Base de redirection : l'origine du client si fournie et valide, sinon APP_URL. */
+function returnBase(origin: string | undefined): string {
+  if (origin && /^https?:\/\//.test(origin)) return origin.replace(/\/+$/, "");
+  return appUrl();
+}
 
 /**
  * Démarre un abonnement (paiement initial) ou une montée en gamme via Stripe Checkout.
@@ -51,6 +60,7 @@ export const startCheckout = createServerFn({ method: "POST" })
     const user = await requireUser(data.accessToken);
     const sb = getServiceSupabase();
     const stripe = getStripe();
+    const base = returnBase(data.origin);
 
     const customerId = await ensureCustomer(user.id, user.email);
 
@@ -85,7 +95,7 @@ export const startCheckout = createServerFn({ method: "POST" })
         billing_cycle_anchor: "now",
         metadata: { user_id: user.id },
       });
-      return { mode: "immediate" as const, url: `${appUrl()}/ai/plan?upgraded=1` };
+      return { mode: "immediate" as const, url: `${base}/ai/plan?upgraded=1` };
     }
 
     // Baisse de gamme : appliquée au prochain renouvellement, sans facturation immédiate (§16).
@@ -98,7 +108,7 @@ export const startCheckout = createServerFn({ method: "POST" })
         metadata: { user_id: user.id },
       });
       await sb.from("subscriptions").update({ scheduled_downgrade_plan: plan, updated_at: new Date().toISOString() }).eq("user_id", user.id);
-      return { mode: "scheduled" as const, url: `${appUrl()}/ai/plan?downgrade=1` };
+      return { mode: "scheduled" as const, url: `${base}/ai/plan?downgrade=1` };
     }
 
     // Premier abonnement : session Checkout Stripe.
@@ -109,8 +119,8 @@ export const startCheckout = createServerFn({ method: "POST" })
       line_items: [{ price: priceIdForPlan(plan), quantity: 1 }],
       subscription_data: { metadata: { user_id: user.id, plan } },
       metadata: { user_id: user.id, plan },
-      success_url: `${appUrl()}/ai/plan?success=1&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl()}/ai/plan?canceled=1`,
+      success_url: `${base}/ai/plan?success=1&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${base}/ai/plan?canceled=1`,
     });
     return { mode: "checkout" as const, url: session.url };
   });

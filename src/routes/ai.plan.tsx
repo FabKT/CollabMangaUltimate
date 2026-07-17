@@ -34,6 +34,7 @@ function PlanImages() {
   const [billing, setBilling] = useState<BillingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -70,6 +71,22 @@ function PlanImages() {
   const currentPlan = (billing?.configured && billing.subscription?.plan) || null;
   const period = billing?.configured ? billing.period : null;
 
+  // Attend que le webhook ait appliqué le nouveau plan (montée en gamme immédiate).
+  const pollUntilPlan = async (target: PlanId) => {
+    const token = await accessToken();
+    if (!token) return;
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 1200));
+      try {
+        const res = await getMyBilling({ data: { accessToken: token } });
+        setBilling(res);
+        if (res.configured && res.subscription?.plan === target) return;
+      } catch {
+        /* on continue */
+      }
+    }
+  };
+
   const startPlan = async (plan: PlanId) => {
     setBusy(true);
     setNotice(null);
@@ -80,15 +97,22 @@ function PlanImages() {
         setBusy(false);
         return;
       }
-      const res = await startCheckout({ data: { plan, accessToken: token } });
+      const res = await startCheckout({ data: { plan, accessToken: token, origin: window.location.origin } });
       if (res.mode === "checkout" && res.url) {
         window.location.href = res.url;
         return;
       }
-      // Montée/baisse immédiate côté Stripe : on rafraîchit l'état.
-      setNotice(res.mode === "immediate" ? "Montée en gamme effectuée." : "Baisse de gamme programmée au prochain renouvellement.");
-      setConfirmPlan(null);
-      refresh();
+      if (res.mode === "immediate") {
+        // Montée en gamme : la carte enregistrée a été débitée. On attend le webhook.
+        setConfirmPlan(null);
+        setNotice("Paiement en cours de traitement…");
+        await pollUntilPlan(plan);
+        setNotice(`Plan mis à jour : ${PLANS[plan].label} — ${PLANS[plan].quota} crédits disponibles.`);
+      } else {
+        setConfirmPlan(null);
+        setNotice("Baisse de gamme programmée : elle prendra effet au prochain renouvellement.");
+        refresh();
+      }
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Échec du paiement.");
     }
@@ -105,6 +129,7 @@ function PlanImages() {
 
   const cancel = async () => {
     setBusy(true);
+    setConfirmCancel(false);
     try {
       const token = await accessToken();
       if (token) {
@@ -118,9 +143,10 @@ function PlanImages() {
     setBusy(false);
   };
 
-  const usagePct = useMemo(() => {
+  // Crédits restants (compte à rebours depuis le quota).
+  const remainingPct = useMemo(() => {
     if (!period || period.quota === 0) return 0;
-    return Math.min(100, Math.round((period.used / period.quota) * 100));
+    return Math.max(0, Math.min(100, Math.round((period.remaining / period.quota) * 100)));
   }, [period]);
 
   return (
@@ -132,7 +158,7 @@ function PlanImages() {
           <>
             <button className="cma-btn-secondary"><Receipt size={16} /> Billing</button>
             {currentPlan && !billing?.subscription?.cancelAtPeriodEnd && (
-              <button className="cma-btn-secondary" onClick={() => void cancel()} disabled={busy}>Annuler le renouvellement</button>
+              <button className="cma-btn-secondary" onClick={() => setConfirmCancel(true)} disabled={busy}>Annuler le renouvellement</button>
             )}
           </>
         }
@@ -172,15 +198,15 @@ function PlanImages() {
               </div>
               <div className="mt-6">
                 <div className="flex items-center justify-between text-[13px]" style={{ color: "var(--text-secondary)" }}>
-                  <span>Images utilisées cette période</span>
-                  <span><strong style={{ color: "var(--text-primary)" }}>{period?.used ?? 0}</strong> / {period?.quota ?? PLANS[currentPlan].quota}</span>
+                  <span>Crédits restants cette période</span>
+                  <span><strong style={{ color: "var(--text-primary)" }}>{period?.remaining ?? PLANS[currentPlan].quota}</strong> / {period?.quota ?? PLANS[currentPlan].quota}</span>
                 </div>
                 <div className="mt-2" style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.06)" }}>
-                  <div style={{ width: `${usagePct}%`, height: "100%", borderRadius: 999, background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
+                  <div style={{ width: `${remainingPct}%`, height: "100%", borderRadius: 999, background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
                 </div>
                 {period && (
                   <div className="mt-2 flex items-center justify-between text-[12px]" style={{ color: "var(--text-muted)" }}>
-                    <span>{period.remaining} crédits restants</span>
+                    <span>{period.used} générée{period.used > 1 ? "s" : ""}</span>
                     <span>Renouvellement : {new Date(period.renewalAt).toLocaleDateString("fr-FR")}</span>
                   </div>
                 )}
@@ -268,7 +294,44 @@ function PlanImages() {
           onConfirm={() => void startPlan(confirmPlan)}
         />
       )}
+
+      {confirmCancel && (
+        <ConfirmDialog
+          title="Annuler le renouvellement"
+          message={
+            period
+              ? `Ton abonnement restera actif jusqu'au ${new Date(period.renewalAt).toLocaleDateString("fr-FR")} (crédits inclus). Il ne sera pas renouvelé ensuite. Aucun remboursement.`
+              : "Ton abonnement restera actif jusqu'à la fin de la période payée puis ne sera pas renouvelé. Aucun remboursement."
+          }
+          confirmLabel="Annuler le renouvellement"
+          busy={busy}
+          onCancel={() => setConfirmCancel(false)}
+          onConfirm={() => void cancel()}
+        />
+      )}
     </>
+  );
+}
+
+function ConfirmDialog({
+  title, message, confirmLabel, busy, onCancel, onConfirm,
+}: {
+  title: string; message: string; confirmLabel: string; busy: boolean; onCancel: () => void; onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={onCancel}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[480px] rounded-[22px] p-6" style={{ background: "var(--panel, #0B1430)", border: "1px solid var(--border-strong, rgba(133,154,206,0.28))" }}>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2"><AlertTriangle size={18} color="var(--warning)" /><h3 className="text-[18px] font-bold">{title}</h3></div>
+          <button onClick={onCancel} aria-label="Fermer" style={{ color: "var(--text-muted)" }}><X size={18} /></button>
+        </div>
+        <p className="text-[14px] leading-[22px]" style={{ color: "var(--text-secondary)" }}>{message}</p>
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button className="cma-btn-secondary" onClick={onCancel} disabled={busy}>Retour</button>
+          <button className="cma-btn-primary" onClick={onConfirm} disabled={busy}>{busy ? "Traitement…" : confirmLabel}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -293,6 +356,7 @@ function UpgradeConfirm({
           Votre abonnement sera ensuite renouvelé chaque mois à la date d'aujourd'hui au tarif de {p.priceEuros.toFixed(2)} €.
         </p>
         <ul className="mt-4 flex flex-col gap-1.5 text-[13px]" style={{ color: "var(--text-muted)" }}>
+          <li>• Débit immédiat sur ta carte enregistrée (pas de nouvelle page de paiement).</li>
           <li>• Aucun report des crédits actuels.</li>
           <li>• Aucun remboursement de l'ancien plan.</li>
           <li>• Nouvelle date de renouvellement = aujourd'hui.</li>
