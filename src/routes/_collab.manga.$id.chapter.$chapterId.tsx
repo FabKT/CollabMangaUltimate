@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
@@ -6,12 +6,15 @@ import {
   Bookmark,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   Settings2,
+  Star,
 } from "lucide-react";
 import { getChapter, type Chapter, type Manga } from "@/lib/manga-data";
 import { RatingSection } from "@/components/manga/RatingSection";
 import { CommentsSection } from "@/components/manga/CommentsSection";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
+import { getChapterRating, rateChapter } from "@/lib/manga-ratings";
 
 type LoaderData = {
   manga: Manga;
@@ -46,6 +49,8 @@ type StudioChapterView = {
   images: string[];
   prevChapterId: string | null;
   nextChapterId: string | null;
+  lastChapterId: string | null;
+  chapters: { id: string; number: number; title: string }[];
 };
 
 function ChapterSwitch() {
@@ -81,6 +86,8 @@ function ChapterSwitch() {
           images,
           prevChapterId: idx > 0 ? published[idx - 1].id : null,
           nextChapterId: idx >= 0 && idx < published.length - 1 ? published[idx + 1].id : null,
+          lastChapterId: published.length > 0 ? published[published.length - 1].id : null,
+          chapters: published.map((c) => ({ id: c.id, number: c.number, title: c.title })),
         });
       }),
     ).catch(() => setStudio(null));
@@ -94,9 +101,36 @@ function ChapterSwitch() {
   return <StudioChapterReader view={studio} />;
 }
 
+function StarRatingPicker({ value, onRate }: { value: number; onRate: (n: number) => void }) {
+  const [hover, setHover] = useState(0);
+  const shown = hover || value;
+  return (
+    <div className="flex items-center gap-1" onMouseLeave={() => setHover(0)}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          aria-label={`Noter ${n} sur 5`}
+          onClick={() => onRate(n)}
+          onMouseEnter={() => setHover(n)}
+          className="p-0.5"
+        >
+          <Star
+            className="h-6 w-6 transition-colors"
+            style={{ color: n <= shown ? "var(--color-star, #ffb84d)" : "var(--color-text-disabled, #5e6a90)" }}
+            fill={n <= shown ? "currentColor" : "none"}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StudioChapterReader({ view }: { view: StudioChapterView }) {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("vertical");
   const [page, setPage] = useState(0);
+  const [rating, setRating] = useState(0);
   const total = view.images.length;
   const canPrev = page > 0;
   const canNext = page < total - 1;
@@ -105,7 +139,8 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
 
   useEffect(() => {
     setPage(0);
-  }, [view.chapterId]);
+    setRating(getChapterRating(view.projectId, view.chapterId));
+  }, [view.chapterId, view.projectId]);
 
   // Mode pagination : flèches clavier gauche/droite.
   useEffect(() => {
@@ -118,126 +153,156 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
     return () => window.removeEventListener("keydown", handler);
   }, [mode, total]);
 
-  return (
-    <div className="mx-auto w-full max-w-[960px] px-4 py-6 md:px-6 md:py-8">
-      {/* Barre supérieure : retour, titre, mode de lecture */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <Link to="/manga/$id" params={{ id: view.projectId }} className="btn-ghost -ml-3 h-10">
-          <ArrowLeft className="h-4 w-4" /> {view.projectTitle}
-        </Link>
-        <span className="text-[13px] font-bold text-[color:var(--color-text-secondary)]">
-          Ch. {view.chapterNumber} — {view.chapterTitle}
-        </span>
-        <div
-          className="flex items-center gap-1 rounded-xl p-1"
-          style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)" }}
-          role="tablist"
-          aria-label="Mode de lecture"
-        >
-          {(["vertical", "pagination"] as Mode[]).map((m) => (
-            <button
-              key={m}
-              role="tab"
-              aria-selected={mode === m}
-              onClick={() => setMode(m)}
-              className="rounded-lg px-3 py-1.5 text-[12px] font-bold transition-colors"
-              style={
-                mode === m
-                  ? { background: "rgba(57,255,136,0.12)", color: "#39ff88", border: "1px solid rgba(57,255,136,0.45)" }
-                  : { color: "var(--color-text-secondary)", border: "1px solid transparent" }
-              }
-            >
-              {m === "vertical" ? "Scroll vertical" : "Pagination"}
-            </button>
-          ))}
-        </div>
-      </div>
+  const rate = (n: number) => {
+    rateChapter(view.projectId, view.chapterId, n);
+    setRating(n);
+  };
 
-      {view.images.length === 0 ? (
-        <div className="rounded-2xl border p-10 text-center text-[14px] text-[color:var(--color-text-secondary)]" style={{ borderColor: "var(--color-border-default)" }}>
-          Aucune page validée avec image dans ce chapitre pour l'instant.
+  const goToChapter = (chapterId: string) => {
+    void navigate({ to: "/manga/$id/chapter/$chapterId", params: { id: view.projectId, chapterId } });
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
+      {/* Barre supérieure : retour + titre (gauche, position inchangée) — contrôles pages (droite) */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <Link to="/manga/$id" params={{ id: view.projectId }} className="btn-ghost -ml-3 h-10">
+            <ArrowLeft className="h-4 w-4" /> {view.projectTitle}
+          </Link>
+          <span className="text-[13px] font-bold text-[color:var(--color-text-secondary)]">
+            Ch. {view.chapterNumber} — {view.chapterTitle}
+          </span>
         </div>
-      ) : mode === "vertical" ? (
-        <div className="flex flex-col gap-2">
-          {view.images.map((src, i) => (
-            <img key={i} src={src} alt={`Page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--color-border-default)" }} />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-4">
-          {/* Page + zones de clic : moitié gauche = page précédente, moitié droite = page suivante. */}
-          <div className="relative w-full select-none">
-            <img
-              src={view.images[page]}
-              alt={`Page ${page + 1}`}
-              className="mx-auto block w-auto max-w-full rounded-xl border"
-              style={{ borderColor: "var(--color-border-default)", maxHeight: "80vh" }}
-            />
-            <button
-              type="button"
-              aria-label="Page précédente"
-              onClick={goPrev}
-              disabled={!canPrev}
-              className="absolute inset-y-0 left-0 w-1/2 cursor-pointer disabled:cursor-default"
-            />
-            <button
-              type="button"
-              aria-label="Page suivante"
-              onClick={goNext}
-              disabled={!canNext}
-              className="absolute inset-y-0 right-0 w-1/2 cursor-pointer disabled:cursor-default"
-            />
-          </div>
-          {/* Contrôles pages — même grille que la nav chapitre pour un alignement parfait. */}
-          <div className="mx-auto grid w-full max-w-[520px] grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <button
-              className="btn-secondary h-10 justify-self-start whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canPrev}
-              onClick={goPrev}
-            >
+        {mode === "pagination" && total > 0 && (
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary h-10 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40" disabled={!canPrev} onClick={goPrev}>
               <ChevronLeft className="h-4 w-4" /> Page précédente
             </button>
-            <span className="whitespace-nowrap text-[13px] font-bold text-[color:var(--color-text-secondary)]">
-              {page + 1} / {total}
-            </span>
-            <button
-              className="btn-secondary h-10 justify-self-end whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canNext}
-              onClick={goNext}
-            >
+            <span className="whitespace-nowrap text-[13px] font-bold text-[color:var(--color-text-secondary)]">{page + 1} / {total}</span>
+            <button className="btn-secondary h-10 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40" disabled={!canNext} onClick={goNext}>
               Page suivante <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Navigation entre chapitres — alignée sur la même grille que les contrôles de page. */}
-      <div className="mx-auto mt-8 grid w-full max-w-[520px] grid-cols-[1fr_auto_1fr] items-center gap-3">
-        {view.prevChapterId ? (
-          <Link to="/manga/$id/chapter/$chapterId" params={{ id: view.projectId, chapterId: view.prevChapterId }} className="btn-secondary h-10 justify-self-start whitespace-nowrap">
-            <ChevronLeft className="h-4 w-4" /> Chapitre précédent
-          </Link>
-        ) : (
-          <span className="btn-secondary h-10 cursor-not-allowed justify-self-start whitespace-nowrap opacity-40"><ChevronLeft className="h-4 w-4" /> Chapitre précédent</span>
-        )}
-        <span aria-hidden />
-        {view.nextChapterId ? (
-          <Link to="/manga/$id/chapter/$chapterId" params={{ id: view.projectId, chapterId: view.nextChapterId }} className="btn-secondary h-10 justify-self-end whitespace-nowrap">
-            Chapitre suivant <ChevronRight className="h-4 w-4" />
-          </Link>
-        ) : (
-          <span className="btn-secondary h-10 cursor-not-allowed justify-self-end whitespace-nowrap opacity-40">Chapitre suivant <ChevronRight className="h-4 w-4" /></span>
         )}
       </div>
 
-      {/* Commentaires du chapitre (réels, Supabase) */}
-      <section
-        className="mt-8 rounded-2xl p-6"
-        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)" }}
-      >
-        <h2 className="mb-4 font-display text-[18px] font-extrabold">Commentaires</h2>
-        <CommentsPanel entityType="manga_chapter" entityId={`${view.projectId}:${view.chapterId}`} />
-      </section>
+      {/* Deux colonnes : contenu (large) à gauche, menu (étroit) à droite */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* Colonne gauche : contenu + commentaires */}
+        <div className="min-w-0">
+          {view.images.length === 0 ? (
+            <div className="rounded-2xl border p-10 text-center text-[14px] text-[color:var(--color-text-secondary)]" style={{ borderColor: "var(--color-border-default)" }}>
+              Aucune page validée avec image dans ce chapitre pour l'instant.
+            </div>
+          ) : mode === "vertical" ? (
+            <div className="flex flex-col gap-2">
+              {view.images.map((src, i) => (
+                <img key={i} src={src} alt={`Page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--color-border-default)" }} />
+              ))}
+            </div>
+          ) : (
+            <div className="relative w-full select-none">
+              <img
+                src={view.images[page]}
+                alt={`Page ${page + 1}`}
+                className="mx-auto block w-auto max-w-full rounded-xl border"
+                style={{ borderColor: "var(--color-border-default)", maxHeight: "82vh" }}
+              />
+              <button type="button" aria-label="Page précédente" onClick={goPrev} disabled={!canPrev} className="absolute inset-y-0 left-0 w-1/2 cursor-pointer disabled:cursor-default" />
+              <button type="button" aria-label="Page suivante" onClick={goNext} disabled={!canNext} className="absolute inset-y-0 right-0 w-1/2 cursor-pointer disabled:cursor-default" />
+            </div>
+          )}
+
+          {/* Commentaires du chapitre (réels, Supabase) — restent sous le contenu */}
+          <section className="mt-8 rounded-2xl p-6" style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)" }}>
+            <h2 className="mb-4 font-display text-[18px] font-extrabold">Commentaires</h2>
+            <CommentsPanel entityType="manga_chapter" entityId={`${view.projectId}:${view.chapterId}`} />
+          </section>
+        </div>
+
+        {/* Colonne droite : menu (sticky) */}
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <div className="flex flex-col gap-5 rounded-2xl p-5" style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)" }}>
+            {/* 1. Mode de lecture */}
+            <div>
+              <p className="meta-label mb-2">Mode de lecture</p>
+              <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: "var(--color-elevated, rgba(255,255,255,0.03))", border: "1px solid var(--color-border-default)" }} role="tablist" aria-label="Mode de lecture">
+                {(["vertical", "pagination"] as Mode[]).map((m) => (
+                  <button
+                    key={m}
+                    role="tab"
+                    aria-selected={mode === m}
+                    onClick={() => setMode(m)}
+                    className="flex-1 rounded-lg px-3 py-1.5 text-[12px] font-bold transition-colors"
+                    style={mode === m ? { background: "rgba(57,255,136,0.12)", color: "#39ff88", border: "1px solid rgba(57,255,136,0.45)" } : { color: "var(--color-text-secondary)", border: "1px solid transparent" }}
+                  >
+                    {m === "vertical" ? "Scroll" : "Pagination"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Dropdown liste des chapitres */}
+            <div>
+              <p className="meta-label mb-2">Chapitre</p>
+              <select
+                value={view.chapterId}
+                onChange={(e) => goToChapter(e.target.value)}
+                className="input-field h-10 w-full text-[13px]"
+                aria-label="Choisir un chapitre"
+              >
+                {view.chapters.map((c) => (
+                  <option key={c.id} value={c.id} className="bg-[color:var(--color-panel)]">
+                    Ch. {c.number} — {c.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Navigation chapitres : précédent / suivant / dernier */}
+            <div>
+              <p className="meta-label mb-2">Navigation</p>
+              <div className="flex items-center gap-2">
+                <button
+                  className="btn-secondary h-10 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!view.prevChapterId}
+                  onClick={() => view.prevChapterId && goToChapter(view.prevChapterId)}
+                  aria-label="Chapitre précédent"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  className="btn-secondary h-10 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!view.nextChapterId}
+                  onClick={() => view.nextChapterId && goToChapter(view.nextChapterId)}
+                  aria-label="Chapitre suivant"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <button
+                  className="btn-secondary h-10 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!view.lastChapterId || view.lastChapterId === view.chapterId}
+                  onClick={() => view.lastChapterId && goToChapter(view.lastChapterId)}
+                  aria-label="Dernier chapitre"
+                  title="Dernier chapitre"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 4. Note du chapitre (met à jour la note du manga) */}
+            <div>
+              <p className="meta-label mb-2">Note du chapitre</p>
+              <StarRatingPicker value={rating} onRate={rate} />
+              <p className="mt-1.5 text-[12px] text-[color:var(--color-text-muted)]">
+                {rating > 0 ? `Ta note : ${rating}/5` : "Note ce chapitre sur 5"}
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

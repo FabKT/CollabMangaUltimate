@@ -12,6 +12,7 @@ import {
 import { HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS, type CatalogManga, type HeroSlide, type NewDrop } from "@/lib/haven-data";
 import { MangaCard } from "@/components/haven/MangaCard";
 import { loadStudioProjects } from "@/lib/studio-projects";
+import { getMangaRating } from "@/lib/manga-ratings";
 
 type StudioCatalogChapter = { id: string; number: number; title: string; status: string; updated: string };
 type StudioCatalogProject = {
@@ -41,7 +42,7 @@ function useVisibleStudioEntries(): CatalogManga[] {
               cover: p.coverDataUrl || "",
               demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
-              rating: 0,
+              rating: getMangaRating(p.id),
               chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,

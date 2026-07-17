@@ -12,6 +12,7 @@ import {
   type SortOption,
 } from "@/lib/haven-data";
 import { loadStudioProjects } from "@/lib/studio-projects";
+import { getMangaRating } from "@/lib/manga-ratings";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { MangaCard } from "@/components/haven/MangaCard";
 
@@ -90,7 +91,7 @@ function CatalogPage() {
               cover: p.coverDataUrl || "",
               demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
-              rating: 0,
+              rating: getMangaRating(p.id),
               chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,
