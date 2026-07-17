@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   FileImage,
   UserPlus,
@@ -14,8 +15,11 @@ import {
   ChevronsUpDown,
   Users,
   ArrowLeft,
+  ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { amIAdmin } from "@/server-functions/admin-billing";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -49,6 +53,31 @@ const groups: Group[] = [
 export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => (to === "/ai" ? pathname === "/ai" : pathname.startsWith(to));
+
+  // Lien admin affiché uniquement pour les administrateurs (vérifié côté serveur).
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    void (async () => {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
+      try {
+        const res = await amIAdmin({ data: { accessToken: token } });
+        setIsAdmin(res.admin);
+      } catch {
+        /* pas admin */
+      }
+    })();
+  }, []);
+
+  const renderedGroups: Group[] = isAdmin
+    ? groups.map((g) =>
+        g.title === "Compte"
+          ? { ...g, items: [...g.items, { label: "Admin — Facturation", to: "/ai/admin", icon: ShieldCheck }] }
+          : g,
+      )
+    : groups;
 
   return (
     <aside
@@ -146,7 +175,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto -mr-1 pr-1">
-        {groups.map((g, i) => (
+        {renderedGroups.map((g, i) => (
           <div key={i} style={{ marginTop: i === 0 ? 0 : 14 }}>
             {g.title && (
               <div

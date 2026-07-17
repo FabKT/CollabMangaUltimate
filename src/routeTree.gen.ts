@@ -29,6 +29,7 @@ import { Route as AiCharactersRouteImport } from './routes/ai.characters'
 import { Route as AiCharacterCreateRouteImport } from './routes/ai.character-create'
 import { Route as AiChapterRouteImport } from './routes/ai.chapter'
 import { Route as AiAssetsRouteImport } from './routes/ai.assets'
+import { Route as AiAdminRouteImport } from './routes/ai.admin'
 import { Route as CollabStudioRouteImport } from './routes/_collab.studio'
 import { Route as CollabSponsorshipHubRouteImport } from './routes/_collab.sponsorship-hub'
 import { Route as CollabSponsorshipRouteImport } from './routes/_collab.sponsorship'
@@ -151,6 +152,11 @@ const AiChapterRoute = AiChapterRouteImport.update({
 const AiAssetsRoute = AiAssetsRouteImport.update({
   id: '/assets',
   path: '/assets',
+  getParentRoute: () => AiRoute,
+} as any)
+const AiAdminRoute = AiAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AiRoute,
 } as any)
 const CollabStudioRoute = CollabStudioRouteImport.update({
@@ -294,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/sponsorship': typeof CollabSponsorshipRoute
   '/sponsorship-hub': typeof CollabSponsorshipHubRoute
   '/studio': typeof CollabStudioRoute
+  '/ai/admin': typeof AiAdminRoute
   '/ai/assets': typeof AiAssetsRoute
   '/ai/chapter': typeof AiChapterRoute
   '/ai/character-create': typeof AiCharacterCreateRoute
@@ -338,6 +345,7 @@ export interface FileRoutesByTo {
   '/sponsorship': typeof CollabSponsorshipRoute
   '/sponsorship-hub': typeof CollabSponsorshipHubRoute
   '/studio': typeof CollabStudioRoute
+  '/ai/admin': typeof AiAdminRoute
   '/ai/assets': typeof AiAssetsRoute
   '/ai/chapter': typeof AiChapterRoute
   '/ai/character-create': typeof AiCharacterCreateRoute
@@ -385,6 +393,7 @@ export interface FileRoutesById {
   '/_collab/sponsorship': typeof CollabSponsorshipRoute
   '/_collab/sponsorship-hub': typeof CollabSponsorshipHubRoute
   '/_collab/studio': typeof CollabStudioRoute
+  '/ai/admin': typeof AiAdminRoute
   '/ai/assets': typeof AiAssetsRoute
   '/ai/chapter': typeof AiChapterRoute
   '/ai/character-create': typeof AiCharacterCreateRoute
@@ -432,6 +441,7 @@ export interface FileRouteTypes {
     | '/sponsorship'
     | '/sponsorship-hub'
     | '/studio'
+    | '/ai/admin'
     | '/ai/assets'
     | '/ai/chapter'
     | '/ai/character-create'
@@ -476,6 +486,7 @@ export interface FileRouteTypes {
     | '/sponsorship'
     | '/sponsorship-hub'
     | '/studio'
+    | '/ai/admin'
     | '/ai/assets'
     | '/ai/chapter'
     | '/ai/character-create'
@@ -522,6 +533,7 @@ export interface FileRouteTypes {
     | '/_collab/sponsorship'
     | '/_collab/sponsorship-hub'
     | '/_collab/studio'
+    | '/ai/admin'
     | '/ai/assets'
     | '/ai/chapter'
     | '/ai/character-create'
@@ -704,6 +716,13 @@ declare module '@tanstack/react-router' {
       path: '/assets'
       fullPath: '/ai/assets'
       preLoaderRoute: typeof AiAssetsRouteImport
+      parentRoute: typeof AiRoute
+    }
+    '/ai/admin': {
+      id: '/ai/admin'
+      path: '/admin'
+      fullPath: '/ai/admin'
+      preLoaderRoute: typeof AiAdminRouteImport
       parentRoute: typeof AiRoute
     }
     '/_collab/studio': {
@@ -933,6 +952,7 @@ const CollabRouteWithChildren =
   CollabRoute._addFileChildren(CollabRouteChildren)
 
 interface AiRouteChildren {
+  AiAdminRoute: typeof AiAdminRoute
   AiAssetsRoute: typeof AiAssetsRoute
   AiChapterRoute: typeof AiChapterRoute
   AiCharacterCreateRoute: typeof AiCharacterCreateRoute
@@ -951,6 +971,7 @@ interface AiRouteChildren {
 }
 
 const AiRouteChildren: AiRouteChildren = {
+  AiAdminRoute: AiAdminRoute,
   AiAssetsRoute: AiAssetsRoute,
   AiChapterRoute: AiChapterRoute,
   AiCharacterCreateRoute: AiCharacterCreateRoute,

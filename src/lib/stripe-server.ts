@@ -176,7 +176,15 @@ async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe
   const userId = subscription.metadata?.user_id || (await userIdForCustomer(sb, customerId));
   if (!userId) throw new Error("Impossible d'associer la facture à un utilisateur.");
 
-  // Enregistre / met à jour la ligne d'abonnement.
+  // Plan courant AVANT mise à jour → sert à déterminer le motif de clôture.
+  const { data: before } = await sb.from("subscriptions").select("id, plan").eq("user_id", userId).maybeSingle();
+  const previousPlan = before?.plan as PlanId | undefined;
+  let closeReason: "renewal" | "upgrade" | "downgrade" = "renewal";
+  if (previousPlan && previousPlan !== plan.id) {
+    closeReason = PLANS[plan.id].amountCents > PLANS[previousPlan].amountCents ? "upgrade" : "downgrade";
+  }
+
+  // Enregistre / met à jour la ligne d'abonnement (purge un éventuel downgrade programmé désormais appliqué).
   await sb.from("subscriptions").upsert(
     {
       user_id: userId,
@@ -185,24 +193,18 @@ async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe
       plan: plan.id,
       status: "active",
       cancel_at_period_end: subscription.cancel_at_period_end ?? false,
+      scheduled_downgrade_plan: null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
   );
-  const { data: subRow } = await sb.from("subscriptions").select("id, plan").eq("user_id", userId).single();
-
-  // Motif de clôture de la période précédente : renouvellement, montée ou baisse.
-  const previousPlan = subRow?.plan as PlanId | undefined;
-  let closeReason: "renewal" | "upgrade" | "downgrade" = "renewal";
-  if (previousPlan && previousPlan !== plan.id) {
-    closeReason = PLANS[plan.id].amountCents > PLANS[previousPlan].amountCents ? "upgrade" : "downgrade";
-  }
+  const { data: subRow } = await sb.from("subscriptions").select("id").eq("user_id", userId).single();
 
   const line = invoice.lines?.data?.[0];
   const periodEndUnix = line?.period?.end ?? subEndUnix(subscription);
   const periodEnd = new Date((periodEndUnix ?? Math.floor(Date.now() / 1000) + 30 * 86400) * 1000).toISOString();
 
-  await sb.rpc("open_paid_period", {
+  const { data: newPeriodId } = await sb.rpc("open_paid_period", {
     p_user_id: userId,
     p_subscription_id: subRow?.id ?? null,
     p_plan: plan.id,
@@ -213,6 +215,33 @@ async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe
     p_invoice_id: invoice.id,
     p_close_reason: closeReason,
   });
+
+  // Frais Stripe réels de cette facture → injectés dans la période (marge exacte).
+  const feeCents = await stripeFeeForInvoice(stripe, invoice);
+  if (newPeriodId && feeCents > 0) {
+    await sb.from("subscription_periods").update({ stripe_fees_cents: feeCents }).eq("id", newPeriodId);
+  }
+}
+
+/** Frais Stripe réels d'une facture (via la balance transaction de la charge). */
+async function stripeFeeForInvoice(stripe: Stripe, invoice: Stripe.Invoice): Promise<number> {
+  try {
+    const anyInv = invoice as unknown as { charge?: string | { id?: string }; payment_intent?: string | { id?: string } };
+    let chargeId = typeof anyInv.charge === "string" ? anyInv.charge : anyInv.charge?.id;
+    if (!chargeId) {
+      const piId = typeof anyInv.payment_intent === "string" ? anyInv.payment_intent : anyInv.payment_intent?.id;
+      if (piId) {
+        const pi = await stripe.paymentIntents.retrieve(piId);
+        chargeId = (pi as unknown as { latest_charge?: string }).latest_charge;
+      }
+    }
+    if (!chargeId) return 0;
+    const charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
+    const bt = charge.balance_transaction;
+    return bt && typeof bt !== "string" ? bt.fee : 0;
+  } catch {
+    return 0;
+  }
 }
 
 async function onInvoiceFailed(sb: SupabaseClient, invoice: Stripe.Invoice): Promise<void> {
