@@ -98,29 +98,25 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
   const [mode, setMode] = useState<Mode>("vertical");
   const [page, setPage] = useState(0);
   const total = view.images.length;
+  const canPrev = page > 0;
+  const canNext = page < total - 1;
+  const goPrev = () => setPage((p) => Math.max(0, p - 1));
+  const goNext = () => setPage((p) => Math.min(total - 1, p + 1));
 
   useEffect(() => {
     setPage(0);
   }, [view.chapterId]);
 
-  const chapterNav = (
-    <div className="flex items-center gap-2">
-      {view.prevChapterId ? (
-        <Link to="/manga/$id/chapter/$chapterId" params={{ id: view.projectId, chapterId: view.prevChapterId }} className="btn-secondary h-10">
-          <ChevronLeft className="h-4 w-4" /> Chapitre précédent
-        </Link>
-      ) : (
-        <span className="btn-secondary h-10 cursor-not-allowed opacity-40"><ChevronLeft className="h-4 w-4" /> Chapitre précédent</span>
-      )}
-      {view.nextChapterId ? (
-        <Link to="/manga/$id/chapter/$chapterId" params={{ id: view.projectId, chapterId: view.nextChapterId }} className="btn-secondary h-10">
-          Chapitre suivant <ChevronRight className="h-4 w-4" />
-        </Link>
-      ) : (
-        <span className="btn-secondary h-10 cursor-not-allowed opacity-40">Chapitre suivant <ChevronRight className="h-4 w-4" /></span>
-      )}
-    </div>
-  );
+  // Mode pagination : flèches clavier gauche/droite.
+  useEffect(() => {
+    if (mode !== "pagination") return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") setPage((p) => Math.min(total - 1, p + 1));
+      if (e.key === "ArrowLeft") setPage((p) => Math.max(0, p - 1));
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [mode, total]);
 
   return (
     <div className="mx-auto w-full max-w-[960px] px-4 py-6 md:px-6 md:py-8">
@@ -169,27 +165,45 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
         </div>
       ) : (
         <div className="flex flex-col items-center gap-4">
-          <img
-            src={view.images[page]}
-            alt={`Page ${page + 1}`}
-            className="w-full rounded-xl border"
-            style={{ borderColor: "var(--color-border-default)", maxHeight: "80vh", objectFit: "contain" }}
-          />
-          <div className="flex items-center gap-4">
+          {/* Page + zones de clic : moitié gauche = page précédente, moitié droite = page suivante. */}
+          <div className="relative w-full select-none">
+            <img
+              src={view.images[page]}
+              alt={`Page ${page + 1}`}
+              className="mx-auto block w-auto max-w-full rounded-xl border"
+              style={{ borderColor: "var(--color-border-default)", maxHeight: "80vh" }}
+            />
             <button
-              className="btn-secondary h-10 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              type="button"
+              aria-label="Page précédente"
+              onClick={goPrev}
+              disabled={!canPrev}
+              className="absolute inset-y-0 left-0 w-1/2 cursor-pointer disabled:cursor-default"
+            />
+            <button
+              type="button"
+              aria-label="Page suivante"
+              onClick={goNext}
+              disabled={!canNext}
+              className="absolute inset-y-0 right-0 w-1/2 cursor-pointer disabled:cursor-default"
+            />
+          </div>
+          {/* Contrôles pages — même grille que la nav chapitre pour un alignement parfait. */}
+          <div className="mx-auto grid w-full max-w-[520px] grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <button
+              className="btn-secondary h-10 justify-self-start whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!canPrev}
+              onClick={goPrev}
             >
               <ChevronLeft className="h-4 w-4" /> Page précédente
             </button>
-            <span className="text-[13px] font-bold text-[color:var(--color-text-secondary)]">
+            <span className="whitespace-nowrap text-[13px] font-bold text-[color:var(--color-text-secondary)]">
               {page + 1} / {total}
             </span>
             <button
-              className="btn-secondary h-10 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={page >= total - 1}
-              onClick={() => setPage((p) => Math.min(total - 1, p + 1))}
+              className="btn-secondary h-10 justify-self-end whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!canNext}
+              onClick={goNext}
             >
               Page suivante <ChevronRight className="h-4 w-4" />
             </button>
@@ -197,8 +211,24 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
         </div>
       )}
 
-      {/* Navigation entre chapitres */}
-      <div className="mt-8 flex justify-center">{chapterNav}</div>
+      {/* Navigation entre chapitres — alignée sur la même grille que les contrôles de page. */}
+      <div className="mx-auto mt-8 grid w-full max-w-[520px] grid-cols-[1fr_auto_1fr] items-center gap-3">
+        {view.prevChapterId ? (
+          <Link to="/manga/$id/chapter/$chapterId" params={{ id: view.projectId, chapterId: view.prevChapterId }} className="btn-secondary h-10 justify-self-start whitespace-nowrap">
+            <ChevronLeft className="h-4 w-4" /> Chapitre précédent
+          </Link>
+        ) : (
+          <span className="btn-secondary h-10 cursor-not-allowed justify-self-start whitespace-nowrap opacity-40"><ChevronLeft className="h-4 w-4" /> Chapitre précédent</span>
+        )}
+        <span aria-hidden />
+        {view.nextChapterId ? (
+          <Link to="/manga/$id/chapter/$chapterId" params={{ id: view.projectId, chapterId: view.nextChapterId }} className="btn-secondary h-10 justify-self-end whitespace-nowrap">
+            Chapitre suivant <ChevronRight className="h-4 w-4" />
+          </Link>
+        ) : (
+          <span className="btn-secondary h-10 cursor-not-allowed justify-self-end whitespace-nowrap opacity-40">Chapitre suivant <ChevronRight className="h-4 w-4" /></span>
+        )}
+      </div>
 
       {/* Commentaires du chapitre (réels, Supabase) */}
       <section
@@ -444,8 +474,23 @@ function ChapterReader() {
                 key={page}
                 src={chapter.pageImages[page]}
                 alt={`${chapter.title} — page ${page + 1}`}
-                className="max-h-[78vh] w-auto max-w-full"
+                className="max-h-[78vh] w-auto max-w-full select-none"
                 style={{ borderRadius: 8, background: "var(--color-bg)" }}
+              />
+              {/* Zones de clic : moitié gauche = page précédente, moitié droite = page suivante. */}
+              <button
+                type="button"
+                aria-label="Previous page"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="absolute inset-y-0 left-0 z-[5] w-1/2 cursor-pointer disabled:cursor-default"
+              />
+              <button
+                type="button"
+                aria-label="Next page"
+                onClick={() => setPage((p) => Math.min(chapter.pageImages.length - 1, p + 1))}
+                disabled={page === chapter.pageImages.length - 1}
+                className="absolute inset-y-0 right-0 z-[5] w-1/2 cursor-pointer disabled:cursor-default"
               />
               <button
                 type="button"
