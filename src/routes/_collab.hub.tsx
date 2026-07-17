@@ -42,7 +42,7 @@ function useVisibleStudioEntries(): CatalogManga[] {
               demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
               rating: 0,
-              chapters: p.chapters.length,
+              chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,
               language: "FR",

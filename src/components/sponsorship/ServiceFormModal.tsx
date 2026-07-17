@@ -23,6 +23,7 @@ export type ServiceFormValues = {
   subscribersMin?: number;
   subscribersMax?: number;
   link?: string;
+  status?: string;
 };
 
 const FORMATS = ["Post communautaire", "Vidéo longue dédiée", "Vidéo courte dédiée", "Placement dans une vidéo", "Story"];
@@ -109,6 +110,7 @@ export function ServiceFormModal({
   showLink = false,
   showChapters = true,
   mode = "creator",
+  statusOptions,
 }: {
   open: boolean;
   onClose: () => void;
@@ -120,6 +122,8 @@ export function ServiceFormModal({
   showChapters?: boolean;
   /** "creator" (défaut) : le service précise les chapitres du projet visés. "project" : l'annonce est postée par un projet, elle précise l'audience recherchée chez le créateur. */
   mode?: "creator" | "project";
+  /** Si fourni, affiche un sélecteur de statut (ex. visibilité de l'annonce). */
+  statusOptions?: string[];
 }) {
   const [format, setFormat] = useState<string[]>(initial?.format ? [initial.format] : []);
   const [platforms, setPlatforms] = useState<string[]>(initial?.platforms ?? []);
@@ -135,6 +139,7 @@ export function ServiceFormModal({
   const [subscribersMin, setSubscribersMin] = useState(initial?.subscribersMin ? String(initial.subscribersMin) : "");
   const [subscribersMax, setSubscribersMax] = useState(initial?.subscribersMax ? String(initial.subscribersMax) : "");
   const [link, setLink] = useState(initial?.link ?? "");
+  const [status, setStatus] = useState<string[]>(initial?.status ? [initial.status] : statusOptions ? [statusOptions[0]] : []);
   const [error, setError] = useState<string | null>(null);
 
   // Resynchronise tous les champs sur `initial` à chaque ouverture : sans ça,
@@ -158,6 +163,7 @@ export function ServiceFormModal({
     setSubscribersMin(initial?.subscribersMin ? String(initial.subscribersMin) : "");
     setSubscribersMax(initial?.subscribersMax ? String(initial.subscribersMax) : "");
     setLink(initial?.link ?? "");
+    setStatus(initial?.status ? [initial.status] : statusOptions ? [statusOptions[0]] : []);
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -184,6 +190,7 @@ export function ServiceFormModal({
       subscribersMin: mode === "project" ? Number(subscribersMin) || undefined : undefined,
       subscribersMax: mode === "project" ? Number(subscribersMax) || undefined : undefined,
       link: link.trim() || undefined,
+      status: statusOptions ? status[0] ?? statusOptions[0] : undefined,
     });
   };
 
@@ -209,6 +216,9 @@ export function ServiceFormModal({
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
+          {statusOptions && (
+            <ChipRow label="Statut de l'annonce (visibilité)" options={statusOptions} selected={status} onChange={setStatus} />
+          )}
           <ChipRow multi label="Plateforme" options={PLATFORMS} selected={platforms} onChange={setPlatforms} />
           <ChipRow label="Format de parrainage (un seul par service)" options={FORMATS} selected={format} onChange={setFormat} />
           <ChipRow label="Type de vidéo" options={VIDEO_TYPES} selected={videoType} onChange={setVideoType} />

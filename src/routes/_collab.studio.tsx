@@ -1303,6 +1303,7 @@ function EditParrainageModal({ sponsorship, onClose, onSave }: { sponsorship: Sp
       mode="project"
       title="Modifier l'annonce de parrainage"
       submitLabel="Enregistrer"
+      statusOptions={["Open", "Paused", "Draft", "Closed", "Archived"]}
       initial={{
         format: sponsorship.title,
         platforms: sponsorship.platform.split(", ").filter(Boolean),
@@ -1314,6 +1315,7 @@ function EditParrainageModal({ sponsorship, onClose, onSave }: { sponsorship: Sp
         description: sponsorship.description,
         subscribersMin: sponsorship.subscribers || undefined,
         subscribersMax: sponsorship.subscribersMax,
+        status: sponsorship.status,
       }}
       onSubmit={(values) => {
         onSave({
@@ -1327,6 +1329,7 @@ function EditParrainageModal({ sponsorship, onClose, onSave }: { sponsorship: Sp
           price: values.price,
           paymentMode: values.paymentMode,
           quantity: values.quantity,
+          status: (values.status as Sponsorship["status"]) ?? sponsorship.status,
         });
       }}
     />
