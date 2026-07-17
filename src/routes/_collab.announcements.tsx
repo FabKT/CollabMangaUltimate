@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listAnnouncements } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { addInterested, listInterested } from "@/lib/announcement-interest";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import {
   Bookmark,
@@ -46,7 +48,7 @@ const sora = { fontFamily: '"Sora", ui-sans-serif, system-ui, sans-serif' };
 const manrope = { fontFamily: '"Manrope", ui-sans-serif, system-ui, sans-serif' };
 
 // ---------- Mock data ----------
-type ProjectAnnouncement = {
+export type ProjectAnnouncement = {
   kind: "project";
   id: string;
   title: string;
@@ -1687,7 +1689,7 @@ function RoleSpotlight({
   );
 }
 
-function ProjectCard({
+export function ProjectCard({
   item,
   onView,
   onApply,
@@ -2000,14 +2002,17 @@ function ModalHeader({
   );
 }
 
-function DetailsModal({
+export function DetailsModal({
   item,
   onClose,
   onApply,
+  hideApply = false,
 }: {
   item: Announcement;
   onClose: () => void;
-  onApply: () => void;
+  onApply?: () => void;
+  /** Masque le bouton « Apply » (vue depuis un projet : lecture seule). */
+  hideApply?: boolean;
 }) {
   const [tab, setTab] = useState<"comments" | "interested">("comments");
   const [saved, setSaved] = useState(false);
@@ -2024,8 +2029,9 @@ function DetailsModal({
         "Profil interessant, les competences annoncees correspondent bien au besoin.",
         "Portfolio a demander avant invitation, mais la disponibilite est claire.",
       ];
+  // Intéressés réels (ceux qui ont répondu) pour les annonces de projet.
   const interested = isProject
-    ? ["Aiko M.", "Kenji O.", "Sam T."]
+    ? listInterested(item.id).map((p) => p.name)
     : ["Kurogane Requiem", "Emberline", "Orbital Silence"];
 
   return (
@@ -2159,14 +2165,16 @@ function DetailsModal({
                       </p>
                     </div>
                   ))
-                : interested.map((name) => (
-                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
-                      <div style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: C.input, color: C.neon, ...sora, fontSize: 12, fontWeight: 800 }}>
-                        {name.slice(0, 2).toUpperCase()}
+                : interested.length === 0
+                  ? <p style={{ ...manrope, color: C.muted, fontSize: 13, fontWeight: 500, padding: 8 }}>Aucun intéressé pour l'instant.</p>
+                  : interested.map((name) => (
+                      <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: C.input, color: C.neon, ...sora, fontSize: 12, fontWeight: 800 }}>
+                          {name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span style={{ ...manrope, color: C.text, fontSize: 13, fontWeight: 800 }}>{name}</span>
                       </div>
-                      <span style={{ ...manrope, color: C.text, fontSize: 13, fontWeight: 800 }}>{name}</span>
-                    </div>
-                  ))}
+                    ))}
             </div>
           </aside>
         </div>
@@ -2186,7 +2194,7 @@ function DetailsModal({
           <Bookmark size={16} fill={saved ? "currentColor" : "none"} style={{ marginRight: 6, display: "inline", verticalAlign: "middle" }} />
           {saved ? "Enregistré" : "Save"}
         </GhostButton>
-        <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>
+        {!hideApply && <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>}
       </div>
     </ModalShell>
   );
@@ -2222,7 +2230,7 @@ const textareaStyle = {
   outline: "none",
 };
 
-function AnnouncementWorkflowModal({
+export function AnnouncementWorkflowModal({
   action,
   item,
   onClose,
@@ -2238,7 +2246,17 @@ function AnnouncementWorkflowModal({
   const [role, setRole] = useState(item.kind === "project" ? item.roleNeeded : item.roleOffered);
   const [duration, setDuration] = useState("14 jours");
   const [level, setLevel] = useState("Standard");
+  const [meName, setMeName] = useState("Vous");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.auth.getSession().then(({ data }) => {
+      const meta = data.session?.user.user_metadata as Record<string, string | undefined> | undefined;
+      const name = meta?.display_name || meta?.full_name || meta?.username || data.session?.user.email?.split("@")[0];
+      if (name) setMeName(name);
+    });
+  }, []);
 
   const title =
     action === "apply"
@@ -2261,6 +2279,8 @@ function AnnouncementWorkflowModal({
         message,
         recipient: owner,
       });
+      // Répondre à une annonce de projet → on rejoint la liste des intéressés (§3).
+      if (item.kind === "project") addInterested(item.id, meName);
       onDone("Réponse envoyée.");
       return;
     }

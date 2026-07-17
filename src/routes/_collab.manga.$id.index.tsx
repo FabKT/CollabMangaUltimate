@@ -1,9 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Bookmark, Play, Star, ArrowLeft, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bookmark, Play, Star, ArrowLeft, Search, BookOpen, Megaphone, Handshake, Users } from "lucide-react";
 import { getManga, type Chapter, type Manga } from "@/lib/manga-data";
 import { ChapterRow } from "@/components/manga/ChapterRow";
 import { loadStudioProjects } from "@/lib/studio-projects";
+import { ProjectCard, DetailsModal, AnnouncementWorkflowModal, type ProjectAnnouncement } from "./_collab.announcements";
+import { projectAnnouncementFromRecruit } from "@/lib/recruit-map";
+import { AnnouncementCard } from "@/components/sponsorship/AnnouncementCard";
+import { DetailDialog } from "@/components/sponsorship/DetailDialog";
+import { announcementFromOption } from "@/lib/sponsorship-map";
+import { listSponsorOptions } from "@/lib/sponsorship-options";
+import type { Announcement } from "@/lib/sponsorship-data";
+
+type StudioCollaborator = { id: string; name: string; role: string; level: string };
 
 /** Projet Studio lisible depuis le catalogue. */
 type StudioReadableProject = {
@@ -22,7 +31,14 @@ type StudioReadableProject = {
     status: string;
     pages: { id: string; candidates: { id: string; image?: string }[]; validatedCandidateId: string | null }[];
   }[];
+  recruits?: {
+    id: string; role: string; status: string; description: string;
+    commitment: string; compensation?: string; remunerated: boolean; created: string;
+  }[];
+  collaborators?: StudioCollaborator[];
 };
+
+type MangaTab = "chapters" | "recrutement" | "parrainage" | "collaborateurs";
 
 export const Route = createFileRoute("/_collab/manga/$id/")({
   loader: ({ params }) => {
@@ -69,7 +85,48 @@ function MangaDetailSwitch() {
 }
 
 function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
+  const [tab, setTab] = useState<MangaTab>("chapters");
+  const [viewRecruit, setViewRecruit] = useState<ProjectAnnouncement | null>(null);
+  const [applyRecruit, setApplyRecruit] = useState<ProjectAnnouncement | null>(null);
+  const [applyNotice, setApplyNotice] = useState<string | null>(null);
+  const [viewSponsor, setViewSponsor] = useState<Announcement | null>(null);
+  const [savedSponsor, setSavedSponsor] = useState<Record<string, boolean>>({});
+
   const published = project.chapters.filter((c) => c.status === "Published");
+
+  // Annonces de recrutement visibles du projet → rendu identique à la page Annonces.
+  const recruits: ProjectAnnouncement[] = useMemo(
+    () =>
+      (project.recruits ?? [])
+        .filter((r) => r.status === "Ouverte")
+        .map((r) =>
+          projectAnnouncementFromRecruit(r, {
+            projectName: project.title,
+            genre: project.genres[0],
+            subgenres: project.subgenres,
+            cover: project.coverDataUrl,
+          }),
+        ),
+    [project],
+  );
+
+  // Annonces de parrainage du projet → rendu identique à la page Sponsoring.
+  const sponsors: Announcement[] = useMemo(
+    () => listSponsorOptions().filter((o) => o.mode === "project" && o.ownerName === project.title).map(announcementFromOption),
+    [project.title],
+  );
+
+  const collaborators = project.collaborators ?? [];
+
+  const TABS: { id: MangaTab; label: string; icon: typeof BookOpen; count: number }[] = [
+    { id: "chapters", label: "Chapitres", icon: BookOpen, count: published.length },
+    { id: "recrutement", label: "Recrutement", icon: Megaphone, count: recruits.length },
+    { id: "parrainage", label: "Parrainage", icon: Handshake, count: sponsors.length },
+    { id: "collaborateurs", label: "Collaborateurs", icon: Users, count: collaborators.length },
+  ];
+
+  const panel = { background: "var(--color-panel)", border: "1px solid var(--color-border-default)", borderRadius: 28 } as const;
+
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
       <div className="mb-6">
@@ -78,10 +135,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
         </Link>
       </div>
 
-      <section
-        className="mb-8 p-6 md:p-8"
-        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)", borderRadius: 28 }}
-      >
+      <section className="mb-6 p-6 md:p-8" style={panel}>
         <div className="grid gap-6 md:grid-cols-[minmax(200px,260px)_1fr] md:gap-8">
           <div className="mx-auto w-full max-w-[260px] md:mx-0">
             <div className="aspect-[3/4] overflow-hidden rounded-2xl" style={{ border: "1px solid var(--color-border-default)" }}>
@@ -117,38 +171,151 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
         </div>
       </section>
 
-      <section
-        className="p-6 md:p-8"
-        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)", borderRadius: 28 }}
-      >
-        <h2 className="font-display text-[20px] font-extrabold">Chapitres publiés</h2>
-        {published.length === 0 ? (
-          <p className="mt-3 text-[14px] text-[color:var(--color-text-secondary)]">Aucun chapitre publié pour l'instant.</p>
-        ) : (
-          <div className="mt-4 grid gap-2">
-            {published.map((c) => {
-              const readablePages = c.pages.filter(
-                (p) => p.validatedCandidateId && p.candidates.find((cd) => cd.id === p.validatedCandidateId)?.image,
-              ).length;
-              return (
+      {/* Onglets */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-bold transition-colors"
+              style={
+                active
+                  ? { background: "rgba(57,255,136,0.12)", border: "1px solid rgba(57,255,136,0.45)", color: "#39ff88" }
+                  : { background: "transparent", border: "1px solid var(--color-border-default)", color: "var(--color-text-secondary)" }
+              }
+            >
+              <Icon className="h-4 w-4" /> {t.label}
+              <span style={{ opacity: 0.65 }}>{t.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {applyNotice && (
+        <div className="mb-4 rounded-2xl px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.35)", color: "#39ff88" }}>
+          {applyNotice}
+        </div>
+      )}
+
+      {tab === "chapters" && (
+        <section className="p-6 md:p-8" style={panel}>
+          <h2 className="font-display text-[20px] font-extrabold">Chapitres publiés</h2>
+          {published.length === 0 ? (
+            <p className="mt-3 text-[14px] text-[color:var(--color-text-secondary)]">Aucun chapitre publié pour l'instant.</p>
+          ) : (
+            <div className="mt-4 grid gap-2">
+              {published.map((c) => {
+                const readablePages = c.pages.filter(
+                  (p) => p.validatedCandidateId && p.candidates.find((cd) => cd.id === p.validatedCandidateId)?.image,
+                ).length;
+                return (
+                  <Link
+                    key={c.id}
+                    to="/manga/$id/chapter/$chapterId"
+                    params={{ id: project.id, chapterId: c.id }}
+                    className="flex items-center justify-between rounded-2xl border px-4 py-3 transition-colors hover:border-[color:var(--color-neon,#39ff88)]"
+                    style={{ borderColor: "var(--color-border-default)", background: "var(--color-card, rgba(255,255,255,0.02))" }}
+                  >
+                    <div>
+                      <div className="text-[14px] font-bold">Ch. {c.number} — {c.title}</div>
+                      <div className="text-[12px] text-[color:var(--color-text-muted)]">{readablePages} page{readablePages > 1 ? "s" : ""} lisible{readablePages > 1 ? "s" : ""}</div>
+                    </div>
+                    <Play className="h-4 w-4 text-[color:var(--color-text-secondary)]" />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "recrutement" && (
+        <section className="p-6 md:p-8" style={panel}>
+          <h2 className="mb-4 font-display text-[20px] font-extrabold">Annonces de recrutement</h2>
+          {recruits.length === 0 ? (
+            <p className="text-[14px] text-[color:var(--color-text-secondary)]">Aucune annonce de recrutement publiée.</p>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {recruits.map((a) => (
+                <ProjectCard key={a.id} item={a} onView={() => setViewRecruit(a)} onApply={() => setApplyRecruit(a)} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "parrainage" && (
+        <section className="p-6 md:p-8" style={panel}>
+          <h2 className="mb-4 font-display text-[20px] font-extrabold">Annonces de parrainage</h2>
+          {sponsors.length === 0 ? (
+            <p className="text-[14px] text-[color:var(--color-text-secondary)]">Aucune annonce de parrainage publiée.</p>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {sponsors.map((a) => (
+                <AnnouncementCard
+                  key={a.id}
+                  a={a}
+                  saved={!!savedSponsor[a.id]}
+                  onToggleSave={() => setSavedSponsor((s) => ({ ...s, [a.id]: !s[a.id] }))}
+                  onViewDetails={() => setViewSponsor(a)}
+                  onContact={() => setViewSponsor(a)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "collaborateurs" && (
+        <section className="p-6 md:p-8" style={panel}>
+          <h2 className="mb-4 font-display text-[20px] font-extrabold">Collaborateurs</h2>
+          {collaborators.length === 0 ? (
+            <p className="text-[14px] text-[color:var(--color-text-secondary)]">Aucun collaborateur pour l'instant.</p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {collaborators.map((c) => (
                 <Link
                   key={c.id}
-                  to="/manga/$id/chapter/$chapterId"
-                  params={{ id: project.id, chapterId: c.id }}
-                  className="flex items-center justify-between rounded-2xl border px-4 py-3 transition-colors hover:border-[color:var(--color-neon,#39ff88)]"
+                  to="/profile/$profileId"
+                  params={{ profileId: c.name === "Vous" ? "moi" : c.name.toLowerCase().replace(/\s+/g, "-") }}
+                  className="flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors hover:border-[color:var(--color-neon,#39ff88)]"
                   style={{ borderColor: "var(--color-border-default)", background: "var(--color-card, rgba(255,255,255,0.02))" }}
                 >
-                  <div>
-                    <div className="text-[14px] font-bold">Ch. {c.number} — {c.title}</div>
-                    <div className="text-[12px] text-[color:var(--color-text-muted)]">{readablePages} page{readablePages > 1 ? "s" : ""} lisible{readablePages > 1 ? "s" : ""}</div>
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-display text-[14px] font-bold" style={{ background: "linear-gradient(135deg,#1a2960,#0a1030)", border: "1px solid var(--color-border-default)" }}>
+                    {c.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
                   </div>
-                  <Play className="h-4 w-4 text-[color:var(--color-text-secondary)]" />
+                  <div className="min-w-0">
+                    <div className="truncate text-[14px] font-bold">{c.name}</div>
+                    <div className="truncate text-[12px] text-[color:var(--color-text-muted)]">{c.role} · {c.level}</div>
+                  </div>
                 </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {viewRecruit && <DetailsModal item={viewRecruit} hideApply onClose={() => setViewRecruit(null)} />}
+      {applyRecruit && (
+        <AnnouncementWorkflowModal
+          action="apply"
+          item={applyRecruit}
+          onClose={() => setApplyRecruit(null)}
+          onDone={(m) => { setApplyRecruit(null); setApplyNotice(m); }}
+        />
+      )}
+      {viewSponsor && (
+        <DetailDialog
+          announcement={viewSponsor}
+          hideActions
+          onOpenChange={(o) => { if (!o) setViewSponsor(null); }}
+          onContact={() => {}}
+        />
+      )}
     </div>
   );
 }

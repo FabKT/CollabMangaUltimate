@@ -66,10 +66,13 @@ export function DetailDialog({
   announcement,
   onOpenChange,
   onContact,
+  hideActions = false,
 }: {
   announcement: Announcement | null;
   onOpenChange: (open: boolean) => void;
   onContact: (announcement: Announcement) => void;
+  /** Masque les boutons Apply/Contact + Save (vue lecture seule, ex. depuis un projet). */
+  hideActions?: boolean;
 }) {
   const a = announcement;
 
@@ -121,12 +124,14 @@ export function DetailDialog({
                   {a.fullDescription}
                 </p>
 
-                <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(133,154,206,0.18)] pt-5">
-                  <button type="button" className={btnPrimary} onClick={() => onContact(a)}>
-                    {a.mode === "project" ? "Apply" : "Contact"}
-                  </button>
-                  <button type="button" className={btnSecondary}>Save</button>
-                </div>
+                {!hideActions && (
+                  <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(133,154,206,0.18)] pt-5">
+                    <button type="button" className={btnPrimary} onClick={() => onContact(a)}>
+                      {a.mode === "project" ? "Apply" : "Contact"}
+                    </button>
+                    <button type="button" className={btnSecondary}>Save</button>
+                  </div>
+                )}
               </SectionCard>
 
               {a.mode === "creator" && (

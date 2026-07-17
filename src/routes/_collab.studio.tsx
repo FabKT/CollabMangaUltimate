@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { addSponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
+import { DetailDialog } from "@/components/sponsorship/DetailDialog";
+import { announcementFromStudioSponsorship } from "@/lib/sponsorship-map";
+import { projectAnnouncementFromRecruit } from "@/lib/recruit-map";
+import { DetailsModal as RecruitDetailsModal } from "./_collab.announcements";
 import {
   createAnnouncementWorkflow,
   createProjectNote,
@@ -1245,10 +1249,15 @@ function RecrutementTab({
         ))}
       </div>
       {detail && (
-        <RecruitDetailModal
-          r={detail}
+        <RecruitDetailsModal
+          item={projectAnnouncementFromRecruit(detail, {
+            projectName: project.title,
+            genre: project.genres[0],
+            subgenres: project.subgenres,
+            cover: project.coverDataUrl,
+          })}
+          hideApply
           onClose={() => setDetail(null)}
-          onEdit={() => { setEditing(detail); setDetail(null); }}
         />
       )}
       {editing && (
@@ -1426,10 +1435,11 @@ function ParrainageTab({
       </section>
 
       {detail && (
-        <ParrainageDetailModal
-          s={detail}
-          onClose={() => setDetail(null)}
-          onEdit={() => { setEditing(detail); setDetail(null); }}
+        <DetailDialog
+          announcement={announcementFromStudioSponsorship(detail, project.title)}
+          hideActions
+          onOpenChange={(o) => { if (!o) setDetail(null); }}
+          onContact={() => {}}
         />
       )}
       {editing && (

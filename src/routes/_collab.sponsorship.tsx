@@ -2,48 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Send, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ANNOUNCEMENTS, type Announcement, type AnnouncementMode, type Platform, type SponsorshipType } from "@/lib/sponsorship-data";
-import { listSponsorOptions, type SponsorOption } from "@/lib/sponsorship-options";
-
-const PLATFORM_ALIAS: Record<string, Platform> = {
-  Youtube: "YouTube",
-  Tiktok: "TikTok",
-  Instagram: "Instagram",
-  Twitter: "Twitter / X",
-};
-
-/** Option créée par un utilisateur/projet → annonce affichée dans la page parrainage. */
-function announcementFromOption(o: SponsorOption): Announcement {
-  return {
-    id: o.id,
-    mode: o.mode,
-    title: o.format,
-    ownerName: o.ownerName,
-    category: "",
-    shortDescription: o.description || o.format,
-    fullDescription: o.description || o.format,
-    price: o.price ? `€${o.price}` : null,
-    priceLabel: o.mode === "project" ? "Budget" : "Price",
-    priceMin: Number(o.price) || undefined,
-    priceMax: Number(o.price) || undefined,
-    platforms: o.platforms.map((p) => PLATFORM_ALIAS[p] ?? ("Other" as Platform)),
-    sponsorshipType: o.format as SponsorshipType,
-    videoType: o.videoType !== "—" ? (o.videoType as Announcement["videoType"]) : undefined,
-    duration: o.duration !== "—" ? (o.duration as Announcement["duration"]) : undefined,
-    paymentMode: o.paymentMode,
-    chapters: o.chaptersMax ?? o.chaptersMin,
-    status: "open",
-    availability: "Available",
-    deadline: "",
-    requirements: [],
-    deliverables: [],
-    targetAudience: "",
-    contactInstructions: "",
-    linked: "",
-    accent: "#39ff88",
-    language: o.language ?? "FR",
-  };
-}
+import { ANNOUNCEMENTS, type Announcement, type AnnouncementMode } from "@/lib/sponsorship-data";
+import { listSponsorOptions } from "@/lib/sponsorship-options";
+import { announcementFromOption } from "@/lib/sponsorship-map";
 import { btnSecondary, inputCls, metaLabel } from "@/components/sponsorship/ui";
 import { AnnouncementCard, CardSkeleton } from "@/components/sponsorship/AnnouncementCard";
 import { DetailDialog } from "@/components/sponsorship/DetailDialog";
