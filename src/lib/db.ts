@@ -404,6 +404,43 @@ export async function listFriendsDb(): Promise<DbProfile[]> {
     .filter((p): p is DbProfile => Boolean(p));
 }
 
+/* ---------------- notifications (table Supabase) ---------------- */
+
+export type DbNotification = {
+  id: string;
+  record_id: string | null;
+  recipient_id: string;
+  actor_id: string | null;
+  category: string;
+  type: string;
+  title: string;
+  content: string;
+  entity_type: string | null;
+  entity_title: string | null;
+  read: boolean;
+  created_at: string;
+};
+
+/** Notifications reçues par l'utilisateur connecté (amis, messages…). */
+export async function listMyNotifications(): Promise<DbNotification[]> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return [];
+  const { data, error } = await sb
+    .from("notifications")
+    .select("*")
+    .eq("recipient_id", uid)
+    .order("created_at", { ascending: false })
+    .limit(80);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DbNotification[];
+}
+
+export async function markNotificationRead(id: string, read = true): Promise<void> {
+  const sb = getSupabase();
+  await sb.from("notifications").update({ read }).eq("id", id);
+}
+
 /* ---------------- commentaires ---------------- */
 
 export type DbComment = {

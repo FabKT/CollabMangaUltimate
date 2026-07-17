@@ -335,6 +335,7 @@ function MessagesPage() {
             sponsors={sponsorConvs}
             messages={messages}
             onSend={handleSend}
+            onConv={(id) => setActiveConv(id)}
           />
         </div>
 
@@ -398,6 +399,7 @@ function QuickProjectModal({ onClose, onCreated }: { onClose: () => void; onCrea
           notes: [],
           sponsorships: [],
           recruits: [],
+          collaborators: [{ id: "co-owner", name: "Vous", role: "Scénariste", level: "chef" }],
         },
         ...existing,
       ]);
@@ -924,7 +926,7 @@ function ServerMenu({
 /* -------------------- Column 3: Active conversation ---------------------- */
 
 function ChatArea({
-  rail, activeServer, baseTab, activeConv, activeChannel, onOpenDetails, friends, projects, sponsors, messages, onSend,
+  rail, activeServer, baseTab, activeConv, activeChannel, onOpenDetails, friends, projects, sponsors, messages, onSend, onConv,
 }: {
   rail: RailKey;
   activeServer: ServerDef | null;
@@ -937,6 +939,7 @@ function ChatArea({
   sponsors: SponsorConv[];
   messages: UiMessage[];
   onSend: (text: string) => void;
+  onConv?: (id: string) => void;
 }) {
   const context = useMemo(
     () => resolveContext({ rail, activeServer, baseTab, activeConv, activeChannel, friends, projects, sponsors }),
@@ -950,7 +953,7 @@ function ChatArea({
       aria-label="Active conversation"
     >
       <TopBar context={context} onOpenDetails={onOpenDetails} />
-      <MessageThread context={context} friends={friends} projects={projects} sponsors={sponsors} messages={messages} />
+      <MessageThread context={context} friends={friends} projects={projects} sponsors={sponsors} messages={messages} onConv={onConv} />
       {context.canCompose && <Composer placeholder={context.placeholder} onSend={onSend} />}
     </section>
   );
@@ -1091,7 +1094,7 @@ function IconBtn({ children, label, onClick }: { children: ReactNode; label: str
   );
 }
 
-function MessageThread({ context, friends, projects, sponsors, messages }: { context: Ctx; friends: Friend[]; projects?: ProjectConv[]; sponsors?: SponsorConv[]; messages: UiMessage[] }) {
+function MessageThread({ context, friends, projects, sponsors, messages, onConv }: { context: Ctx; friends: Friend[]; projects?: ProjectConv[]; sponsors?: SponsorConv[]; messages: UiMessage[]; onConv?: (id: string) => void }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
@@ -1105,9 +1108,9 @@ function MessageThread({ context, friends, projects, sponsors, messages }: { con
         />
       )}
 
-      {context.kind === "amis-overview" && <FriendsOverview friends={friends} />}
-      {context.kind === "projets-overview" && <ProjectsOverview projects={projects} />}
-      {context.kind === "parrainages-overview" && <SponsorsOverview sponsors={sponsors} />}
+      {context.kind === "amis-overview" && <FriendsOverview friends={friends} onConv={onConv} />}
+      {context.kind === "projets-overview" && <ProjectsOverview projects={projects} onConv={onConv} />}
+      {context.kind === "parrainages-overview" && <SponsorsOverview sponsors={sponsors} onConv={onConv} />}
 
       {context.kind === "conversation" && <MessagesList messages={messages} />}
       <div ref={endRef} />
@@ -1132,7 +1135,7 @@ function EmptyState({ title, text }: { title: string; text: string }) {
   );
 }
 
-function FriendsOverview({ friends }: { friends: Friend[] }) {
+function FriendsOverview({ friends, onConv }: { friends: Friend[]; onConv?: (id: string) => void }) {
   const filters = ["Tous", "En attente", "Ajouter un ami"] as const;
   const [f, setF] = useState<(typeof filters)[number]>("Tous");
   return (
@@ -1180,7 +1183,7 @@ function FriendsOverview({ friends }: { friends: Friend[] }) {
                 <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Membre CollabManga</div>
               </div>
             </div>
-            <Button size="sm" variant="ghost" style={{ color: "var(--cm-text-2)" }}>Message</Button>
+            <Button size="sm" variant="ghost" style={{ color: "var(--cm-text-2)" }} onClick={() => onConv?.(fr.id)}>Message</Button>
           </div>
         ))}
       </div>
@@ -1188,7 +1191,7 @@ function FriendsOverview({ friends }: { friends: Friend[] }) {
   );
 }
 
-function ProjectsOverview({ projects = [] }: { projects?: ProjectConv[] }) {
+function ProjectsOverview({ projects = [], onConv }: { projects?: ProjectConv[]; onConv?: (id: string) => void }) {
   return (
     <div className="mx-auto grid max-w-3xl gap-3">
       {projects.length === 0 && (
@@ -1203,14 +1206,14 @@ function ProjectsOverview({ projects = [] }: { projects?: ProjectConv[] }) {
               <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{p.label} · {p.preview}</div>
             </div>
           </div>
-          <Button size="sm" style={{ background: "var(--cm-neon)", color: "#04111E" }}>Ouvrir</Button>
+          <Button size="sm" style={{ background: "var(--cm-neon)", color: "#04111E" }} onClick={() => onConv?.(p.id)}>Ouvrir</Button>
         </div>
       ))}
     </div>
   );
 }
 
-function SponsorsOverview({ sponsors = [] }: { sponsors?: SponsorConv[] }) {
+function SponsorsOverview({ sponsors = [], onConv }: { sponsors?: SponsorConv[]; onConv?: (id: string) => void }) {
   return (
     <div className="mx-auto grid max-w-3xl gap-3">
       {sponsors.length === 0 && (
@@ -1225,7 +1228,7 @@ function SponsorsOverview({ sponsors = [] }: { sponsors?: SponsorConv[] }) {
               <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{s.chip} · {s.preview}</div>
             </div>
           </div>
-          <Button size="sm" variant="ghost" style={{ color: "var(--cm-text-2)" }}>Voir l'annonce</Button>
+          <Button size="sm" variant="ghost" style={{ color: "var(--cm-text-2)" }} onClick={() => onConv?.(s.id)}>Ouvrir</Button>
         </div>
       ))}
     </div>

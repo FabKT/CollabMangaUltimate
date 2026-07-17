@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
 import { addSponsorOption, listSponsorOptions, type SponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
+import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
 
 /** Projection minimale d'un projet Studio (stocké en IndexedDB). */
@@ -448,6 +449,10 @@ function ProfilePage({
         kind={detailsOpen?.kind ?? ""}
         source={detailsOpen?.source ?? "own"}
         mode={mode}
+        illustration={myIllustrations.find((i) => i.title === detailsOpen?.title)}
+        idea={myIdeas.find((i) => i.title === detailsOpen?.title)}
+        announcement={myAnnouncements.find((a) => a.title === detailsOpen?.title)}
+        option={myOptions.find((o) => o.format === detailsOpen?.title)}
         onEdit={(t) => {
           setDetailsOpen(null);
           setEditSponsorship(t);
@@ -2876,6 +2881,10 @@ function DetailsModal({
   kind,
   source,
   mode,
+  illustration,
+  idea,
+  announcement,
+  option,
   onEdit,
 }: {
   open: boolean;
@@ -2884,6 +2893,10 @@ function DetailsModal({
   kind: string;
   source: "own" | "favorite";
   mode: ViewMode;
+  illustration?: DbIllustration;
+  idea?: DbIdea;
+  announcement?: DbAnnouncement;
+  option?: SponsorOption;
   onEdit: (title: string) => void;
 }) {
   const isSponsorship = kind === "Sponsorship option";
@@ -2911,6 +2924,7 @@ function DetailsModal({
         </>
       }
     >
+      {/* Le contenu reflète le popup de la page correspondante, avec les vraies données. */}
       <div className={isSponsorship ? "" : "grid grid-cols-1 gap-6 md:grid-cols-[240px_minmax(0,1fr)]"}>
         {!isSponsorship && (
           <div
@@ -2920,76 +2934,76 @@ function DetailsModal({
               border: "1px solid rgba(133,154,206,0.18)",
             }}
           >
-            <ImageIcon size={30} color="#5E6A90" />
+            {illustration?.image_url || idea?.image_url ? (
+              <img src={illustration?.image_url || idea?.image_url || ""} alt={title} className="h-full w-full object-cover" />
+            ) : (
+              <ImageIcon size={30} color="#5E6A90" />
+            )}
           </div>
         )}
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone="info">{kind}</Chip>
-            <Chip tone="active">Available</Chip>
+            {idea?.category && <Chip>{idea.category}</Chip>}
+            {announcement?.status_sought && <Chip>Role · {announcement.status_sought}</Chip>}
+            {announcement?.language && <Chip>{announcement.language}</Chip>}
           </div>
           <h2 className="cm-sora mt-3 text-[22px] font-bold leading-8" style={{ color: "#F7FAFF" }}>
             {title || `${kind} details`}
           </h2>
           <p className="mt-2 text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
-            {isSponsorship
-              ? "Détail complet de l'option de parrainage : plateformes ciblées, format, durée, mode de paiement et livrables attendus."
-              : "Vue complète de cette publication : contexte, objectifs, exigences et tout ce qu'un collaborateur ou lecteur souhaite savoir avant d'agir."}
+            {illustration?.description ||
+              idea?.description ||
+              announcement?.hook ||
+              option?.description ||
+              (isSponsorship
+                ? "Détail complet du service de parrainage."
+                : "Vue complète de cette publication.")}
           </p>
-          {isSponsorship ? (
+          {isSponsorship && (
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Stat label="Format" value="Vidéo courte dédiée" />
-              <Stat label="Plateformes" value="YouTube · TikTok" />
-              <Stat label="Durée" value="1–3 min" />
-              <Stat label="Paiement" value="Paiement unique" />
-              <Stat label="Prix" value="450 €" />
-              <Stat label="Chapitres" value="5–12" />
-            </div>
-          ) : (
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Stat label="Status" value="Ongoing" />
-              <Stat label="Role" value="Dessinateur" />
-              <Stat label="Chapters" value="12" />
-              <Stat label="Genre" value="Shonen" />
-              <Stat label="Mode" value="Remote" />
-              <Stat label="Updated" value="2d ago" />
+              <Stat label="Format" value={option?.format ?? title} />
+              <Stat label="Plateformes" value={option?.platforms.join(" · ") || "—"} />
+              <Stat label="Durée" value={option?.duration ?? "—"} />
+              <Stat label="Paiement" value={option?.paymentMode ?? "—"} />
+              <Stat label="Prix" value={option ? `${option.price} €` : "—"} />
+              <Stat
+                label="Chapitres"
+                value={option?.chaptersMin || option?.chaptersMax ? `${option?.chaptersMin ?? 0}–${option?.chaptersMax ?? "∞"}` : "—"}
+              />
             </div>
           )}
-          <div className="mt-5 flex flex-wrap gap-1.5">
-            {isSponsorship ? (
-              <>
-                <Chip>YouTube</Chip>
-                <Chip>TikTok</Chip>
-                <Chip tone="info">Paiement unique</Chip>
-              </>
-            ) : (
-              <>
-                <Chip>Long-term</Chip>
-                <Chip>Team of 3</Chip>
-                <Chip>Weekly cadence</Chip>
-                <Chip tone="info">Remote</Chip>
-              </>
-            )}
+          {announcement && (
+            <div className="mt-5 flex flex-wrap gap-1.5">
+              {announcement.genres.map((g) => <Chip key={g}>{g}</Chip>)}
+              {announcement.subgenres.slice(0, 4).map((g) => <Chip key={g} tone="info">{g}</Chip>)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(announcement?.description || idea?.description) && (
+        <div className="mt-8">
+          <SectionTitle title="Détails" subtitle="Description complète." />
+          <div
+            className="rounded-[18px] p-5 text-[14px] leading-[22px]"
+            style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)", color: "#B8C4E5" }}
+          >
+            {announcement?.description || idea?.description}
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="mt-8">
-        <SectionTitle title="Détails" subtitle="Tout ce que les cartes condensées omettent." />
-        <div
-          className="rounded-[18px] p-5 text-[14px] leading-[22px]"
-          style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)", color: "#B8C4E5" }}
-        >
-          {isSponsorship
-            ? "Description longue de l'offre de parrainage : cadrage éditorial, ton, points de discussion, mentions obligatoires et conditions de livraison."
-            : "Description longue. Historique des chapitres, liste des contributeurs, illustrations précédentes ou livrables détaillés trouvent leur place ici."}
+      {/* Commentaires réels, comme sur les pages Illustration / Idées */}
+      {(illustration || idea) && (
+        <div className="mt-8">
+          <SectionTitle title="Commentaires" subtitle="Les retours de la communauté." />
+          <CommentsPanel
+            entityType={illustration ? "illustration" : "idea"}
+            entityId={illustration ? illustration.id : idea!.id}
+          />
         </div>
-      </div>
-
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <SecondaryButton icon={<Copy size={16} />}>Copy link</SecondaryButton>
-        <GhostButton icon={<Check size={16} />}>Save</GhostButton>
-      </div>
+      )}
     </ModalShell>
   );
 }

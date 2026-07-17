@@ -258,7 +258,10 @@ function NewChapterRow() {
 function HomePage() {
   const studioEntries = useVisibleStudioEntries();
   const all = [...studioEntries, ...CATALOG_MANGA];
-  const byRating = [...all].sort((a, b) => b.rating - a.rating);
+  // Tant qu'aucun avis n'existe, la vedette = les premiers projets ajoutés
+  // (le store liste les plus récents en premier → on inverse pour l'ancienneté).
+  const hasRatings = all.some((m) => m.rating > 0);
+  const byRating = hasRatings ? [...all].sort((a, b) => b.rating - a.rating) : [...all].reverse();
   const favorites = byRating.slice(0, 4);
   const gems = [...all].sort((a, b) => a.chapters - b.chapters).slice(0, 4);
   const hasCatalog = all.length > 0;

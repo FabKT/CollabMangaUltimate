@@ -8,6 +8,7 @@ import {
   subscribeWorkflowState,
   type WorkflowNotification,
 } from "@/lib/user-workflows";
+import { listMyNotifications, type DbNotification } from "@/lib/db";
 import {
   Bell,
   Search,
@@ -409,6 +410,7 @@ function NotificationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>("n2");
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [workflowNotifications, setWorkflowNotifications] = useState<WorkflowNotification[]>([]);
+  const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
 
   useEffect(() => {
     const refresh = () => setWorkflowNotifications(loadWorkflowState().notifications);
@@ -416,9 +418,14 @@ function NotificationsPage() {
     return subscribeWorkflowState(refresh);
   }, []);
 
+  // Notifications réelles (Supabase) : demandes d'ami, messages reçus…
+  useEffect(() => {
+    void listMyNotifications().then(setDbNotifications).catch(() => setDbNotifications([]));
+  }, []);
+
   const notifications = useMemo(
-    () => [...workflowNotifications.map(workflowToNotification), ...NOTIFICATIONS],
-    [workflowNotifications],
+    () => [...dbNotifications.map(dbToNotification), ...workflowNotifications.map(workflowToNotification)],
+    [dbNotifications, workflowNotifications],
   );
 
   const filtered = useMemo(() => {
@@ -513,6 +520,34 @@ function NotificationsPage() {
 }
 
 // ---------- Page title ----------------------------------------------------
+
+/** Mappe une notification Supabase (table `notifications`) vers le format de la page. */
+function dbToNotification(n: DbNotification): Notification {
+  const category = (["message", "project", "sponsorship", "friend", "manga", "system"].includes(n.category)
+    ? n.category
+    : "system") as Category;
+  return {
+    id: `db-${n.id}`,
+    category,
+    typeLabel: n.type.replace(/_/g, " "),
+    title: n.title,
+    preview: n.content,
+    description: n.content,
+    actor: n.entity_title ?? "CollabManga",
+    time: relativeTime(n.created_at),
+    status: n.read ? "read" : "unread",
+    importance: n.category === "friend" ? "action" : "normal",
+    entity: n.entity_title
+      ? { kind: category === "message" ? "conversation" : "profile", title: n.entity_title, subtitle: n.entity_type ?? "", status: n.read ? "Lu" : "Nouveau" }
+      : undefined,
+    actions:
+      n.category === "friend" && n.type === "demande_ami"
+        ? [{ label: "Ouvrir l'onglet Amis du profil", kind: "primary" }]
+        : n.category === "message"
+          ? [{ label: "Ouvrir Messages", kind: "primary" }]
+          : [],
+  };
+}
 
 function workflowToNotification(n: WorkflowNotification): Notification {
   return {

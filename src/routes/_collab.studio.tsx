@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Plus, Search, LayoutGrid, List as ListIcon, MoreHorizontal,
@@ -65,6 +65,8 @@ interface Project {
   coverDataUrl?: string;
   /** Projet visible dans le catalogue public (masquable dans les paramètres). */
   catalogVisible?: boolean;
+  /** Membres du projet avec leur niveau d'accès. */
+  collaborators?: Collaborator[];
 }
 
 const COLLAB_ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"];
@@ -285,13 +287,28 @@ const PROJECT_RATING: Record<string, number> = {};
 
 const PROJECT_COLLABORATORS: Record<string, number> = {};
 
-type Collaborator = { id: string; name: string; role: string; status: "Propriétaire" | "Actif" | "Invité" };
+/** Niveaux d'accès au projet : un seul chef (le créateur), des éditeurs, des collaborateurs. */
+type CollabLevel = "chef" | "editeur" | "collaborateur";
+type Collaborator = { id: string; name: string; role: string; level: CollabLevel };
 
-const PROJECT_COLLAB_LIST: Record<string, Collaborator[]> = {};
+const LEVEL_LABEL: Record<CollabLevel, string> = {
+  chef: "Chef",
+  editeur: "Éditeur",
+  collaborateur: "Collaborateur",
+};
 
 const defaultCollaborators = (): Collaborator[] => [
-  { id: "co-owner", name: "Vous", role: "Scénariste", status: "Propriétaire" },
+  { id: "co-owner", name: "Vous", role: "Scénariste", level: "chef" },
 ];
+
+function projectCollaborators(p: Project): Collaborator[] {
+  return p.collaborators && p.collaborators.length > 0 ? p.collaborators : defaultCollaborators();
+}
+
+/** Niveau de l'utilisateur courant (« Vous ») dans le projet. */
+function myLevel(p: Project): CollabLevel {
+  return projectCollaborators(p).find((c) => c.name === "Vous")?.level ?? "chef";
+}
 
 // Réalisés / en cours — parrainages liés au projet (alimentés quand des parrainages aboutissent).
 type RealizedParrainage = { id: string; creator: string; platform: string; status: "Terminé" | "En cours" | "Planifié"; price: string };
@@ -471,7 +488,7 @@ function ProjectWorkspace({
         {tab === "Calendar" && <CalendarTab project={project} onAddNote={openNote} />}
         {tab === "Recrutement" && <RecrutementTab project={project} onAddRecruit={() => setModal("recruit")} />}
         {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => setModal("parrainage")} />}
-        {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} />}
+        {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} updateProject={updateProject} />}
         {tab === "Settings" && <SettingsTab project={project} updateProject={updateProject} onDeleteProject={onDeleteProject} onWorkflow={onWorkflow} />}
       </div>
 
@@ -1148,28 +1165,115 @@ function ParrainageTab({ project, onAddParrainage }: { project: Project; onAddPa
 
 /* ----- Collaborateurs tab ----- */
 
-function CollaborateursTab({ project, onWorkflow }: { project: Project; onWorkflow?: (message: string) => void }) {
-  const collabs = PROJECT_COLLAB_LIST[project.id] ?? defaultCollaborators();
+function CollaborateursTab({
+  project,
+  onWorkflow,
+  updateProject,
+}: {
+  project: Project;
+  onWorkflow?: (message: string) => void;
+  updateProject?: (updater: (p: Project) => Project) => void;
+}) {
+  const collabs = projectCollaborators(project);
+  const me = myLevel(project);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const initials = (name: string) => name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+  const deny = (message: string) => onWorkflow?.(`Action non autorisée pour ton statut : ${message}`);
+
+  const setCollabs = (updater: (list: Collaborator[]) => Collaborator[]) => {
+    updateProject?.((p) => ({ ...p, collaborators: updater(projectCollaborators(p)), updated: "À l'instant" }));
+  };
+
+  /** Règles : chef → tout ; éditeur → promouvoir/exclure les collaborateurs seulement ; collaborateur → rien. */
+  const promote = (target: Collaborator) => {
+    setMenuFor(null);
+    if (me === "collaborateur") return deny("un collaborateur ne peut pas promouvoir.");
+    if (target.level === "collaborateur") {
+      setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "editeur" } : c)));
+      onWorkflow?.(`${target.name} est maintenant éditeur.`);
+      return;
+    }
+    if (target.level === "editeur") {
+      if (me !== "chef") return deny("seul le chef peut promouvoir un éditeur.");
+      // L'éditeur devient chef, l'ancien chef devient éditeur (un seul chef par projet).
+      setCollabs((list) =>
+        list.map((c) =>
+          c.id === target.id ? { ...c, level: "chef" } : c.level === "chef" ? { ...c, level: "editeur" } : c,
+        ),
+      );
+      onWorkflow?.(`${target.name} est maintenant le chef du projet — tu deviens éditeur.`);
+      return;
+    }
+    deny("le chef ne peut pas être promu.");
+  };
+
+  const demote = (target: Collaborator) => {
+    setMenuFor(null);
+    if (me !== "chef") return deny("seul le chef peut rétrograder.");
+    if (target.level === "editeur") {
+      setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "collaborateur" } : c)));
+      onWorkflow?.(`${target.name} est maintenant collaborateur.`);
+      return;
+    }
+    deny("ce membre ne peut pas être rétrogradé.");
+  };
+
+  const exclude = (target: Collaborator) => {
+    setMenuFor(null);
+    if (target.level === "chef") return deny("le chef ne peut pas être exclu.");
+    if (me === "collaborateur") return deny("un collaborateur ne peut exclure personne.");
+    if (me === "editeur" && target.level === "editeur") return deny("un éditeur ne peut pas exclure un autre éditeur.");
+    setCollabs((list) => list.filter((c) => c.id !== target.id));
+    onWorkflow?.(`${target.name} a été exclu du projet.`);
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-[18px] font-bold">Collaborateurs</h2>
-          <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">{collabs.length} personne{collabs.length > 1 ? "s" : ""} sur ce projet.</p>
+          <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">
+            {collabs.length} personne{collabs.length > 1 ? "s" : ""} sur ce projet · ton statut : {LEVEL_LABEL[me]}
+          </p>
         </div>
         <PrimaryButton icon={UserPlus} onClick={() => setInviteOpen(true)}>Inviter un collaborateur</PrimaryButton>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {collabs.map(c => (
-          <div key={c.id} className="flex items-center gap-3 rounded-[18px] border border-[var(--border-default)] bg-[var(--elevated)] p-4 shadow-[var(--shadow-card)]">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-gradient-to-br from-[#1a2960] to-[#0a1030] font-display text-[14px] font-bold">{initials(c.name)}</div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[14px] font-bold">{c.name}</div>
-              <div className="truncate tiny-meta text-[var(--text-muted)]">{c.role}</div>
-            </div>
-            <StatusChip label={c.status} tone={c.status === "Propriétaire" ? "neon" : c.status === "Invité" ? "neutral" : "info"} />
+          <div key={c.id} className="relative flex items-center gap-3 rounded-[18px] border border-[var(--border-default)] bg-[var(--elevated)] p-4 shadow-[var(--shadow-card)]">
+            <Link
+              to="/profile/$profileId"
+              params={{ profileId: c.name === "Vous" ? "moi" : c.name.toLowerCase().replace(/\s+/g, "-") }}
+              className="flex min-w-0 flex-1 items-center gap-3"
+              title={`Voir le profil de ${c.name}`}
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-gradient-to-br from-[#1a2960] to-[#0a1030] font-display text-[14px] font-bold">{initials(c.name)}</div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[14px] font-bold">{c.name}</div>
+                <div className="truncate tiny-meta text-[var(--text-muted)]">{c.role}</div>
+              </div>
+            </Link>
+            <StatusChip label={LEVEL_LABEL[c.level]} tone={c.level === "chef" ? "neon" : c.level === "editeur" ? "info" : "neutral"} />
+            <IconButton ariaLabel={`Actions sur ${c.name}`} onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}>
+              <MoreHorizontal className="h-4 w-4" />
+            </IconButton>
+            {menuFor === c.id && (
+              <div
+                className="absolute right-3 top-14 z-20 w-48 overflow-hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--panel)] py-1 shadow-[0_18px_44px_rgba(0,0,0,0.45)]"
+              >
+                <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => promote(c)}>
+                  Promouvoir
+                </button>
+                <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => demote(c)}>
+                  Rétrograder
+                </button>
+                <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={() => exclude(c)}>
+                  Exclure du projet
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1177,8 +1281,12 @@ function CollaborateursTab({ project, onWorkflow }: { project: Project; onWorkfl
         <InviteCollaboratorModal
           projectTitle={project.title}
           onClose={() => setInviteOpen(false)}
-          onDone={(message) => {
+          onDone={(message, member) => {
             setInviteOpen(false);
+            if (member) {
+              // Tout nouvel arrivant démarre comme collaborateur.
+              setCollabs((list) => [...list, { id: `co-${Date.now()}`, name: member.name, role: member.role, level: "collaborateur" }]);
+            }
             onWorkflow?.(message);
           }}
         />
@@ -1194,7 +1302,7 @@ function InviteCollaboratorModal({
 }: {
   projectTitle: string;
   onClose: () => void;
-  onDone: (message: string) => void;
+  onDone: (message: string, member?: { name: string; role: string }) => void;
 }) {
   const [recipient, setRecipient] = useState("");
   const [role, setRole] = useState<string[]>(["Dessinateur"]);
@@ -1208,7 +1316,7 @@ function InviteCollaboratorModal({
       role: role[0] || "Dessinateur",
       message: message.trim() || undefined,
     });
-    onDone(`Invitation envoyée à ${recipient.trim()}.`);
+    onDone(`Invitation envoyée à ${recipient.trim()}.`, { name: recipient.trim(), role: role[0] || "Dessinateur" });
   };
 
   return (
@@ -1220,7 +1328,6 @@ function InviteCollaboratorModal({
       <div className="flex flex-col gap-5">
         <ModalField label="Email ou pseudo"><TextInput value={recipient} onChange={setRecipient} placeholder="collaborateur@email.com ou @username" /></ModalField>
         <ChoiceRow label="Rôle" defaultValue="Dessinateur" options={COLLAB_ROLES} onChange={setRole} />
-        <ChoiceRow label="Accès au projet" defaultValue="Collaborateur" options={["Collaborateur", "Lecture seule"]} />
         <ModalField label="Message"><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Expliquez le rôle attendu, le rythme et les prochaines étapes." className={modalTextarea} /></ModalField>
       </div>
     </StudioModal>
@@ -1356,6 +1463,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
         : [],
       sponsorships: [],
       recruits: [],
+      collaborators: defaultCollaborators(),
     };
     createProjectWorkflow({ title: project.title, synopsis: project.synopsis, genres: project.genres });
     onCreate(project);
@@ -1636,6 +1744,10 @@ function SettingsTab({
             aria-checked={catalogVisible}
             disabled={!hasPublishedChapter(project) || project.status === "Finished"}
             onClick={() => {
+              if (myLevel(project) !== "chef") {
+                onWorkflow("Action non autorisée pour ton statut : seul le chef peut modifier la visibilité du projet.");
+                return;
+              }
               updateProject((p) => ({ ...p, catalogVisible: !catalogVisible, updated: "À l'instant" }));
               onWorkflow(catalogVisible ? "Projet masqué du catalogue (Paused)." : "Projet visible dans le catalogue (In progress).");
             }}
@@ -1706,7 +1818,18 @@ function SettingsTab({
                 <GhostButton onClick={() => setConfirmDelete(false)}>Annuler</GhostButton>
               </>
             ) : (
-              <DangerButton icon={Trash2} onClick={() => setConfirmDelete(true)}>Delete Project</DangerButton>
+              <DangerButton
+                icon={Trash2}
+                onClick={() => {
+                  if (myLevel(project) !== "chef") {
+                    onWorkflow("Action non autorisée pour ton statut : seul le chef peut supprimer le projet.");
+                    return;
+                  }
+                  setConfirmDelete(true);
+                }}
+              >
+                Delete Project
+              </DangerButton>
             )}
           </div>
         </div>
@@ -1762,7 +1885,19 @@ function ChapterWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages]);
 
+  // Permissions par niveau : le collaborateur peut seulement AJOUTER des images.
+  const level = myLevel(project);
+  const [permNotice, setPermNotice] = useState<string | null>(null);
+  const deny = (message: string) => {
+    setPermNotice(`Action non autorisée pour ton statut : ${message}`);
+    window.setTimeout(() => setPermNotice(null), 3200);
+  };
+
   const setPublished = (value: boolean) => {
+    if (level === "collaborateur") {
+      deny("un collaborateur ne peut pas publier un chapitre.");
+      return;
+    }
     setPublishedState(value);
     onChapterChange((c) => ({
       ...c,
@@ -1780,6 +1915,10 @@ function ChapterWorkspace({
 
   const validateSelected = () => {
     if (!selectedCand) return;
+    if (level === "collaborateur") {
+      deny("un collaborateur ne peut pas valider la sélection d'une image.");
+      return;
+    }
     setPage(p => ({
       ...p,
       validatedCandidateId: selectedCand,
@@ -1789,6 +1928,14 @@ function ChapterWorkspace({
   };
 
   const triggerImport = (candId: string) => {
+    // Un collaborateur peut ajouter une image dans un emplacement vide, pas remplacer une image existante.
+    if (level === "collaborateur") {
+      const target = page.candidates.find((c) => c.id === candId);
+      if (target?.image) {
+        deny("un collaborateur ne peut pas remplacer une image déjà ajoutée.");
+        return;
+      }
+    }
     pendingCand.current = candId;
     fileInputRef.current?.click();
   };
@@ -1818,6 +1965,10 @@ function ChapterWorkspace({
   };
 
   const removeCand = (candId: string) => {
+    if (level === "collaborateur") {
+      deny("un collaborateur ne peut pas retirer une image.");
+      return;
+    }
     setPage(p => {
       const nextValidated = p.validatedCandidateId === candId ? null : p.validatedCandidateId;
       // Drop the tile entirely when several candidates exist; otherwise just clear it.
@@ -1886,6 +2037,11 @@ function ChapterWorkspace({
   return (
     <div className="flex flex-col gap-6">
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChosen} />
+      {permNotice && (
+        <div className="rounded-[14px] border border-[rgba(255,184,77,0.4)] bg-[rgba(255,184,77,0.10)] px-4 py-3 text-[13px] font-bold text-[var(--warning)]">
+          {permNotice}
+        </div>
+      )}
       <PageHeader
         back={{ label: `Back to ${project.title}`, onClick: onBack }}
         eyebrow={<span className="tiny-meta text-[var(--neon)]">Chapter workspace</span>}

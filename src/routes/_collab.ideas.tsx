@@ -825,7 +825,7 @@ function PropModal({ p, saved, onSave, onClose }: {
           <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
             Créé par
           </div>
-          <div className="mt-4 flex items-center gap-3">
+          <a href={`/profile/${encodeURIComponent(authorName.toLowerCase().replace(/s+/g, "-"))}`} className="mt-4 flex items-center gap-3" title={`Voir le profil de ${authorName}`} style={{ textDecoration: "none" }}>
             <div className="h-12 w-12 rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display font-bold text-[var(--neon)]">
               {authorName.slice(0, 2).toUpperCase()}
             </div>
@@ -833,7 +833,7 @@ function PropModal({ p, saved, onSave, onClose }: {
               <div className="font-display text-[16px] font-bold truncate">{authorName}</div>
               {p.project && <div className="mt-0.5 text-[12px] text-[var(--text-muted)] truncate">{p.project}</div>}
             </div>
-          </div>
+          </a>
           <p className="mt-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">{authorBio}</p>
           {tab === "details" ? (
             <div className="mt-5 border-t border-[var(--border)] pt-5">

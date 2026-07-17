@@ -103,11 +103,7 @@ const AVAILABILITY = [
   "Open to unpaid collaboration", "Busy", "Not available",
 ];
 
-const COLLAB_TYPES = [
-  "Long-term project", "Short-term mission", "One-shot collaboration",
-  "Paid collaboration", "Revenue share", "Volunteer collaboration",
-  "Sponsorship collaboration",
-];
+const COLLAB_TYPES = ["Rémunéré", "Non rémunéré"];
 
 const EXPERIENCE = ["Beginner", "Intermediate", "Advanced", "Professional"];
 

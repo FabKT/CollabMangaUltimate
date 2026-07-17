@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { addIllustration, listIllustrations } from "@/lib/db";
+import { addIllustration, listIllustrations, startConversationWith } from "@/lib/db";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
   X, Upload, Bookmark, BookmarkCheck, MessageSquare, Send, ChevronRight, ChevronLeft,
@@ -246,7 +246,7 @@ type Art = {
   id: string; title: string; artist: string; role: string; style: string; type: string;
   skills: string[]; availability: "Available now" | "Open to projects" | "Limited" | "Not available";
   ratio: Ratio; seed: number; views: number; saves: number;
-  imageUrl?: string; description?: string;
+  imageUrl?: string; description?: string; authorId?: string;
 };
 
 const ART_TITLES = [
@@ -276,6 +276,7 @@ const ARTS: Art[] = Array.from({ length: 14 }).map((_, i) => {
 
 /* ---------------- Page ---------------- */
 function IllustrationsPage() {
+  const navigate = useNavigate();
   const [view, setView] = useState<"masonry" | "grid" | "compact">("masonry");
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [openArt, setOpenArt] = useState<Art | null>(null);
@@ -305,6 +306,7 @@ function IllustrationsPage() {
             saves: 0,
             imageUrl: r.image_url,
             description: r.description,
+            authorId: r.author_id,
           })),
         ),
       )
@@ -401,7 +403,13 @@ function IllustrationsPage() {
           works={realArts.filter((a) => a.artist === openArt.artist && a.id !== openArt.id)}
           onClose={() => setOpenArt(null)}
           onInvite={() => setInvite(openArt)}
-          onContact={() => setContact(openArt)}
+          onContact={() => {
+            if (openArt.authorId) {
+              void startConversationWith(openArt.authorId)
+                .then(() => navigate({ to: "/messages" }))
+                .catch(() => setContact(openArt));
+            } else setContact(openArt);
+          }}
           onPortfolio={() => setPortfolio(openArt)}
           saved={saved.has(openArt.id)}
           onSave={() => toggleSave(openArt.id)}
@@ -706,7 +714,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 /* ---------------- Invite Modal ---------------- */
 function InviteModal({ art, onClose }: { art: Art; onClose: () => void }) {
   const [role, setRole] = useState(ROLES[0]);
-  const [mode, setMode] = useState("Revenue share");
+  const [mode, setMode] = useState("Rémunéré");
   return (
     <ModalShell onClose={onClose} width={640}>
       <ModalHeader title="Invite to project" subtitle={`Send a project invitation to ${art.artist}`} onClose={onClose} />
@@ -718,7 +726,7 @@ function InviteModal({ art, onClose }: { art: Art; onClose: () => void }) {
           <Select value={role} onChange={setRole} options={ROLES} />
         </Field>
         <Field label="Collaboration mode">
-          <Select value={mode} onChange={setMode} options={["Revenue share","Paid work","Portfolio collaboration","Volunteer","To define"]} />
+          <Select value={mode} onChange={setMode} options={["Rémunéré", "Non rémunéré"]} />
         </Field>
         <Field label="Invitation message">
           <Textarea placeholder="Introduce the project, expectations, timeline and why this artist is a fit…" />
