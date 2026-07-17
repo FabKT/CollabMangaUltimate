@@ -96,7 +96,12 @@ export function GoogleAuthButton({ onError }: { onError: (message: string) => vo
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/` },
+      options: {
+        // On revient directement dans l'app (évite la landing lourde) et on saute
+        // la sélection de compte pour accélérer le retour.
+        redirectTo: `${window.location.origin}/hub`,
+        queryParams: { prompt: "select_account" },
+      },
     });
     if (error) onError(frenchAuthError(error.message));
   };

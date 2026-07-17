@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Home,
   Compass,
@@ -15,8 +15,10 @@ import {
   Zap,
   Sparkles,
   ArrowRight,
+  LogOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { signOut } from "@/lib/auth";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -60,6 +62,11 @@ const groups: Group[] = [
 export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
+  const navigate = useNavigate();
+  const logout = async () => {
+    await signOut();
+    void navigate({ to: "/login" });
+  };
 
   return (
     <aside
@@ -232,6 +239,24 @@ export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean
           </span>
         </span>
       </Link>
+
+      <button
+        onClick={() => void logout()}
+        className="mt-2 flex items-center justify-center gap-2 transition-colors"
+        style={{
+          background: "transparent",
+          border: "1px solid var(--border-default)",
+          borderRadius: 10,
+          padding: "8px 10px",
+          color: "var(--text-secondary)",
+          cursor: "pointer",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,95,126,0.45)"; e.currentTarget.style.color = "#ff5f7e"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+      >
+        <LogOut size={15} strokeWidth={2} />
+        <span style={{ font: "700 12px/16px var(--font-sans)" }}>Se déconnecter</span>
+      </button>
     </aside>
   );
 }

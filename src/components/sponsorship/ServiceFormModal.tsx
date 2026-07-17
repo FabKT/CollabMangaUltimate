@@ -137,8 +137,29 @@ export function ServiceFormModal({
   const [link, setLink] = useState(initial?.link ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  // Resynchronise tous les champs sur `initial` à chaque ouverture : sans ça,
+  // les valeurs d'un service qu'on édite ne s'affichent pas (state figé au 1er montage).
   useEffect(() => {
-    if (!open) setError(null);
+    if (!open) {
+      setError(null);
+      return;
+    }
+    setFormat(initial?.format ? [initial.format] : []);
+    setPlatforms(initial?.platforms ?? []);
+    setVideoType(initial?.videoType ? [initial.videoType] : []);
+    setDuration(initial?.duration ? [initial.duration] : []);
+    setPayment(initial?.paymentMode ? [initial.paymentMode] : []);
+    setPrice(initial?.price ?? "");
+    setQuantity(initial?.quantity ? String(initial.quantity) : "");
+    setDescription(initial?.description ?? "");
+    setLanguage(initial?.language ?? "FR");
+    setChaptersMin(initial?.chaptersMin ? String(initial.chaptersMin) : "");
+    setChaptersMax(initial?.chaptersMax ? String(initial.chaptersMax) : "");
+    setSubscribersMin(initial?.subscribersMin ? String(initial.subscribersMin) : "");
+    setSubscribersMax(initial?.subscribersMax ? String(initial.subscribersMax) : "");
+    setLink(initial?.link ?? "");
+    setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;

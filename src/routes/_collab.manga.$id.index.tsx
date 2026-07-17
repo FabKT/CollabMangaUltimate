@@ -109,7 +109,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
             <div className="mt-5">
               <p className="meta-label mb-2">Genre & sous-genres</p>
               <div className="flex flex-wrap gap-1.5">
-                {project.genres.map((g) => <span key={g} className="chip-active">{g}</span>)}
+                {project.genres.map((g) => <span key={g} className="chip-active font-bold">{g}</span>)}
                 {(project.subgenres ?? []).map((g) => <span key={g} className="chip-neutral">{g}</span>)}
               </div>
             </div>
@@ -241,7 +241,7 @@ function MangaDetail() {
             <div className="mt-5">
               <p className="meta-label mb-2">Genre & sous-genres</p>
               <div className="flex flex-wrap gap-1.5">
-                <span className="chip-active">{manga.demographic}</span>
+                <span className="chip-active font-bold">{manga.demographic}</span>
                 {manga.subgenres.map((g: string) => (
                   <span key={g} className="chip-neutral">{g}</span>
                 ))}

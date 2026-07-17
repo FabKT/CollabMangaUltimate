@@ -448,6 +448,14 @@ function ProjectWorkspace({
                 {editing && <button className="rounded-full border border-dashed border-[var(--border-strong)] px-3 py-1.5 text-[13px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Plus className="mr-1 inline h-3.5 w-3.5" />Add genre</button>}
               </div>
             </div>
+            {(project.subgenres && project.subgenres.length > 0) && (
+              <div>
+                <div className="tiny-meta mb-2 text-[var(--text-muted)]">Sous-genres</div>
+                <div className="flex flex-wrap gap-2">
+                  {project.subgenres.map(g => <Chip key={g} label={g} />)}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right: stats + quick actions */}

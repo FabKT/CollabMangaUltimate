@@ -2010,6 +2010,7 @@ function DetailsModal({
   onApply: () => void;
 }) {
   const [tab, setTab] = useState<"comments" | "interested">("comments");
+  const [saved, setSaved] = useState(false);
   const isProject = item.kind === "project";
   const entityTitle = isProject ? item.projectName : item.userName;
   const entitySubtitle = isProject ? "Projet recruteur" : itemRole(item);
@@ -2181,7 +2182,10 @@ function DetailsModal({
           flexWrap: "wrap",
         }}
       >
-        <GhostButton>Save</GhostButton>
+        <GhostButton onClick={() => setSaved((s) => !s)}>
+          <Bookmark size={16} fill={saved ? "currentColor" : "none"} style={{ marginRight: 6, display: "inline", verticalAlign: "middle" }} />
+          {saved ? "Enregistré" : "Save"}
+        </GhostButton>
         <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>
       </div>
     </ModalShell>

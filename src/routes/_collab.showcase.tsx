@@ -652,7 +652,6 @@ function DetailModal({
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Btn variant="primary" icon={<UserPlus size={16} />} onClick={onInvite}>Invite to Project</Btn>
             <Btn variant="secondary" icon={<MessageSquare size={16} />} onClick={onContact}>Contact Artist</Btn>
-            <Btn variant="secondary" icon={<ExternalLink size={16} />} onClick={onPortfolio}>View Portfolio</Btn>
             <Btn variant="ghost" icon={saved ? <BookmarkCheck size={16} color={C.neon} /> : <Bookmark size={16} />} onClick={onSave}>
               {saved ? "Saved" : "Save Artwork"}
             </Btn>

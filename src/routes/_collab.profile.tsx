@@ -10,6 +10,7 @@ import {
   listIdeas,
   listIllustrations,
   listPendingFriendRequests,
+  getMyRoles,
   respondFriendRequestDb,
   startConversationWith,
   updateMyRole,
@@ -316,6 +317,7 @@ function ProfilePage({
         : [
             { id: "overview", label: "Overview" },
             { id: "sponsorship", label: "Sponsorship" },
+            { id: "illustrations", label: "Illustrations" },
             { id: "announcements", label: "Announcements" },
             { id: "projects", label: "Projects Promoted" },
             { id: "propositions", label: "Idées" },
@@ -368,6 +370,7 @@ function ProfilePage({
                 <OverviewTab
                   profileType={profileType}
                   mode={mode}
+                  options={myOptions}
                   onAdd={setAddOpen}
                   onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
                 />
@@ -996,22 +999,24 @@ function OverviewTab({
   mode,
   onAdd,
   onDetails,
+  options,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
   onAdd: (kind: AddKind) => void;
   onDetails: (title: string, kind: string) => void;
+  options?: SponsorOption[];
 }) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-1">
         <BioPanel profileType={profileType} mode={mode} />
       </div>
-      <div className="lg:col-span-2">
+      <div className="lg:col-span-2 space-y-6">
         {profileType === "creator" ? (
           <ProjectShowcase mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} />
         ) : (
-          <SponsorshipShowcase mode={mode} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} />
+          <SponsorshipShowcase mode={mode} options={options} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} />
         )}
       </div>
     </div>
@@ -1163,9 +1168,15 @@ function ProjectCard({
 
 /* ---------------- Sponsorship showcase ---------------- */
 
-function SponsorshipShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
-  // Production : aucune option d'exemple.
-  const options: { title: string; price: string; type: string; video: string; duration: string }[] = [];
+function SponsorshipShowcase({ mode, options, onAdd, onDetails }: { mode: ViewMode; options?: SponsorOption[]; onAdd: () => void; onDetails: (title: string) => void }) {
+  // Mêmes services réels que l'onglet Sponsorship (data créée par le créateur).
+  const cards = (options ?? []).map((o) => ({
+    title: o.format,
+    price: `€${o.price}`,
+    type: o.format,
+    video: o.videoType,
+    duration: o.duration,
+  }));
   return (
     <Panel>
       <SectionTitle
@@ -1175,11 +1186,15 @@ function SponsorshipShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd
           mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>Add service</SecondaryButton>
         }
       />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {options.map((o, i) => (
-          <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.title)} />
-        ))}
-      </div>
+      {cards.length === 0 ? (
+        <EmptyState title="No services yet" text="Les services de parrainage créés apparaîtront ici." />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {cards.map((o, i) => (
+            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.title)} />
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -1976,16 +1991,22 @@ function EditProfileModal({
 }) {
   const [available, setAvailable] = useState(true);
   const [mainRole, setMainRole] = useState(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
+  const [secondaryRole, setSecondaryRole] = useState("Scénariste");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setMainRole(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
+    if (!open) return;
+    setMainRole(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
+    void getMyRoles().then((r) => {
+      if (r.role) setMainRole(r.role);
+      if (r.secondaryRole) setSecondaryRole(r.secondaryRole);
+    });
   }, [open, profileType]);
 
   const save = async () => {
     setSaving(true);
     try {
-      await updateMyRole(mainRole);
+      await updateMyRole(mainRole, secondaryRole);
     } catch {
       /* pas connecté — le choix reste local pour cette session */
     }
@@ -2025,10 +2046,10 @@ function EditProfileModal({
             </Field>
             <AvailabilityEditToggle available={available} onChange={setAvailable} />
             <Field label="Main role">
-              <ProfileSelect defaultValue={mainRole} options={PROFILE_ROLES} onChange={setMainRole} />
+              <ProfileSelect key={`main-${mainRole}`} defaultValue={mainRole} options={PROFILE_ROLES} onChange={setMainRole} />
             </Field>
             <Field label="Secondary role">
-              <ProfileSelect defaultValue="Scénariste" options={PROFILE_ROLES} />
+              <ProfileSelect key={`sec-${secondaryRole}`} defaultValue={secondaryRole} options={PROFILE_ROLES} onChange={setSecondaryRole} />
             </Field>
           </div>
         </FormGroup>

@@ -77,13 +77,24 @@ export async function currentUserId(): Promise<string | null> {
   return data.session?.user.id ?? null;
 }
 
-/** Persiste le rôle principal choisi dans le popup de modification du profil. */
-export async function updateMyRole(role: string): Promise<void> {
+/** Persiste le rôle principal (et secondaire) choisi dans le popup de modification du profil. */
+export async function updateMyRole(role: string, secondaryRole?: string | null): Promise<void> {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour modifier ton profil.");
-  const { error } = await sb.from("profiles").update({ role }).eq("id", uid);
+  const patch: { role: string; secondary_role?: string | null } = { role };
+  if (secondaryRole !== undefined) patch.secondary_role = secondaryRole;
+  const { error } = await sb.from("profiles").update(patch).eq("id", uid);
   if (error) throw new Error(error.message);
+}
+
+/** Rôles (principal + secondaire) de l'utilisateur courant. */
+export async function getMyRoles(): Promise<{ role: string | null; secondaryRole: string | null }> {
+  if (!supabase) return { role: null, secondaryRole: null };
+  const uid = (await supabase.auth.getSession()).data.session?.user.id;
+  if (!uid) return { role: null, secondaryRole: null };
+  const { data } = await supabase.from("profiles").select("role, secondary_role").eq("id", uid).single();
+  return { role: data?.role ?? null, secondaryRole: data?.secondary_role ?? null };
 }
 
 /** Upload d'une image dans le bucket `media`. Retourne l'URL publique. */
