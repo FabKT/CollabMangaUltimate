@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { DecorImageResult } from "@/server-functions/decor-image";
+import { authJsonHeaders } from "@/lib/auth-header";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import { addCreatedDecor } from "@/lib/decor-store";
 import {
@@ -131,7 +132,7 @@ function DecorCreatePage() {
     try {
       const response = await fetch("/api/decor/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authJsonHeaders(),
         body: JSON.stringify({
           prompt,
           styleId: activeStyle.id,

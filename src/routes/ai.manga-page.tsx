@@ -21,6 +21,7 @@ import {
   type MangaHistoryEntry,
 } from "@/lib/manga-history";
 import { PlancheCanvas } from "@/components/canvas/PlancheCanvas";
+import { bearerHeader } from "@/lib/auth-header";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import {
   BookImage,
@@ -150,6 +151,7 @@ async function requestMangaApiJson<T>(
   try {
     const response = await fetch(path, {
       ...init,
+      headers: { ...(init.headers as Record<string, string> | undefined), ...(await bearerHeader()) },
       signal: controller.signal,
     });
     const contentType = response.headers.get("content-type") ?? "";

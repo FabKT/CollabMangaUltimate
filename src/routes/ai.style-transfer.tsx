@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { MANGA_STYLES } from "@/lib/manga-styles";
 import type { StyleTransferResult } from "@/server-functions/style-transfer-image";
+import { authJsonHeaders } from "@/lib/auth-header";
 import {
   Wand2,
   Upload,
@@ -94,7 +95,7 @@ function StyleTransferPage() {
     try {
       const response = await fetch("/api/style-transfer/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authJsonHeaders(),
         body: JSON.stringify({
           baseImageDataUrl: baseImage,
           styleId: isCustom ? CUSTOM_STYLE : targetStyleId,

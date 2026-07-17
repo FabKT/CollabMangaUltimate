@@ -5,6 +5,7 @@ import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import type { SketchFinalResult } from "@/server-functions/sketch-final-image";
+import { authJsonHeaders } from "@/lib/auth-header";
 import {
   Check,
   Download,
@@ -170,7 +171,7 @@ function SketchFinalPage() {
       const size = await getImageSizeForGeneration(sketchImage);
       const response = await fetch("/api/sketch-final/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authJsonHeaders(),
         body: JSON.stringify({
           sketchImageDataUrl: sketchImage,
           styleImageDataUrl,

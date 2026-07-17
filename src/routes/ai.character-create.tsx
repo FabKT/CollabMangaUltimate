@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { CharacterImageResult } from "@/server-functions/character-image";
+import { authJsonHeaders } from "@/lib/auth-header";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import {
   Palette,
@@ -174,7 +175,7 @@ function CharacterCreatePage() {
       ]);
       const response = await fetch("/api/character/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authJsonHeaders(),
         body: JSON.stringify({
           prompt: prompt.trim(),
           identityImageDataUrl: identityReference.imageDataUrl,
