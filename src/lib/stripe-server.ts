@@ -158,12 +158,27 @@ async function onCheckoutCompleted(stripe: Stripe, sb: SupabaseClient, session: 
   // Le quota est attribué par invoice.paid (paiement réellement confirmé, §4).
 }
 
+/** Extrait l'id d'abonnement d'une facture, quelle que soit la version d'API Stripe.
+ *  (Depuis 2026-04-22, `invoice.subscription` est retiré → `parent.subscription_details`.) */
+function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | undefined {
+  const pick = (v: unknown): string | undefined => (typeof v === "string" ? v : (v as { id?: string } | undefined)?.id);
+  const inv = invoice as unknown as {
+    subscription?: unknown;
+    parent?: { subscription_details?: { subscription?: unknown } };
+    lines?: { data?: Array<{ subscription?: unknown; parent?: { subscription_item_details?: { subscription?: unknown } } }> };
+  };
+  const line = inv.lines?.data?.[0];
+  return (
+    pick(inv.subscription) ||
+    pick(inv.parent?.subscription_details?.subscription) ||
+    pick(line?.subscription) ||
+    pick(line?.parent?.subscription_item_details?.subscription)
+  );
+}
+
 /** Paiement confirmé (initial, renouvellement ou montée en gamme) → ouvre une période payée. */
 async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe.Invoice): Promise<void> {
-  const subscriptionId =
-    typeof (invoice as { subscription?: unknown }).subscription === "string"
-      ? ((invoice as { subscription?: string }).subscription as string)
-      : (invoice as { subscription?: { id?: string } }).subscription?.id;
+  const subscriptionId = subscriptionIdFromInvoice(invoice);
   if (!subscriptionId) return;
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);

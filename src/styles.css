@@ -236,9 +236,23 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
   transition:
     background 120ms ease,
-    transform 120ms ease;
+    box-shadow 120ms ease,
+    transform 80ms ease;
+  &:hover:not(:disabled) {
+    background: var(--neon-hover);
+    box-shadow: 0 0 0 3px rgba(57, 255, 136, 0.16);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px) scale(0.99);
+    box-shadow: none;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 @utility cma-btn-secondary {
   background: transparent;
@@ -251,9 +265,23 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
   transition:
     background 120ms ease,
-    border-color 120ms ease;
+    border-color 120ms ease,
+    transform 80ms ease;
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--neon-soft-border);
+    color: var(--neon);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px) scale(0.99);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 @utility cma-btn-ghost {
   background: transparent;
@@ -265,6 +293,22 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 80ms ease;
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 @utility cma-icon-btn {
   width: 36px;
@@ -276,9 +320,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
   transition:
     border-color 120ms ease,
-    color 120ms ease;
+    color 120ms ease,
+    background 120ms ease,
+    transform 80ms ease;
+  &:hover:not(:disabled) {
+    border-color: var(--neon-soft-border);
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
 }
 
 @utility cma-chip {
