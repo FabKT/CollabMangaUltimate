@@ -40,6 +40,14 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // Webhook Stripe : intercepté avant TanStack Start pour lire le corps brut
+      // (nécessaire à la vérification de signature).
+      const url = new URL(request.url);
+      if (url.pathname === "/api/stripe/webhook" && request.method === "POST") {
+        const { handleStripeWebhook } = await import("./lib/stripe-server");
+        return await handleStripeWebhook(request);
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
