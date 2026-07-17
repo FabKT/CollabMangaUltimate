@@ -20,6 +20,8 @@ export type ServiceFormValues = {
   language: string;
   chaptersMin?: number;
   chaptersMax?: number;
+  subscribersMin?: number;
+  subscribersMax?: number;
   link?: string;
 };
 
@@ -106,6 +108,7 @@ export function ServiceFormModal({
   submitLabel,
   showLink = false,
   showChapters = true,
+  mode = "creator",
 }: {
   open: boolean;
   onClose: () => void;
@@ -115,6 +118,8 @@ export function ServiceFormModal({
   submitLabel?: string;
   showLink?: boolean;
   showChapters?: boolean;
+  /** "creator" (défaut) : le service précise les chapitres du projet visés. "project" : l'annonce est postée par un projet, elle précise l'audience recherchée chez le créateur. */
+  mode?: "creator" | "project";
 }) {
   const [format, setFormat] = useState<string[]>(initial?.format ? [initial.format] : []);
   const [platforms, setPlatforms] = useState<string[]>(initial?.platforms ?? []);
@@ -127,6 +132,8 @@ export function ServiceFormModal({
   const [language, setLanguage] = useState(initial?.language ?? "FR");
   const [chaptersMin, setChaptersMin] = useState(initial?.chaptersMin ? String(initial.chaptersMin) : "");
   const [chaptersMax, setChaptersMax] = useState(initial?.chaptersMax ? String(initial.chaptersMax) : "");
+  const [subscribersMin, setSubscribersMin] = useState(initial?.subscribersMin ? String(initial.subscribersMin) : "");
+  const [subscribersMax, setSubscribersMax] = useState(initial?.subscribersMax ? String(initial.subscribersMax) : "");
   const [link, setLink] = useState(initial?.link ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -151,8 +158,10 @@ export function ServiceFormModal({
       quantity: Math.max(1, Number(quantity) || 1),
       description: description.trim(),
       language,
-      chaptersMin: Number(chaptersMin) || undefined,
-      chaptersMax: Number(chaptersMax) || undefined,
+      chaptersMin: mode === "creator" ? Number(chaptersMin) || undefined : undefined,
+      chaptersMax: mode === "creator" ? Number(chaptersMax) || undefined : undefined,
+      subscribersMin: mode === "project" ? Number(subscribersMin) || undefined : undefined,
+      subscribersMax: mode === "project" ? Number(subscribersMax) || undefined : undefined,
       link: link.trim() || undefined,
     });
   };
@@ -212,7 +221,7 @@ export function ServiceFormModal({
               <input style={inputStyle} placeholder="https://…" value={link} onChange={(e) => setLink(e.target.value)} />
             </Field>
           )}
-          {showChapters && (
+          {showChapters && mode === "creator" && (
             <div className="rounded-[16px] p-4" style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)" }}>
               <div className="mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Chapitres du projet</div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -221,6 +230,19 @@ export function ServiceFormModal({
                 </Field>
                 <Field label="Nombre de chapitres maximal">
                   <input type="number" min={0} style={inputStyle} placeholder="0" value={chaptersMax} onChange={(e) => setChaptersMax(e.target.value)} />
+                </Field>
+              </div>
+            </div>
+          )}
+          {showChapters && mode === "project" && (
+            <div className="rounded-[16px] p-4" style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)" }}>
+              <div className="mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Audience du créateur recherché</div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Field label="Abonnés minimum">
+                  <input type="number" min={0} style={inputStyle} placeholder="0" value={subscribersMin} onChange={(e) => setSubscribersMin(e.target.value)} />
+                </Field>
+                <Field label="Abonnés maximum">
+                  <input type="number" min={0} style={inputStyle} placeholder="0" value={subscribersMax} onChange={(e) => setSubscribersMax(e.target.value)} />
                 </Field>
               </div>
             </div>

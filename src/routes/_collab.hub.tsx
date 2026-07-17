@@ -9,17 +9,18 @@ import {
   ArrowRight,
   BookOpen,
 } from "lucide-react";
-import { HERO_SLIDES, HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS, type CatalogManga } from "@/lib/haven-data";
+import { HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS, type CatalogManga, type HeroSlide, type NewDrop } from "@/lib/haven-data";
 import { MangaCard } from "@/components/haven/MangaCard";
 import { loadStudioProjects } from "@/lib/studio-projects";
 
+type StudioCatalogChapter = { id: string; number: number; title: string; status: string; updated: string };
 type StudioCatalogProject = {
   id: string;
   title: string;
   synopsis: string;
   status: string;
   genres: string[];
-  chapters: unknown[];
+  chapters: StudioCatalogChapter[];
   coverDataUrl?: string;
   catalogVisible?: boolean;
 };
@@ -53,6 +54,35 @@ function useVisibleStudioEntries(): CatalogManga[] {
   return entries;
 }
 
+/** Derniers chapitres publiés des projets Studio visibles → alimente "New Chapter Releases". */
+function useVisibleStudioChapters(): NewDrop[] {
+  const [drops, setDrops] = useState<NewDrop[]>([]);
+  useEffect(() => {
+    void loadStudioProjects<StudioCatalogProject>()
+      .then((rows) => {
+        const list: NewDrop[] = [];
+        for (const p of rows) {
+          if (!p.catalogVisible) continue;
+          const published = p.chapters.filter((c) => c.status === "Published");
+          const last = published[published.length - 1];
+          if (!last) continue;
+          list.push({
+            mangaId: p.id,
+            chapterId: last.id,
+            cover: p.coverDataUrl || "",
+            title: p.title,
+            chapterLabel: `Ch. ${last.number} — ${last.title}`,
+            note: p.synopsis,
+            date: last.updated,
+          });
+        }
+        setDrops(list);
+      })
+      .catch(() => setDrops([]));
+  }, []);
+  return drops;
+}
+
 export const Route = createFileRoute("/_collab/hub")({
   head: () => ({
     meta: [
@@ -67,9 +97,9 @@ export const Route = createFileRoute("/_collab/hub")({
   component: HomePage,
 });
 
-function HeroCarousel() {
+function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   const [i, setI] = useState(0);
-  const total = HERO_SLIDES.length;
+  const total = slides.length;
   const go = useCallback((n: number) => setI((prev) => (prev + n + total) % total), [total]);
 
   useEffect(() => {
@@ -115,18 +145,18 @@ function HeroCarousel() {
     );
   }
 
-  const slide = HERO_SLIDES[i];
+  const slide = slides[i];
 
   return (
     <section className="relative">
       <div className="relative h-[70vh] min-h-[520px] w-full overflow-hidden md:h-[80vh]">
-        {HERO_SLIDES.map((s, idx) => (
+        {slides.map((s, idx) => (
           <div
             key={s.id}
             className={`absolute inset-0 transition-opacity duration-700 ${idx === i ? "opacity-100" : "opacity-0"}`}
             aria-hidden={idx !== i}
           >
-            <img src={s.image} alt={s.title} className="h-full w-full object-cover" />
+            <img src={s.image || HERO_FALLBACK_IMAGE} alt={s.title} className="h-full w-full object-cover" />
             <div className="absolute inset-0" style={{ background: "var(--gradient-hero)" }} />
             <div className="absolute inset-0" style={{ background: "var(--gradient-hero-side)" }} />
           </div>
@@ -153,12 +183,12 @@ function HeroCarousel() {
               {slide.synopsis}
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Link to="/manga" className="btn-primary">
+              <Link to="/manga/$id" params={{ id: slide.id }} className="btn-primary">
                 <Play className="h-4 w-4" /> Read now
               </Link>
-              <button className="btn-ghost">
+              <Link to="/manga/$id" params={{ id: slide.id }} className="btn-ghost">
                 <Info className="h-4 w-4" /> Details
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -179,7 +209,7 @@ function HeroCarousel() {
         </button>
 
         <div className="absolute inset-x-0 bottom-8 z-20 flex justify-center gap-2">
-          {HERO_SLIDES.map((_, idx) => (
+          {slides.map((_, idx) => (
             <button
               key={idx}
               aria-label={`Go to slide ${idx + 1}`}
@@ -220,18 +250,18 @@ function SectionHeader({
   );
 }
 
-function NewChapterRow() {
+function NewChapterRow({ drops }: { drops: NewDrop[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {NEW_DROPS.map((c) => (
+      {drops.map((c) => (
         <Link
-          key={c.mangaId}
+          key={`${c.mangaId}-${c.chapterId}`}
           to="/manga/$id/chapter/$chapterId"
           params={{ id: c.mangaId, chapterId: c.chapterId }}
           className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition-colors hover:border-primary/40"
         >
           <img
-            src={c.cover}
+            src={c.cover || HERO_FALLBACK_IMAGE}
             alt={c.title}
             loading="lazy"
             className="h-24 w-16 shrink-0 rounded-lg object-cover"
@@ -257,18 +287,31 @@ function NewChapterRow() {
 
 function HomePage() {
   const studioEntries = useVisibleStudioEntries();
+  const studioDrops = useVisibleStudioChapters();
   const all = [...studioEntries, ...CATALOG_MANGA];
+  const newDrops = [...studioDrops, ...NEW_DROPS];
   // Tant qu'aucun avis n'existe, la vedette = les premiers projets ajoutés
   // (le store liste les plus récents en premier → on inverse pour l'ancienneté).
   const hasRatings = all.some((m) => m.rating > 0);
   const byRating = hasRatings ? [...all].sort((a, b) => b.rating - a.rating) : [...all].reverse();
   const favorites = byRating.slice(0, 4);
+  // Le héros, en haut de page, met en avant les mêmes mangas les plus aimés, en rotation.
+  const heroSlides: HeroSlide[] = favorites.map((m, idx) => ({
+    id: m.id,
+    title: m.title,
+    rank: idx + 1,
+    image: m.cover || HERO_FALLBACK_IMAGE,
+    demographic: m.demographic,
+    status: m.status,
+    genres: m.genres,
+    synopsis: m.synopsis,
+  }));
   const gems = [...all].sort((a, b) => a.chapters - b.chapters).slice(0, 4);
   const hasCatalog = all.length > 0;
 
   return (
     <div>
-      <HeroCarousel />
+      <HeroCarousel slides={heroSlides} />
 
       {!hasCatalog && (
         <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
@@ -318,7 +361,7 @@ function HomePage() {
         </section>
       )}
 
-      {NEW_DROPS.length > 0 && (
+      {newDrops.length > 0 && (
         <section className="border-y border-border/70 bg-surface">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
             <SectionHeader
@@ -326,7 +369,7 @@ function HomePage() {
               title="New Chapter Releases"
               subtitle="Fresh from the studio — the most recent chapters posted by creators."
             />
-            <NewChapterRow />
+            <NewChapterRow drops={newDrops} />
           </div>
         </section>
       )}

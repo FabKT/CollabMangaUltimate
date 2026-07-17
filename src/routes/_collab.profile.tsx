@@ -12,6 +12,7 @@ import {
   listPendingFriendRequests,
   respondFriendRequestDb,
   startConversationWith,
+  updateMyRole,
   uploadImage,
   type DbAnnouncement,
   type DbFriendRequest,
@@ -224,7 +225,7 @@ function ProfilePage({
 }) {
   const publicLocked = initialMode === "public";
   const [profileType, setProfileType] = useState<ProfileType>(initialProfileType);
-  const [mode, setMode] = useState<ViewMode>(initialMode);
+  const [mode] = useState<ViewMode>(initialMode);
   const [tab, setTab] = useState("overview");
   // Identité réelle de l'utilisateur connecté (remplace l'identité de démonstration).
   const [liveIdentity, setLiveIdentity] = useState<PublicProfileIdentity | null>(null);
@@ -258,6 +259,8 @@ function ProfilePage({
           avatarUrl: meta?.avatar_url,
           bannerUrl: meta?.banner_url,
         });
+        const { data: row } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+        if (!cancelled && row?.role) setProfileType(row.role === "Créateur de contenu" ? "content" : "creator");
       } catch {
         /* identité par défaut conservée */
       }
@@ -327,14 +330,6 @@ function ProfilePage({
         className="mx-auto w-full max-w-[1280px] px-4 py-6 md:px-6 md:py-8 lg:px-8"
         style={{ fontFamily: "var(--font-manrope)" }}
       >
-        {!publicLocked && (
-          <DemoSwitcher
-            profileType={profileType}
-            setProfileType={setProfileType}
-            mode={mode}
-            setMode={setMode}
-          />
-        )}
 
         <ProfileHeader
           profileType={profileType}
@@ -441,6 +436,7 @@ function ProfilePage({
         onClose={() => setEditOpen(false)}
         profileType={profileType}
         onIdentityChange={() => setIdentityRefreshKey((k) => k + 1)}
+        onProfileTypeChange={setProfileType}
       />
       <DetailsModal
         open={!!detailsOpen}
@@ -752,61 +748,6 @@ function MetaLabel({ children }: { children: ReactNode }) {
 }
 
 /* ---------------- Demo switcher ---------------- */
-
-function DemoSwitcher({
-  profileType,
-  setProfileType,
-  mode,
-  setMode,
-}: {
-  profileType: ProfileType;
-  setProfileType: (v: ProfileType) => void;
-  mode: ViewMode;
-  setMode: (v: ViewMode) => void;
-}) {
-  return (
-    <div className="mb-4 flex flex-wrap items-center justify-end gap-2 text-[12px]" style={{ color: "#7F8CB3" }}>
-      <span className="mr-1 font-bold uppercase tracking-wider">Demo view</span>
-      <SegBtn active={profileType === "creator"} onClick={() => setProfileType("creator")}>
-        Dessinateur / Scénariste
-      </SegBtn>
-      <SegBtn active={profileType === "content"} onClick={() => setProfileType("content")}>
-        Créateur de contenu
-      </SegBtn>
-      <span className="mx-1" style={{ color: "#5E6A90" }}>|</span>
-      <SegBtn active={mode === "own"} onClick={() => setMode("own")}>
-        Own profile
-      </SegBtn>
-      <SegBtn active={mode === "public"} onClick={() => setMode("public")}>
-        Public view
-      </SegBtn>
-    </div>
-  );
-}
-
-function SegBtn({ children, active, onClick }: { children: ReactNode; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-full px-3 py-1 text-[12px] font-bold transition-colors"
-      style={
-        active
-          ? {
-              background: "rgba(57,255,136,0.12)",
-              border: "1px solid rgba(57,255,136,0.45)",
-              color: "#39FF88",
-            }
-          : {
-              background: "#0E193A",
-              border: "1px solid rgba(133,154,206,0.18)",
-              color: "#B8C4E5",
-            }
-      }
-    >
-      {children}
-    </button>
-  );
-}
 
 /* ---------------- Header ---------------- */
 
@@ -1796,12 +1737,14 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function ProfileSelect({
   options,
   defaultValue,
+  onChange,
 }: {
   options: readonly string[];
   defaultValue?: string;
+  onChange?: (value: string) => void;
 }) {
   return (
-    <select className="cm-input" defaultValue={defaultValue ?? options[0]}>
+    <select className="cm-input" defaultValue={defaultValue ?? options[0]} onChange={(e) => onChange?.(e.target.value)}>
       {options.map((option) => (
         <option key={option} value={option}>{option}</option>
       ))}
@@ -2023,13 +1966,33 @@ function EditProfileModal({
   onClose,
   profileType,
   onIdentityChange,
+  onProfileTypeChange,
 }: {
   open: boolean;
   onClose: () => void;
   onIdentityChange?: () => void;
   profileType: ProfileType;
+  onProfileTypeChange?: (type: ProfileType) => void;
 }) {
   const [available, setAvailable] = useState(true);
+  const [mainRole, setMainRole] = useState(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setMainRole(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
+  }, [open, profileType]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateMyRole(mainRole);
+    } catch {
+      /* pas connecté — le choix reste local pour cette session */
+    }
+    onProfileTypeChange?.(mainRole === "Créateur de contenu" ? "content" : "creator");
+    setSaving(false);
+    onClose();
+  };
 
   return (
     <ModalShell
@@ -2040,7 +2003,7 @@ function EditProfileModal({
       footer={
         <>
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-          <PrimaryButton onClick={onClose}>Save Changes</PrimaryButton>
+          <PrimaryButton onClick={() => void save()}>{saving ? "Enregistrement…" : "Save Changes"}</PrimaryButton>
         </>
       }
     >
@@ -2062,7 +2025,7 @@ function EditProfileModal({
             </Field>
             <AvailabilityEditToggle available={available} onChange={setAvailable} />
             <Field label="Main role">
-              <ProfileSelect defaultValue={profileType === "content" ? "Créateur de contenu" : "Dessinateur"} options={PROFILE_ROLES} />
+              <ProfileSelect defaultValue={mainRole} options={PROFILE_ROLES} onChange={setMainRole} />
             </Field>
             <Field label="Secondary role">
               <ProfileSelect defaultValue="Scénariste" options={PROFILE_ROLES} />

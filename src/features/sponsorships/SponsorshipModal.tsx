@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal, Field, inputCls } from "./ui";
 import {
   createSponsorship,
@@ -10,6 +10,9 @@ import {
 } from "./store";
 import { ServiceModal } from "./ServiceModal";
 import { sendSponsorshipContact } from "@/lib/user-workflows";
+import { loadStudioProjects } from "@/lib/studio-projects";
+
+type StudioProjectOption = { id: string; title: string };
 
 type CreatorOption = {
   id: string;
@@ -71,6 +74,7 @@ function service(
 
 export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [project, setProject] = useState("");
+  const [myProjects, setMyProjects] = useState<StudioProjectOption[]>([]);
   const [query, setQuery] = useState("");
   const [creatorId, setCreatorId] = useState(creatorOptions[0]?.id ?? "");
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
@@ -80,6 +84,16 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadStudioProjects<StudioProjectOption>()
+      .then((rows) => {
+        setMyProjects(rows);
+        setProject((current) => current || rows[0]?.title || "");
+      })
+      .catch(() => setMyProjects([]));
+  }, [open]);
 
   const creators = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -215,7 +229,15 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
               </p>
             </div>
             <Field label="Projet manga à parrainer" required>
-              <input className={inputCls} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Nom du projet" />
+              {myProjects.length > 0 ? (
+                <select className={inputCls} value={project} onChange={(e) => setProject(e.target.value)}>
+                  {myProjects.map((p) => (
+                    <option key={p.id} value={p.title}>{p.title}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className={inputCls} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Nom du projet" />
+              )}
             </Field>
             <Field label="Rechercher un créateur de contenu">
               <input className={inputCls} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nom, plateforme, audience..." />

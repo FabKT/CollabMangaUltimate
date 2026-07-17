@@ -47,7 +47,7 @@ interface Sponsorship {
   id: string; title: string; status: "Draft" | "Open" | "Paused" | "Closed" | "Archived";
   description: string; created: string;
   platform: string; videoType: string; duration: string;
-  subscribers: number; quantity: number; price: string; paymentMode: string;
+  subscribers: number; subscribersMax?: number; quantity: number; price: string; paymentMode: string;
 }
 interface RecruitAnnouncement {
   id: string; role: string; status: "Ouverte" | "Brouillon";
@@ -484,12 +484,12 @@ function ProjectWorkspace({
         />
 
         {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => setModal("chapter")} updateProject={updateProject} onWorkflow={onWorkflow} />}
-        {tab === "Notes" && <NotesTab project={project} onAdd={() => openNote()} />}
+        {tab === "Notes" && <NotesTab project={project} onAdd={() => openNote()} updateProject={updateProject} onWorkflow={onWorkflow} />}
         {tab === "Calendar" && <CalendarTab project={project} onAddNote={openNote} />}
-        {tab === "Recrutement" && <RecrutementTab project={project} onAddRecruit={() => setModal("recruit")} />}
-        {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => setModal("parrainage")} />}
-        {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} updateProject={updateProject} />}
-        {tab === "Settings" && <SettingsTab project={project} updateProject={updateProject} onDeleteProject={onDeleteProject} onWorkflow={onWorkflow} />}
+        {tab === "Recrutement" && <RecrutementTab project={project} onAddRecruit={() => setModal("recruit")} updateProject={updateProject} onWorkflow={onWorkflow} />}
+        {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => setModal("parrainage")} updateProject={updateProject} onWorkflow={onWorkflow} />}
+        {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} updateProject={updateProject} onLeaveProject={onBack} />}
+        {tab === "Settings" && <SettingsTab project={project} updateProject={updateProject} onDeleteProject={onDeleteProject} onWorkflow={onWorkflow} onLeaveProject={onBack} />}
       </div>
 
       {modal === "chapter" && (
@@ -767,9 +767,79 @@ function EditChapterModal({
 
 /* ----- Notes tab ----- */
 
-function NotesTab({ project, onAdd }: { project: Project; onAdd: () => void }) {
+function EditNoteModal({ note, onClose, onSave }: { note: Note; onClose: () => void; onSave: (patch: Partial<Note>) => void }) {
+  const [title, setTitle] = useState(note.title);
+  const [content, setContent] = useState(note.content);
+  const [date, setDate] = useState(note.date ?? "");
+  const [priority, setPriority] = useState<string[]>([note.priority]);
+
+  const submit = () => {
+    if (!title.trim()) return;
+    onSave({
+      title: title.trim(),
+      preview: (content.trim() || title.trim()).slice(0, 120),
+      content: content.trim(),
+      date: date.trim() || undefined,
+      priority: (priority[0] as Note["priority"]) || "Medium",
+    });
+  };
+
+  return (
+    <StudioModal
+      title="Modifier la note"
+      onClose={onClose}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Save} onClick={submit}>Enregistrer</PrimaryButton></>}
+    >
+      <div className="flex flex-col gap-4">
+        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre de la note" /></ModalField>
+        <ModalField label="Contenu"><textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Contenu de la note…" className={modalTextarea} /></ModalField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <ModalField label="Date liée">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-11 w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 text-[14px] text-[var(--text-primary)] outline-none transition-shadow focus:border-[var(--neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)] [color-scheme:dark]"
+            />
+          </ModalField>
+          <ChoiceRow label="Priorité" defaultValue={note.priority} options={["Low", "Medium", "High"]} onChange={setPriority} />
+        </div>
+      </div>
+    </StudioModal>
+  );
+}
+
+function NotesTab({
+  project,
+  onAdd,
+  updateProject,
+  onWorkflow,
+}: {
+  project: Project;
+  onAdd: () => void;
+  updateProject?: (updater: (p: Project) => Project) => void;
+  onWorkflow?: (message: string) => void;
+}) {
   const [selected, setSelected] = useState<string | null>(project.notes[0]?.id ?? null);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const note = project.notes.find(n => n.id === selected) ?? null;
+
+  const saveNote = (patch: Partial<Note>) => {
+    if (!note) return;
+    updateProject?.((p) => ({ ...p, notes: p.notes.map((n) => (n.id === note.id ? { ...n, ...patch } : n)), updated: "À l'instant" }));
+    onWorkflow?.("Note mise à jour.");
+    setEditing(false);
+  };
+
+  const deleteNote = () => {
+    if (!note) return;
+    updateProject?.((p) => ({ ...p, notes: p.notes.filter((n) => n.id !== note.id), updated: "À l'instant" }));
+    onWorkflow?.("Note supprimée.");
+    setSelected(null);
+    setConfirmDelete(false);
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_1fr]">
       <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-4 shadow-[var(--shadow-panel)]">
@@ -780,7 +850,7 @@ function NotesTab({ project, onAdd }: { project: Project; onAdd: () => void }) {
         <TextInput icon={Search} placeholder="Search notes…" className="mb-3" />
         <div className="flex flex-col gap-2">
           {project.notes.map(n => (
-            <button key={n.id} onClick={() => setSelected(n.id)} className={`rounded-[14px] border p-3 text-left transition-colors ${selected === n.id ? "border-[var(--neon-border)] bg-[var(--neon-soft)]" : "border-[var(--border-default)] bg-[var(--elevated)] hover:border-[var(--border-strong)]"}`}>
+            <button key={n.id} onClick={() => { setSelected(n.id); setEditing(false); setConfirmDelete(false); }} className={`rounded-[14px] border p-3 text-left transition-colors ${selected === n.id ? "border-[var(--neon-border)] bg-[var(--neon-soft)]" : "border-[var(--border-default)] bg-[var(--elevated)] hover:border-[var(--border-strong)]"}`}>
               <div className="truncate text-[14px] font-bold">{n.title}</div>
               <p className="mt-1 line-clamp-2 text-[13px] text-[var(--text-secondary)]">{n.preview}</p>
               <div className="mt-2 flex items-center gap-3 tiny-meta text-[var(--text-muted)]">
@@ -801,8 +871,15 @@ function NotesTab({ project, onAdd }: { project: Project; onAdd: () => void }) {
                 <h3 className="mt-1 font-display text-[20px] font-bold">{note.title}</h3>
               </div>
               <div className="flex items-center gap-2">
-                <SecondaryButton icon={Edit3} className="!h-10 !px-3">Edit</SecondaryButton>
-                <DangerButton icon={Trash2}>Delete</DangerButton>
+                <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => setEditing(true)}>Edit</SecondaryButton>
+                {confirmDelete ? (
+                  <>
+                    <DangerButton icon={Trash2} onClick={deleteNote}>Confirmer</DangerButton>
+                    <GhostButton onClick={() => setConfirmDelete(false)}>Annuler</GhostButton>
+                  </>
+                ) : (
+                  <DangerButton icon={Trash2} onClick={() => setConfirmDelete(true)}>Delete</DangerButton>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -812,7 +889,7 @@ function NotesTab({ project, onAdd }: { project: Project; onAdd: () => void }) {
             <div>
               <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Content</div>
               <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">
-                {note.preview} Notes to complete.
+                {note.content || note.preview || "Aucun contenu."}
               </div>
             </div>
           </div>
@@ -820,6 +897,9 @@ function NotesTab({ project, onAdd }: { project: Project; onAdd: () => void }) {
           <div className="flex h-full min-h-[240px] items-center justify-center text-[14px] text-[var(--text-muted)]">Select a note or create a new one.</div>
         )}
       </div>
+      {editing && note && (
+        <EditNoteModal note={note} onClose={() => setEditing(false)} onSave={saveNote} />
+      )}
     </div>
   );
 }
@@ -976,7 +1056,7 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
 /* ----- Sponsorship tab ----- */
 
 function AnnonceCard({
-  title, status, statusTone, description, metas, remunerated = false,
+  title, status, statusTone, description, metas, remunerated = false, onView, onManage,
 }: {
   title: string;
   status: string;
@@ -984,6 +1064,8 @@ function AnnonceCard({
   description: string;
   metas: { label: string; value: string }[];
   remunerated?: boolean;
+  onView?: () => void;
+  onManage?: () => void;
 }) {
   return (
     <div className="flex flex-col rounded-[22px] border border-[var(--border-default)] bg-[var(--elevated)] p-5 shadow-[var(--shadow-card)]">
@@ -1008,17 +1090,117 @@ function AnnonceCard({
         ))}
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <SecondaryButton className="!h-10 !px-3">View Details</SecondaryButton>
-        <PrimaryButton icon={Edit3} className="!h-10 !px-3">Manage</PrimaryButton>
+        <SecondaryButton className="!h-10 !px-3" onClick={onView}>View Details</SecondaryButton>
+        <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={onManage}>Manage</PrimaryButton>
       </div>
     </div>
   );
 }
 
+function RecruitDetailModal({ r, onClose, onEdit }: { r: RecruitAnnouncement; onClose: () => void; onEdit: () => void }) {
+  const rows: { label: string; value: string }[] = [
+    { label: "Statut recherché", value: r.role },
+    { label: "Engagement", value: r.commitment },
+    { label: "Rémunération", value: r.compensation },
+    { label: "Créée", value: r.created },
+    { label: "Statut de l'annonce", value: r.status },
+  ];
+  return (
+    <StudioModal
+      title={r.role}
+      onClose={onClose}
+      footer={<><GhostButton onClick={onClose}>Fermer</GhostButton><PrimaryButton icon={Edit3} onClick={onEdit}>Modifier</PrimaryButton></>}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {rows.map(row => <MetaField key={row.label} label={row.label} value={row.value} />)}
+        </div>
+        <div>
+          <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Description</div>
+          <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">{r.description || "—"}</div>
+        </div>
+      </div>
+    </StudioModal>
+  );
+}
+
+function EditRecruitModal({ recruit, onClose, onSave }: { recruit: RecruitAnnouncement; onClose: () => void; onSave: (patch: Partial<RecruitAnnouncement>) => void }) {
+  const [remuneration, setRemuneration] = useState(recruit.remunerated);
+  const [description, setDescription] = useState(recruit.description);
+  const [role, setRole] = useState<string[]>([recruit.role]);
+  const [engagement, setEngagement] = useState<string[]>([recruit.commitment]);
+  const [status, setStatus] = useState<string[]>([recruit.status]);
+
+  const submit = () => {
+    onSave({
+      role: role[0] || recruit.role,
+      description: description.trim() || recruit.description,
+      commitment: engagement[0] || recruit.commitment,
+      compensation: remuneration ? "Rémunéré" : "Sans rémunération",
+      remunerated: remuneration,
+      status: (status[0] as RecruitAnnouncement["status"]) || recruit.status,
+    });
+  };
+
+  return (
+    <StudioModal
+      title="Modifier l'annonce de recrutement"
+      onClose={onClose}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Save} onClick={submit}>Enregistrer</PrimaryButton></>}
+    >
+      <div className="flex flex-col gap-6">
+        <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} className={modalTextarea} /></ModalField>
+        <ChoiceRow label="Statut recherché" defaultValue={recruit.role} options={COLLAB_ROLES} onChange={setRole} />
+        <ChoiceRow label="Statut de l'annonce" defaultValue={recruit.status} options={["Ouverte", "Brouillon"]} onChange={setStatus} />
+        <button
+          type="button"
+          role="switch"
+          aria-checked={remuneration}
+          onClick={() => setRemuneration((value) => !value)}
+          className="flex items-center justify-between rounded-[14px] border px-4 py-3 text-left"
+          style={{
+            borderColor: remuneration ? "rgba(57,255,136,0.45)" : "var(--border-default)",
+            background: remuneration ? "rgba(57,255,136,0.12)" : "var(--input-bg)",
+          }}
+        >
+          <span className="text-[13px] font-bold text-[var(--text-primary)]">Rémunération</span>
+          <span className="relative h-6 w-11 rounded-full border border-[var(--border-default)] bg-[var(--elevated)]">
+            <span
+              className="absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all"
+              style={{ left: remuneration ? 22 : 2, background: remuneration ? "var(--neon)" : "var(--text-secondary)" }}
+            />
+          </span>
+        </button>
+        <ChoiceRow label="Engagement" defaultValue={recruit.commitment} options={["Long terme", "Ponctuel"]} onChange={setEngagement} />
+      </div>
+    </StudioModal>
+  );
+}
+
 /* ----- Recrutement tab ----- */
 
-function RecrutementTab({ project, onAddRecruit }: { project: Project; onAddRecruit: () => void }) {
+function RecrutementTab({
+  project,
+  onAddRecruit,
+  updateProject,
+  onWorkflow,
+}: {
+  project: Project;
+  onAddRecruit: () => void;
+  updateProject?: (updater: (p: Project) => Project) => void;
+  onWorkflow?: (message: string) => void;
+}) {
   const recruit = project.recruits ?? [];
+  const [detail, setDetail] = useState<RecruitAnnouncement | null>(null);
+  const [editing, setEditing] = useState<RecruitAnnouncement | null>(null);
+  const saveRecruit = (id: string, patch: Partial<RecruitAnnouncement>) => {
+    updateProject?.((p) => ({
+      ...p,
+      recruits: (p.recruits ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)),
+      updated: "À l'instant",
+    }));
+    onWorkflow?.("Annonce de recrutement mise à jour.");
+  };
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1049,21 +1231,38 @@ function RecrutementTab({ project, onAddRecruit }: { project: Project; onAddRecr
               { label: "Créée", value: r.created },
             ]}
             remunerated={r.remunerated}
+            onView={() => setDetail(r)}
+            onManage={() => setEditing(r)}
           />
         ))}
       </div>
+      {detail && (
+        <RecruitDetailModal
+          r={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => { setEditing(detail); setDetail(null); }}
+        />
+      )}
+      {editing && (
+        <EditRecruitModal
+          recruit={editing}
+          onClose={() => setEditing(null)}
+          onSave={(patch) => { saveRecruit(editing.id, patch); setEditing(null); }}
+        />
+      )}
     </div>
   );
 }
 
 /* ----- Parrainage tab ----- */
 
-function ParrainageDetailModal({ s, onClose }: { s: Sponsorship; onClose: () => void }) {
+function ParrainageDetailModal({ s, onClose, onEdit }: { s: Sponsorship; onClose: () => void; onEdit: () => void }) {
   const rows: { label: string; value: string }[] = [
     { label: "Type de vidéo", value: s.videoType },
     { label: "Durée de vidéo", value: s.duration },
     { label: "Plateforme", value: s.platform },
     { label: "Abonnés min.", value: String(s.subscribers) },
+    { label: "Abonnés max.", value: s.subscribersMax ? String(s.subscribersMax) : "—" },
     { label: "Quantité", value: String(s.quantity) },
     { label: "Prix", value: `${s.price} €` },
     { label: "Mode de paiement", value: s.paymentMode },
@@ -1073,7 +1272,7 @@ function ParrainageDetailModal({ s, onClose }: { s: Sponsorship; onClose: () => 
     <StudioModal
       title={s.title}
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Fermer</GhostButton><PrimaryButton icon={Edit3} onClick={onClose}>Modifier</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Fermer</GhostButton><PrimaryButton icon={Edit3} onClick={onEdit}>Modifier</PrimaryButton></>}
     >
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1088,9 +1287,66 @@ function ParrainageDetailModal({ s, onClose }: { s: Sponsorship; onClose: () => 
   );
 }
 
-function ParrainageTab({ project, onAddParrainage }: { project: Project; onAddParrainage: () => void }) {
+function EditParrainageModal({ sponsorship, onClose, onSave }: { sponsorship: Sponsorship; onClose: () => void; onSave: (patch: Partial<Sponsorship>) => void }) {
+  return (
+    <ServiceFormModal
+      open
+      onClose={onClose}
+      mode="project"
+      title="Modifier l'annonce de parrainage"
+      submitLabel="Enregistrer"
+      initial={{
+        format: sponsorship.title,
+        platforms: sponsorship.platform.split(", ").filter(Boolean),
+        videoType: sponsorship.videoType,
+        duration: sponsorship.duration,
+        paymentMode: sponsorship.paymentMode,
+        price: sponsorship.price,
+        quantity: sponsorship.quantity,
+        description: sponsorship.description,
+        subscribersMin: sponsorship.subscribers || undefined,
+        subscribersMax: sponsorship.subscribersMax,
+      }}
+      onSubmit={(values) => {
+        onSave({
+          title: values.format,
+          description: values.description,
+          platform: values.platforms.join(", ") || "Toutes plateformes",
+          videoType: values.videoType,
+          duration: values.duration,
+          subscribers: values.subscribersMin ?? 0,
+          subscribersMax: values.subscribersMax,
+          price: values.price,
+          paymentMode: values.paymentMode,
+          quantity: values.quantity,
+        });
+      }}
+    />
+  );
+}
+
+function ParrainageTab({
+  project,
+  onAddParrainage,
+  updateProject,
+  onWorkflow,
+}: {
+  project: Project;
+  onAddParrainage: () => void;
+  updateProject?: (updater: (p: Project) => Project) => void;
+  onWorkflow?: (message: string) => void;
+}) {
   const [detail, setDetail] = useState<Sponsorship | null>(null);
+  const [editing, setEditing] = useState<Sponsorship | null>(null);
   const realized = PROJECT_REALIZED_PARRAINAGES[project.id] ?? [];
+  const saveSponsorship = (id: string, patch: Partial<Sponsorship>) => {
+    updateProject?.((p) => ({
+      ...p,
+      sponsorships: p.sponsorships.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      updated: "À l'instant",
+    }));
+    onWorkflow?.("Annonce de parrainage mise à jour.");
+  };
   return (
     <div className="flex flex-col gap-8">
       {/* Annonces de parrainage — promotion du manga */}
@@ -1118,7 +1374,7 @@ function ParrainageTab({ project, onAddParrainage }: { project: Project; onAddPa
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 <SecondaryButton className="!h-10 !px-3" onClick={() => setDetail(s)}>Voir détails</SecondaryButton>
-                <PrimaryButton icon={Edit3} className="!h-10 !px-3">Gérer</PrimaryButton>
+                <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => setEditing(s)}>Gérer</PrimaryButton>
               </div>
             </div>
           ))}
@@ -1158,21 +1414,61 @@ function ParrainageTab({ project, onAddParrainage }: { project: Project; onAddPa
         )}
       </section>
 
-      {detail && <ParrainageDetailModal s={detail} onClose={() => setDetail(null)} />}
+      {detail && (
+        <ParrainageDetailModal
+          s={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => { setEditing(detail); setDetail(null); }}
+        />
+      )}
+      {editing && (
+        <EditParrainageModal
+          sponsorship={editing}
+          onClose={() => setEditing(null)}
+          onSave={(patch) => { saveSponsorship(editing.id, patch); setEditing(null); }}
+        />
+      )}
     </div>
   );
 }
 
 /* ----- Collaborateurs tab ----- */
 
+/**
+ * Un membre qui quitte son projet : s'il était chef, l'éditeur le plus ancien devient chef
+ * (à défaut, le collaborateur le plus ancien) ; le projet reste vide si personne d'autre.
+ */
+function leaveProjectAction(
+  updateProject: (updater: (p: Project) => Project) => void,
+  onWorkflow: ((message: string) => void) | undefined,
+  onLeft: (() => void) | undefined,
+) {
+  updateProject((p) => {
+    const list = projectCollaborators(p);
+    const me = list.find((c) => c.name === "Vous");
+    const others = list.filter((c) => c.name !== "Vous");
+    let nextList = others;
+    if (me?.level === "chef" && others.length > 0) {
+      const idx = others.findIndex((c) => c.level === "editeur");
+      const promoteIdx = idx !== -1 ? idx : 0;
+      nextList = others.map((c, i) => (i === promoteIdx ? { ...c, level: "chef" as CollabLevel } : c));
+    }
+    return { ...p, collaborators: nextList, updated: "À l'instant" };
+  });
+  onWorkflow?.("Tu as quitté le projet.");
+  onLeft?.();
+}
+
 function CollaborateursTab({
   project,
   onWorkflow,
   updateProject,
+  onLeaveProject,
 }: {
   project: Project;
   onWorkflow?: (message: string) => void;
   updateProject?: (updater: (p: Project) => Project) => void;
+  onLeaveProject?: () => void;
 }) {
   const collabs = projectCollaborators(project);
   const me = myLevel(project);
@@ -1186,9 +1482,17 @@ function CollaborateursTab({
     updateProject?.((p) => ({ ...p, collaborators: updater(projectCollaborators(p)), updated: "À l'instant" }));
   };
 
-  /** Règles : chef → tout ; éditeur → promouvoir/exclure les collaborateurs seulement ; collaborateur → rien. */
+  const leave = () => {
+    setMenuFor(null);
+    if (!updateProject) return;
+    leaveProjectAction(updateProject, onWorkflow, onLeaveProject);
+  };
+
+  /** Règles : chef → tout ; éditeur → promouvoir/exclure les collaborateurs seulement ; collaborateur → rien.
+   *  Sur soi-même, la seule action possible est « Quitter le projet ». */
   const promote = (target: Collaborator) => {
     setMenuFor(null);
+    if (target.name === "Vous") return deny("utilise « Quitter le projet » pour agir sur toi-même.");
     if (me === "collaborateur") return deny("un collaborateur ne peut pas promouvoir.");
     if (target.level === "collaborateur") {
       setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "editeur" } : c)));
@@ -1211,6 +1515,7 @@ function CollaborateursTab({
 
   const demote = (target: Collaborator) => {
     setMenuFor(null);
+    if (target.name === "Vous") return deny("utilise « Quitter le projet » pour agir sur toi-même.");
     if (me !== "chef") return deny("seul le chef peut rétrograder.");
     if (target.level === "editeur") {
       setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "collaborateur" } : c)));
@@ -1222,6 +1527,7 @@ function CollaborateursTab({
 
   const exclude = (target: Collaborator) => {
     setMenuFor(null);
+    if (target.name === "Vous") return deny("utilise « Quitter le projet » pour agir sur toi-même.");
     if (target.level === "chef") return deny("le chef ne peut pas être exclu.");
     if (me === "collaborateur") return deny("un collaborateur ne peut exclure personne.");
     if (me === "editeur" && target.level === "editeur") return deny("un éditeur ne peut pas exclure un autre éditeur.");
@@ -1263,15 +1569,23 @@ function CollaborateursTab({
               <div
                 className="absolute right-3 top-14 z-20 w-48 overflow-hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--panel)] py-1 shadow-[0_18px_44px_rgba(0,0,0,0.45)]"
               >
-                <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => promote(c)}>
-                  Promouvoir
-                </button>
-                <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => demote(c)}>
-                  Rétrograder
-                </button>
-                <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={() => exclude(c)}>
-                  Exclure du projet
-                </button>
+                {c.name === "Vous" ? (
+                  <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={leave}>
+                    Quitter le projet
+                  </button>
+                ) : (
+                  <>
+                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => promote(c)}>
+                      Promouvoir
+                    </button>
+                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => demote(c)}>
+                      Rétrograder
+                    </button>
+                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={() => exclude(c)}>
+                      Exclure du projet
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1366,8 +1680,8 @@ function StudioModal({ title, onClose, children, footer }: { title: string; onCl
 }
 
 // One option row: title + all options shown at once as selectable chips (no dropdown).
-function ChoiceRow({ label, options, multi = false, defaultValue, onChange }: { label: string; options: string[]; multi?: boolean; defaultValue?: string; onChange?: (selected: string[]) => void }) {
-  const [sel, setSel] = useState<string[]>(defaultValue ? [defaultValue] : []);
+function ChoiceRow({ label, options, multi = false, defaultValue, defaultValues, onChange }: { label: string; options: string[]; multi?: boolean; defaultValue?: string; defaultValues?: string[]; onChange?: (selected: string[]) => void }) {
+  const [sel, setSel] = useState<string[]>(defaultValues ?? (defaultValue ? [defaultValue] : []));
   const toggle = (o: string) =>
     setSel(prev => {
       const next = multi ? (prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]) : prev[0] === o ? [] : [o];
@@ -1543,6 +1857,7 @@ function AddParrainageModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s
     <ServiceFormModal
       open
       onClose={onClose}
+      mode="project"
       title="Nouvelle annonce de parrainage"
       onSubmit={(values) => {
         onAdd({
@@ -1554,7 +1869,8 @@ function AddParrainageModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s
           platform: values.platforms.join(", ") || "Toutes plateformes",
           videoType: values.videoType,
           duration: values.duration,
-          subscribers: 0,
+          subscribers: values.subscribersMin ?? 0,
+          subscribersMax: values.subscribersMax,
           quantity: values.quantity,
           price: values.price,
           paymentMode: values.paymentMode,
@@ -1634,22 +1950,27 @@ function SettingsTab({
   updateProject,
   onDeleteProject,
   onWorkflow,
+  onLeaveProject,
 }: {
   project: Project;
   updateProject: (updater: (p: Project) => Project) => void;
   onDeleteProject: () => void;
   onWorkflow: (message: string) => void;
+  onLeaveProject?: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(project.title);
   const [synopsis, setSynopsis] = useState(project.synopsis);
+  const [genres, setGenres] = useState<string[]>(project.genres);
+  const [subgenres, setSubgenres] = useState<string[]>(project.subgenres ?? []);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const catalogVisible = project.catalogVisible ?? false;
 
   const saveEdits = () => {
     if (!title.trim()) return;
-    updateProject((p) => ({ ...p, title: title.trim(), synopsis: synopsis.trim(), updated: "À l'instant" }));
+    updateProject((p) => ({ ...p, title: title.trim(), synopsis: synopsis.trim(), genres, subgenres, updated: "À l'instant" }));
     setEditing(false);
     onWorkflow("Paramètres du projet enregistrés.");
   };
@@ -1672,7 +1993,7 @@ function SettingsTab({
             <h3 className="font-display text-[18px] font-bold">Projet</h3>
             {editing ? (
               <div className="flex items-center gap-2">
-                <GhostButton onClick={() => { setEditing(false); setTitle(project.title); setSynopsis(project.synopsis); }}>Annuler</GhostButton>
+                <GhostButton onClick={() => { setEditing(false); setTitle(project.title); setSynopsis(project.synopsis); setGenres(project.genres); setSubgenres(project.subgenres ?? []); }}>Annuler</GhostButton>
                 <PrimaryButton icon={Save} className="!h-10 !px-3" onClick={saveEdits}>Enregistrer</PrimaryButton>
               </div>
             ) : (
@@ -1689,6 +2010,14 @@ function SettingsTab({
                 <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Synopsis</div>
                 <textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} className={modalTextarea} />
               </div>
+              <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} defaultValues={genres} onChange={setGenres} />
+              <ChoiceRow
+                multi
+                label="Sous-genres"
+                options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
+                defaultValues={subgenres}
+                onChange={setSubgenres}
+              />
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-[var(--border-default)]">
@@ -1696,6 +2025,7 @@ function SettingsTab({
                 { label: "Titre", value: project.title },
                 { label: "Statut", value: project.status },
                 { label: "Genres", value: project.genres.join(", ") || "—" },
+                { label: "Sous-genres", value: (project.subgenres ?? []).join(", ") || "—" },
                 { label: "Chapitres", value: String(project.chapters.length) },
               ].map(i => (
                 <div key={i.label} className="flex items-center justify-between py-3">
@@ -1803,6 +2133,26 @@ function SettingsTab({
               )}
             </div>
           )}
+        </div>
+        <div className="rounded-[22px] border border-[rgba(255,184,77,0.35)] bg-[rgba(255,184,77,0.05)] p-5">
+          <h3 className="font-display text-[18px] font-bold text-[var(--warning)]">Quitter le projet</h3>
+          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">
+            {confirmLeave
+              ? myLevel(project) === "chef"
+                ? "Confirme : l'éditeur le plus ancien (ou à défaut le collaborateur le plus ancien) deviendra chef à ta place."
+                : "Confirme : tu perdras l'accès à ce projet."
+              : "Tu ne feras plus partie de ce projet. Si tu es chef, le rôle sera transmis automatiquement."}
+          </p>
+          <div className="mt-4 flex items-center gap-2">
+            {confirmLeave ? (
+              <>
+                <DangerButton icon={Undo2} onClick={() => leaveProjectAction(updateProject, onWorkflow, onLeaveProject)}>Confirmer</DangerButton>
+                <GhostButton onClick={() => setConfirmLeave(false)}>Annuler</GhostButton>
+              </>
+            ) : (
+              <SecondaryButton icon={Undo2} onClick={() => setConfirmLeave(true)}>Quitter le projet</SecondaryButton>
+            )}
+          </div>
         </div>
         <div className="rounded-[22px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.05)] p-5">
           <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-[var(--danger)]" /><h3 className="font-display text-[18px] font-bold text-[var(--danger)]">Danger zone</h3></div>

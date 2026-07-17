@@ -175,13 +175,21 @@ function initialsOf(name: string) {
   return name.split(/[\s_.-]+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 }
 
-function profileFromDb(db: { id: string; username: string; display_name: string | null }): Profile {
+/** Rôle choisi dans le popup de modification du profil (FR) → rôle affiché sur Discover (EN). */
+const ROLE_FROM_PROFILE: Record<string, Role> = {
+  "Dessinateur": "Artist",
+  "Scénariste": "Writer",
+  "Créateur de contenu": "Content creator",
+  "Lecteur": "Reader",
+};
+
+function profileFromDb(db: { id: string; username: string; display_name: string | null; role?: string | null }): Profile {
   const name = db.display_name || db.username;
   return {
     id: db.id,
     username: db.username.startsWith("@") ? db.username : `@${db.username}`,
     initials: initialsOf(name),
-    role: "Reader",
+    role: (db.role && ROLE_FROM_PROFILE[db.role]) || "Reader",
     secondary: [],
     languages: ["Français"],
     rating: 0,

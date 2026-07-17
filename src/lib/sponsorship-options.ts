@@ -25,6 +25,9 @@ export type SponsorOption = {
   ownerName: string;
   chaptersMin?: number;
   chaptersMax?: number;
+  /** Uniquement pour les annonces créées par un projet (mode "project") : audience recherchée. */
+  subscribersMin?: number;
+  subscribersMax?: number;
   /** Langue du service (code site, ex. FR). */
   language?: string;
   createdAt: string;

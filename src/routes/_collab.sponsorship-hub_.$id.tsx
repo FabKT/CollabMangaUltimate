@@ -93,7 +93,7 @@ function SponsorshipDetailPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
             </button>
             {menuOpen && (
-              <div role="menu" className="absolute right-0 z-30 mt-2 w-60 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-2xl">
+              <div role="menu" className="absolute right-0 z-[90] mt-2 w-60 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-2xl">
                 <MenuItem label="Edit sponsorship" onClick={() => { setMenuOpen(false); alert("Open sponsorship editor (demo)."); }} />
                 <div className="relative">
                   <MenuItem

@@ -11,6 +11,8 @@ export type DbProfile = {
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  /** Rôle principal choisi dans le popup de modification du profil (Dessinateur, Scénariste, Créateur de contenu, Lecteur). */
+  role?: string | null;
 };
 
 export type DbIllustration = {
@@ -66,13 +68,22 @@ export type DbMessage = {
   created_at: string;
 };
 
-const PROFILE_COLS = "id, username, display_name, avatar_url";
+const PROFILE_COLS = "id, username, display_name, avatar_url, role";
 
 /** Utilisateur connecté (ou null). */
 export async function currentUserId(): Promise<string | null> {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id ?? null;
+}
+
+/** Persiste le rôle principal choisi dans le popup de modification du profil. */
+export async function updateMyRole(role: string): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour modifier ton profil.");
+  const { error } = await sb.from("profiles").update({ role }).eq("id", uid);
+  if (error) throw new Error(error.message);
 }
 
 /** Upload d'une image dans le bucket `media`. Retourne l'URL publique. */
