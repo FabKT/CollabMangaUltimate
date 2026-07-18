@@ -1515,7 +1515,7 @@ function ProfileFriendsTab() {
   const contact = async (profileId: string) => {
     try {
       await startConversationWith(profileId);
-      void navigate({ to: "/messages" });
+      void navigate({ to: "/messages", search: { conversation: undefined } });
     } catch {
       setFeedback("Impossible d'ouvrir la conversation.");
     }

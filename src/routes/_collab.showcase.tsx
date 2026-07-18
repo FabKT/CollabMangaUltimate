@@ -406,7 +406,7 @@ function IllustrationsPage() {
           onContact={() => {
             if (openArt.authorId) {
               void startConversationWith(openArt.authorId)
-                .then(() => navigate({ to: "/messages" }))
+                .then(() => navigate({ to: "/messages", search: { conversation: undefined } }))
                 .catch(() => setContact(openArt));
             } else setContact(openArt);
           }}
