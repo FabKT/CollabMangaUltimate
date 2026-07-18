@@ -21,20 +21,16 @@ import {
   Users,
   BookOpen,
   Sparkles,
-  ShieldAlert,
-  Star,
   Archive,
   Reply,
   ExternalLink,
   Check,
   X,
   Calendar,
-  FileImage,
   UserPlus,
   Info,
   ChevronDown,
   Paperclip,
-  CircleAlert,
   Layers,
 } from "lucide-react";
 
@@ -52,7 +48,7 @@ export const Route = createFileRoute("/_collab/notifications")({
   component: NotificationsPage,
 });
 
-// ---------- Types & mock data ---------------------------------------------
+// ---------- Types --------------------------------------------------------
 
 type Category = "message" | "project" | "sponsorship" | "friend" | "manga" | "system";
 type Status = "unread" | "read";
@@ -88,286 +84,6 @@ type Notification = {
   actions: ActionSpec[];
   secondaryActions?: ActionSpec[];
 };
-
-const NOTIFICATIONS: Notification[] = [
-  {
-    id: "n1",
-    category: "message",
-    typeLabel: "Direct message",
-    title: "New message received",
-    preview: "You have a new direct message in your inbox.",
-    description:
-      "A collaborator sent you a new direct message. Open the conversation to reply or continue the discussion.",
-    actor: "Collaborator",
-    time: "2 min",
-    status: "unread",
-    importance: "action",
-    entity: { kind: "conversation", title: "Direct conversation", subtitle: "Private thread", status: "Active" },
-    meta: [
-      { label: "Conversation", value: "Direct" },
-      { label: "Attachments", value: "None" },
-    ],
-    actions: [
-      { label: "Open conversation", kind: "primary" },
-      { label: "Reply", kind: "secondary" },
-    ],
-    secondaryActions: [
-      { label: "Mark as read", kind: "ghost" },
-      { label: "Archive", kind: "ghost" },
-    ],
-  },
-  {
-    id: "n2",
-    category: "project",
-    typeLabel: "Project invitation",
-    title: "Project invitation",
-    preview: "You've been invited to join a manga project as a collaborator.",
-    description:
-      "A project owner invited you to join their manga project with a proposed role. Review the project scope, team, and role before accepting.",
-    actor: "Project owner",
-    time: "18 min",
-    status: "unread",
-    importance: "action",
-    entity: { kind: "project", title: "Manga project", subtitle: "Original serialized project", status: "In production" },
-    meta: [
-      { label: "Proposed role", value: "Dessinateur" },
-      { label: "Team size", value: "4 members" },
-    ],
-    actions: [
-      { label: "Accept invitation", kind: "primary" },
-      { label: "Decline", kind: "danger" },
-    ],
-    secondaryActions: [{ label: "View project", kind: "secondary" }],
-  },
-  {
-    id: "n3",
-    category: "sponsorship",
-    typeLabel: "Sponsorship proposal",
-    title: "Sponsorship proposal received",
-    preview: "A content creator sent a sponsorship offer for your project.",
-    description:
-      "A content creator submitted a sponsorship proposal for one of your published manga projects. Review the offer, video type, and budget before responding.",
-    actor: "Content creator",
-    time: "1 h",
-    status: "unread",
-    importance: "important",
-    entity: {
-      kind: "sponsorship",
-      title: "Sponsorship announcement",
-      subtitle: "Creator offer to project",
-      status: "Pending review",
-      price: "Budget on request",
-      videoType: "Long-form review",
-      duration: "8–12 min",
-    },
-    meta: [
-      { label: "Type", value: "Creator offer" },
-      { label: "Deadline", value: "In 6 days" },
-    ],
-    actions: [
-      { label: "View proposal", kind: "primary" },
-      { label: "Accept", kind: "secondary" },
-      { label: "Decline", kind: "danger" },
-    ],
-    secondaryActions: [{ label: "Open sponsorship chat", kind: "ghost" }],
-  },
-  {
-    id: "n4",
-    category: "project",
-    typeLabel: "Page validated",
-    title: "Manga page validated",
-    preview: "A page candidate was validated on one of your chapters.",
-    description:
-      "A candidate image for a manga page has been validated by a reviewer on your project. Open the chapter to see the finalized page.",
-    actor: "Reviewer",
-    time: "3 h",
-    status: "unread",
-    importance: "normal",
-    entity: { kind: "chapter", title: "Chapter draft", subtitle: "Page 12 of the current chapter", status: "Validated" },
-    meta: [
-      { label: "Page", value: "12" },
-      { label: "Status", value: "Validated" },
-    ],
-    actions: [
-      { label: "Open chapter page", kind: "primary" },
-      { label: "View validated image", kind: "secondary" },
-    ],
-  },
-  {
-    id: "n5",
-    category: "friend",
-    typeLabel: "Friend request",
-    title: "Friend request received",
-    preview: "A user wants to connect with you on CollabManga.",
-    description:
-      "A user sent you a friend request. Accept to add them to your network and enable direct collaboration suggestions.",
-    actor: "New user",
-    time: "5 h",
-    status: "unread",
-    importance: "action",
-    entity: { kind: "profile", title: "User profile", subtitle: "Manga creator · Dessinateur", status: "New" },
-    meta: [{ label: "Mutual friends", value: "3" }],
-    actions: [
-      { label: "Accept friend request", kind: "primary" },
-      { label: "Decline", kind: "danger" },
-    ],
-    secondaryActions: [{ label: "View profile", kind: "secondary" }],
-  },
-  {
-    id: "n6",
-    category: "manga",
-    typeLabel: "New chapter",
-    title: "New chapter published",
-    preview: "A manga you follow just released a new chapter.",
-    description:
-      "A creator you follow has published a new chapter in one of their ongoing manga. Open it to start reading right away.",
-    actor: "Followed creator",
-    time: "8 h",
-    status: "read",
-    importance: "normal",
-    entity: { kind: "manga", title: "Followed manga", subtitle: "Ongoing serialization", status: "New chapter" },
-    meta: [
-      { label: "Chapter", value: "Latest" },
-      { label: "Language", value: "FR" },
-    ],
-    actions: [
-      { label: "Read chapter", kind: "primary" },
-      { label: "View manga", kind: "secondary" },
-    ],
-  },
-  {
-    id: "n7",
-    category: "message",
-    typeLabel: "Attachment received",
-    title: "Attachment received in a project chat",
-    preview: "A collaborator shared a file in a project conversation.",
-    description:
-      "A new attachment was uploaded in a project conversation you're part of. Open the conversation to preview and download.",
-    actor: "Collaborator",
-    time: "10 h",
-    status: "read",
-    importance: "normal",
-    entity: { kind: "conversation", title: "Project conversation", subtitle: "Team thread", status: "Active" },
-    meta: [
-      { label: "File type", value: "Image" },
-      { label: "Linked to", value: "Chapter draft" },
-    ],
-    actions: [
-      { label: "Open attachment", kind: "primary" },
-      { label: "Open conversation", kind: "secondary" },
-    ],
-  },
-  {
-    id: "n8",
-    category: "project",
-    typeLabel: "Calendar reminder",
-    title: "Deadline reminder on a project note",
-    preview: "A note linked to one of your projects is due soon.",
-    description:
-      "A calendar-linked project note is approaching its deadline. Open the note or your project calendar to review the task.",
-    actor: "Calendar",
-    time: "Yesterday",
-    status: "read",
-    importance: "important",
-    entity: { kind: "note", title: "Project note", subtitle: "Linked to project calendar", status: "Due soon" },
-    meta: [
-      { label: "Priority", value: "High" },
-      { label: "Deadline", value: "Tomorrow" },
-    ],
-    actions: [
-      { label: "Open calendar", kind: "primary" },
-      { label: "Open note", kind: "secondary" },
-    ],
-    secondaryActions: [{ label: "Mark as done", kind: "ghost" }],
-  },
-  {
-    id: "n9",
-    category: "sponsorship",
-    typeLabel: "Proposal accepted",
-    title: "Sponsorship proposal accepted",
-    preview: "A sponsorship proposal you were involved in has been accepted.",
-    description:
-      "The related sponsorship proposal has been accepted. Continue the collaboration in the sponsorship chat and align on next steps.",
-    actor: "Sponsorship partner",
-    time: "Yesterday",
-    status: "read",
-    importance: "normal",
-    entity: {
-      kind: "sponsorship",
-      title: "Sponsorship announcement",
-      subtitle: "Project request",
-      status: "Accepted",
-    },
-    meta: [
-      { label: "Type", value: "Project request" },
-      { label: "Next step", value: "Kickoff chat" },
-    ],
-    actions: [
-      { label: "Open sponsorship chat", kind: "primary" },
-      { label: "View announcement", kind: "secondary" },
-    ],
-  },
-  {
-    id: "n10",
-    category: "manga",
-    typeLabel: "New comment",
-    title: "New comment on your manga",
-    preview: "A reader left a comment on one of your published chapters.",
-    description:
-      "A reader posted a new comment on one of your manga chapters. Open the discussion thread to reply or moderate.",
-    actor: "Reader",
-    time: "2 d",
-    status: "read",
-    importance: "normal",
-    entity: { kind: "manga", title: "Your manga", subtitle: "Published chapter", status: "Active" },
-    meta: [{ label: "Thread", value: "Chapter comments" }],
-    actions: [
-      { label: "Open comments", kind: "primary" },
-      { label: "Reply", kind: "secondary" },
-    ],
-  },
-  {
-    id: "n11",
-    category: "system",
-    typeLabel: "AI generation",
-    title: "AI generation completed",
-    preview: "An AI generation you started has finished processing.",
-    description:
-      "An AI generation task linked to one of your chapters completed successfully. Open the result to review and integrate it.",
-    actor: "AI service",
-    time: "2 d",
-    status: "read",
-    importance: "normal",
-    entity: { kind: "ai", title: "AI generation result", subtitle: "Linked to a chapter draft", status: "Completed" },
-    meta: [
-      { label: "Generation", value: "Image" },
-      { label: "Status", value: "Ready" },
-    ],
-    actions: [
-      { label: "Open result", kind: "primary" },
-      { label: "View history", kind: "secondary" },
-    ],
-  },
-  {
-    id: "n12",
-    category: "system",
-    typeLabel: "Account security",
-    title: "Account security check",
-    preview: "A security event was recorded on your account.",
-    description:
-      "A recent account security event was recorded. Review your account settings and active sessions if you don't recognize the activity.",
-    actor: "Security",
-    time: "3 d",
-    status: "read",
-    importance: "important",
-    meta: [
-      { label: "Event", value: "New sign-in" },
-      { label: "Device", value: "Unknown" },
-    ],
-    actions: [{ label: "Review account settings", kind: "primary" }],
-    secondaryActions: [{ label: "Dismiss", kind: "ghost" }],
-  },
-];
 
 // ---------- Config --------------------------------------------------------
 
@@ -407,7 +123,7 @@ function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<"all" | Category>("all");
   const [filter, setFilter] = useState<FilterKey>("All");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>("n2");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [workflowNotifications, setWorkflowNotifications] = useState<WorkflowNotification[]>([]);
   const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
@@ -1208,9 +924,3 @@ function EmptyState({
     </div>
   );
 }
-
-// Suppress unused-import warnings for icons kept for readiness with more notification types.
-void ShieldAlert;
-void Star;
-void FileImage;
-void CircleAlert;
