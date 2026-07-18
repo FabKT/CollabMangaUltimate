@@ -145,22 +145,6 @@ const seed = ({
 });
 
 // Catalogue vide en production : il se remplit quand les créateurs publient leurs mangas.
-export const MANGA_LIST: Manga[] = [
-];
-
-export function getManga(id: string): Manga | undefined {
-  return MANGA_LIST.find((m) => m.id === id);
-}
-
-export function getChapter(mangaId: string, chapterId: string) {
-  const manga = getManga(mangaId);
-  if (!manga) return null;
-  const idx = manga.chapters.findIndex((c) => c.id === chapterId);
-  if (idx === -1) return null;
-  return {
-    manga,
-    chapter: manga.chapters[idx],
-    prev: manga.chapters[idx - 1] ?? null,
-    next: manga.chapters[idx + 1] ?? null,
-  };
-}
+// Catalogue statique vide : la production s'appuie sur les projets Studio.
+// (Conservé pour la structure de données ; haven-data en dérive CATALOG_MANGA.)
+export const MANGA_LIST: Manga[] = [];
