@@ -1,13 +1,27 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
+import {
+  ArrowRight,
+  BookOpen,
+  Users,
+  Sparkles,
+  PenLine,
+  Palette,
+  Megaphone,
+  Layers,
+  UserCheck,
+  Wand2,
+  Rocket,
+  FolderKanban,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth";
 
 /**
- * Page d'introduction CollabManga (implémentation du design CollabManga.dc.html).
- * Le héros propose le choix entre les deux parties du site :
+ * Page d'introduction CollabManga — 100 % texte + cadres (aucune image à
+ * intégrer). Le héros propose le choix entre les deux parties du site :
  *   - CollabManga (réseau)  → /hub
  *   - CollabManga AI        → /ai
- * Fonds du héros : /intro/hero-collab.jpg et /intro/hero-ai.jpg (public/intro/).
  */
 
 export const Route = createFileRoute("/")({
@@ -49,42 +63,44 @@ function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
-function PatternBox({ angle, neon, label }: { angle: number; neon?: boolean; label: string }) {
-  const line = neon ? "rgba(57,255,136,0.08)" : "rgba(184,196,229,0.06)";
+function FeatureCard({ icon: Icon, title, text, neon }: { icon: LucideIcon; title: string; text: string; neon?: boolean }) {
   return (
     <div
+      className="intro-card"
       style={{
-        height: 320,
-        borderRadius: 16,
-        overflow: "hidden",
-        position: "relative",
         background: C.card,
-        border: `1px solid ${neon ? "rgba(57,255,136,0.25)" : C.border}`,
+        border: `1px solid ${neon ? "rgba(57,255,136,0.28)" : C.border}`,
+        borderRadius: 16,
+        padding: 24,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        height: "100%",
       }}
     >
       <div
         style={{
-          position: "absolute",
-          inset: 0,
-          backgroundImage: `repeating-linear-gradient(${angle}deg, ${line} 0px, ${line} 2px, transparent 2px, transparent 24px)`,
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "monospace",
-          fontSize: 12,
-          letterSpacing: "0.08em",
-          color: C.muted,
-          textTransform: "uppercase",
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          display: "grid",
+          placeItems: "center",
+          background: "rgba(57,255,136,0.10)",
+          border: "1px solid rgba(57,255,136,0.30)",
         }}
       >
-        {label}
+        <Icon size={20} color={C.neon} />
       </div>
+      <div style={{ ...sora, fontWeight: 700, fontSize: 18, color: C.text }}>{title}</div>
+      <div style={{ ...manrope, fontSize: 14, lineHeight: 1.6, color: C.text2 }}>{text}</div>
+    </div>
+  );
+}
+
+function CardGrid({ min = 220, children }: { min?: number; children: ReactNode }) {
+  return (
+    <div style={{ display: "grid", gap: 20, gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, width: "100%" }}>
+      {children}
     </div>
   );
 }
@@ -108,8 +124,8 @@ function HeroPanel({
 }) {
   const line = neonPattern ? "rgba(57,255,136,0.05)" : "rgba(184,196,229,0.06)";
   return (
-    <Link to={to} className="intro-hero-panel" style={{ position: "relative", display: "block", overflow: "hidden", background: C.deep, cursor: "pointer" }}>
-      {/* motif de secours (visible tant que l'image n'est pas fournie) */}
+    <Link to={to} className="intro-hero-panel" style={{ position: "relative", display: "block", overflow: "hidden", background: C.deep, cursor: "pointer", textDecoration: "none" }}>
+      {/* motif de secours (visible tant que l'image n'est pas chargée) */}
       <div
         style={{
           position: "absolute",
@@ -157,7 +173,7 @@ function HeroPanel({
             ...manrope,
           }}
         >
-          {cta} <span>→</span>
+          {cta} <ArrowRight size={16} />
         </div>
       </div>
     </Link>
@@ -198,7 +214,6 @@ function IntroPage() {
   return (
     <div style={{ ...manrope, background: C.bg, color: C.text, width: "100%", minHeight: "100vh" }}>
       <style>{`
-        /* Le héros remplit tout l'écran visible sous le header (80px) avant le premier scroll */
         .intro-hero-panel { height: calc(100vh - 80px); height: calc(100dvh - 80px); min-height: 520px; }
         .intro-hero-panel:hover .intro-hero-border { border-color: rgba(57,255,136,0.45); }
         .intro-hero-panel .intro-hero-img { transition: transform .35s ease; }
@@ -209,14 +224,16 @@ function IntroPage() {
         .intro-btn-ghost:hover { border-color: #39FF88; color: #39FF88; }
         .intro-btn-neon { background: #39FF88; border: none; color: #050B1D; font-weight: 700; font-size: 14px; padding: 11px 22px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background .15s; }
         .intro-btn-neon:hover { background: #25E575; }
-        .intro-btn-outline { width: fit-content; margin-top: 8px; border: 1px solid rgba(133,154,206,0.35); color: #F7FAFF; font-weight: 600; font-size: 15px; padding: 12px 24px; border-radius: 8px; text-decoration: none; transition: all .15s; display: inline-block; }
+        .intro-btn-outline { width: fit-content; margin-top: 8px; border: 1px solid rgba(133,154,206,0.35); color: #F7FAFF; font-weight: 600; font-size: 15px; padding: 12px 24px; border-radius: 8px; text-decoration: none; transition: all .15s; display: inline-flex; align-items: center; gap: 8px; }
         .intro-btn-outline:hover { border-color: #39FF88; color: #39FF88; }
+        .intro-card { transition: border-color .18s, transform .18s; }
+        .intro-card:hover { border-color: rgba(57,255,136,0.4); transform: translateY(-2px); }
+        .intro-section { padding: 100px 48px; }
         @media (max-width: 900px) {
           .intro-hero { grid-template-columns: 1fr !important; }
-          /* empilés sur mobile : les 2 panneaux partagent l'écran visible */
           .intro-hero-panel { height: calc(50vh - 41px); height: calc(50dvh - 41px); min-height: 380px; }
-          .intro-split { grid-template-columns: 1fr !important; }
           .intro-nav { display: none !important; }
+          .intro-section { padding: 72px 24px; }
         }
       `}</style>
 
@@ -251,7 +268,7 @@ function IntroPage() {
         <HeaderAuth />
       </header>
 
-      {/* HERO : le choix des deux parties, images manga en fond */}
+      {/* HERO : choix des deux parties (texte + cadres) */}
       <section
         id="home"
         className="intro-hero"
@@ -277,81 +294,94 @@ function IntroPage() {
       </section>
 
       {/* PURPOSE */}
-      <section style={{ padding: "120px 48px", background: C.panel, display: "flex", justifyContent: "center" }}>
-        <div style={{ maxWidth: 760, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+      <section className="intro-section" style={{ background: C.panel }}>
+        <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
           <Eyebrow>Our goal</Eyebrow>
           <h2 style={{ ...sora, fontWeight: 800, fontSize: 38, lineHeight: 1.2, margin: 0, color: C.text }}>
             Helping manga projects grow faster, and better
           </h2>
           <p style={{ fontSize: 17, lineHeight: 1.7, color: C.text2, margin: 0 }}>
             CollabManga gives creators the tools to collaborate, organize production, publish chapters, and gain
-            visibility — with AI-assisted workflows available whenever they're needed. The platform is built to support
-            the growth of original manga creation in Western markets, connecting writers, artists, illustrators,
-            content creators, and readers in one place.
+            visibility — with AI-assisted workflows available whenever they're needed. The platform supports the growth
+            of original manga creation in Western markets, connecting writers, artists, illustrators, content creators,
+            and readers in one place.
           </p>
+        </div>
+        <div style={{ maxWidth: 960, margin: "48px auto 0" }}>
+          <CardGrid min={240}>
+            <FeatureCard icon={Users} title="Collaborate" text="Find writers, artists and illustrators, form a team, and manage roles on every project." />
+            <FeatureCard icon={FolderKanban} title="Organize production" text="Plan chapters and pages, keep notes and a calendar, and track what's ready to publish." />
+            <FeatureCard icon={Rocket} title="Publish & grow" text="Release chapters to the catalog, gather readers, and build an audience for your series." />
+          </CardGrid>
         </div>
       </section>
 
-      {/* CATALOG PREVIEW */}
-      <section
-        id="catalog"
-        className="intro-split"
-        style={{ padding: "100px 48px", background: C.bg, display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 64, alignItems: "center" }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <Eyebrow>Catalog</Eyebrow>
-          <h3 style={{ ...sora, fontWeight: 800, fontSize: 32, margin: 0, color: C.text }}>Discover published manga</h3>
-          <p style={{ fontSize: 16, lineHeight: 1.7, color: C.text2, margin: 0, maxWidth: 440 }}>
-            Explore original series and chapters published by the community — from early collaborations to finished
-            releases.
-          </p>
-          <Link to="/manga" className="intro-btn-outline" style={manrope}>Explore the catalog</Link>
-        </div>
-        <PatternBox angle={115} label="catalog grid — placeholder" />
-      </section>
-
-      {/* ABOUT PREVIEW */}
-      <section
-        id="about"
-        className="intro-split"
-        style={{ padding: "100px 48px", background: C.panel, display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 64, alignItems: "center" }}
-      >
-        <PatternBox angle={65} label="team / community photo — placeholder" />
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <Eyebrow>About</Eyebrow>
-          <h3 style={{ ...sora, fontWeight: 800, fontSize: 32, margin: 0, color: C.text }}>Why CollabManga exists</h3>
-          <p style={{ fontSize: 16, lineHeight: 1.7, color: C.text2, margin: 0, maxWidth: 440 }}>
-            CollabManga connects writers, artists, illustrators, and readers in one ecosystem built specifically for
-            manga creation outside Japan — where finding the right collaborators is still hard.
-          </p>
-          <a href="#home" className="intro-btn-outline" style={manrope}>Learn more</a>
+      {/* CATALOG */}
+      <section id="catalog" className="intro-section" style={{ background: C.bg }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 620 }}>
+            <Eyebrow>Catalog</Eyebrow>
+            <h3 style={{ ...sora, fontWeight: 800, fontSize: 32, margin: 0, color: C.text }}>Discover published manga</h3>
+            <p style={{ fontSize: 16, lineHeight: 1.7, color: C.text2, margin: 0 }}>
+              Explore original series and chapters published by the community — from early collaborations to finished
+              releases.
+            </p>
+            <Link to="/manga" className="intro-btn-outline" style={manrope}>Explore the catalog <ArrowRight size={16} /></Link>
+          </div>
+          <CardGrid min={240}>
+            <FeatureCard icon={BookOpen} title="Original series" text="Community-made manga, published chapter by chapter with genres and subgenres." />
+            <FeatureCard icon={Layers} title="From draft to finished" text="Follow projects at every stage — in progress, paused, or completed." />
+            <FeatureCard icon={Sparkles} title="Read & rate" text="Read in scroll or pagination mode, comment, and rate the chapters you enjoy." />
+          </CardGrid>
         </div>
       </section>
 
-      {/* AI PREVIEW */}
-      <section
-        id="ai"
-        className="intro-split"
-        style={{ padding: "100px 48px", background: C.bg, display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 64, alignItems: "center" }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <Eyebrow>CollabManga AI</Eyebrow>
-          <h3 style={{ ...sora, fontWeight: 800, fontSize: 32, margin: 0, color: C.text }}>
-            AI tools built for manga production
-          </h3>
-          <p style={{ fontSize: 16, lineHeight: 1.7, color: C.text2, margin: 0, maxWidth: 440 }}>
-            Generate manga pages, keep characters consistent across chapters, and speed up production with style-aware
-            AI assistance.
-          </p>
-          <Link to="/ai" className="intro-btn-outline" style={manrope}>Discover CollabManga AI</Link>
+      {/* ABOUT */}
+      <section id="about" className="intro-section" style={{ background: C.panel }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 620 }}>
+            <Eyebrow>About</Eyebrow>
+            <h3 style={{ ...sora, fontWeight: 800, fontSize: 32, margin: 0, color: C.text }}>Why CollabManga exists</h3>
+            <p style={{ fontSize: 16, lineHeight: 1.7, color: C.text2, margin: 0 }}>
+              CollabManga connects everyone involved in manga creation outside Japan — where finding the right
+              collaborators is still hard. One ecosystem, built specifically for original manga.
+            </p>
+          </div>
+          <CardGrid min={200}>
+            <FeatureCard icon={PenLine} title="Writers" text="Build worlds and scenarios, recruit artists, and lead projects." />
+            <FeatureCard icon={Palette} title="Artists" text="Draw pages and covers, join teams, and grow a portfolio." />
+            <FeatureCard icon={Sparkles} title="Illustrators" text="Showcase illustrations and get discovered for collaborations." />
+            <FeatureCard icon={Megaphone} title="Content creators" text="Promote manga through sponsorships and reach new readers." />
+            <FeatureCard icon={UserCheck} title="Readers" text="Discover series, follow chapters, and support creators." />
+          </CardGrid>
         </div>
-        <PatternBox angle={45} neon label="AI page generation preview — placeholder" />
+      </section>
+
+      {/* AI */}
+      <section id="ai" className="intro-section" style={{ background: C.bg }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 620 }}>
+            <Eyebrow>CollabManga AI</Eyebrow>
+            <h3 style={{ ...sora, fontWeight: 800, fontSize: 32, margin: 0, color: C.text }}>AI tools built for manga production</h3>
+            <p style={{ fontSize: 16, lineHeight: 1.7, color: C.text2, margin: 0 }}>
+              Generate manga pages, keep characters consistent across chapters, and speed up production with style-aware
+              AI assistance.
+            </p>
+            <Link to="/ai" className="intro-btn-outline" style={manrope}>Discover CollabManga AI <ArrowRight size={16} /></Link>
+          </div>
+          <CardGrid min={240}>
+            <FeatureCard icon={Layers} neon title="Manga Page Creator" text="Compose full manga pages from prompts, references and panel instructions." />
+            <FeatureCard icon={UserCheck} neon title="Character consistency" text="Reuse character cards to keep faces and outfits consistent across chapters." />
+            <FeatureCard icon={Wand2} neon title="Style transfer" text="Apply a coherent visual style to your artwork in a couple of clicks." />
+            <FeatureCard icon={Sparkles} neon title="Raw to Final" text="Turn rough sketches into finished, styled manga panels." />
+          </CardGrid>
+        </div>
       </section>
 
       {/* FINAL CTA */}
       <section
+        className="intro-section"
         style={{
-          padding: "140px 48px",
           background: C.panel,
           borderTop: `1px solid ${C.border}`,
           display: "flex",
@@ -359,17 +389,15 @@ function IntroPage() {
           alignItems: "center",
           gap: 36,
           textAlign: "center",
+          paddingTop: 140,
+          paddingBottom: 140,
         }}
       >
         <h2 style={{ ...sora, fontWeight: 800, fontSize: 42, margin: 0, color: C.text, maxWidth: 640 }}>
           Start building your manga project
         </h2>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center" }}>
-          <Link
-            to="/signup"
-            className="intro-btn-neon"
-            style={{ ...manrope, fontSize: 15, padding: "14px 28px", textDecoration: "none", display: "inline-block" }}
-          >
+          <Link to="/signup" className="intro-btn-neon" style={{ ...manrope, fontSize: 15, padding: "14px 28px", textDecoration: "none", display: "inline-block" }}>
             Sign up
           </Link>
           <Link to="/manga" className="intro-btn-outline" style={{ ...manrope, marginTop: 0, padding: "13px 27px" }}>
