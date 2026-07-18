@@ -17,7 +17,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AiStyleTransferRouteImport } from './routes/ai.style-transfer'
 import { Route as AiSketchFinalRouteImport } from './routes/ai.sketch-final'
-import { Route as AiSettingsRouteImport } from './routes/ai.settings'
 import { Route as AiSceneRouteImport } from './routes/ai.scene'
 import { Route as AiPromptsRouteImport } from './routes/ai.prompts'
 import { Route as AiPlanRouteImport } from './routes/ai.plan'
@@ -46,6 +45,7 @@ import { Route as CollabAnnouncementsRouteImport } from './routes/_collab.announ
 import { Route as CollabMangaIndexRouteImport } from './routes/_collab.manga.index'
 import { Route as ApiStyleTransferGenerateRouteImport } from './routes/api.style-transfer.generate'
 import { Route as ApiSketchFinalGenerateRouteImport } from './routes/api.sketch-final.generate'
+import { Route as ApiPlancheTransferGenerateRouteImport } from './routes/api.planche-transfer.generate'
 import { Route as ApiMangaStatusRouteImport } from './routes/api.manga.status'
 import { Route as ApiMangaGeneratePageRouteImport } from './routes/api.manga.generate-page'
 import { Route as ApiDecorGenerateRouteImport } from './routes/api.decor.generate'
@@ -92,11 +92,6 @@ const AiStyleTransferRoute = AiStyleTransferRouteImport.update({
 const AiSketchFinalRoute = AiSketchFinalRouteImport.update({
   id: '/sketch-final',
   path: '/sketch-final',
-  getParentRoute: () => AiRoute,
-} as any)
-const AiSettingsRoute = AiSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
   getParentRoute: () => AiRoute,
 } as any)
 const AiSceneRoute = AiSceneRouteImport.update({
@@ -240,6 +235,12 @@ const ApiSketchFinalGenerateRoute = ApiSketchFinalGenerateRouteImport.update({
   path: '/api/sketch-final/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPlancheTransferGenerateRoute =
+  ApiPlancheTransferGenerateRouteImport.update({
+    id: '/api/planche-transfer/generate',
+    path: '/api/planche-transfer/generate',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiMangaStatusRoute = ApiMangaStatusRouteImport.update({
   id: '/api/manga/status',
   path: '/api/manga/status',
@@ -312,7 +313,6 @@ export interface FileRoutesByFullPath {
   '/ai/plan': typeof AiPlanRoute
   '/ai/prompts': typeof AiPromptsRoute
   '/ai/scene': typeof AiSceneRoute
-  '/ai/settings': typeof AiSettingsRoute
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/': typeof AiIndexRoute
@@ -322,6 +322,7 @@ export interface FileRoutesByFullPath {
   '/api/decor/generate': typeof ApiDecorGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
   '/api/manga/status': typeof ApiMangaStatusRoute
+  '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
   '/api/sketch-final/generate': typeof ApiSketchFinalGenerateRoute
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
   '/manga/': typeof CollabMangaIndexRoute
@@ -357,7 +358,6 @@ export interface FileRoutesByTo {
   '/ai/plan': typeof AiPlanRoute
   '/ai/prompts': typeof AiPromptsRoute
   '/ai/scene': typeof AiSceneRoute
-  '/ai/settings': typeof AiSettingsRoute
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai': typeof AiIndexRoute
@@ -367,6 +367,7 @@ export interface FileRoutesByTo {
   '/api/decor/generate': typeof ApiDecorGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
   '/api/manga/status': typeof ApiMangaStatusRoute
+  '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
   '/api/sketch-final/generate': typeof ApiSketchFinalGenerateRoute
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
   '/manga': typeof CollabMangaIndexRoute
@@ -405,7 +406,6 @@ export interface FileRoutesById {
   '/ai/plan': typeof AiPlanRoute
   '/ai/prompts': typeof AiPromptsRoute
   '/ai/scene': typeof AiSceneRoute
-  '/ai/settings': typeof AiSettingsRoute
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/': typeof AiIndexRoute
@@ -415,6 +415,7 @@ export interface FileRoutesById {
   '/api/decor/generate': typeof ApiDecorGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
   '/api/manga/status': typeof ApiMangaStatusRoute
+  '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
   '/api/sketch-final/generate': typeof ApiSketchFinalGenerateRoute
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
   '/_collab/manga/': typeof CollabMangaIndexRoute
@@ -453,7 +454,6 @@ export interface FileRouteTypes {
     | '/ai/plan'
     | '/ai/prompts'
     | '/ai/scene'
-    | '/ai/settings'
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/'
@@ -463,6 +463,7 @@ export interface FileRouteTypes {
     | '/api/decor/generate'
     | '/api/manga/generate-page'
     | '/api/manga/status'
+    | '/api/planche-transfer/generate'
     | '/api/sketch-final/generate'
     | '/api/style-transfer/generate'
     | '/manga/'
@@ -498,7 +499,6 @@ export interface FileRouteTypes {
     | '/ai/plan'
     | '/ai/prompts'
     | '/ai/scene'
-    | '/ai/settings'
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai'
@@ -508,6 +508,7 @@ export interface FileRouteTypes {
     | '/api/decor/generate'
     | '/api/manga/generate-page'
     | '/api/manga/status'
+    | '/api/planche-transfer/generate'
     | '/api/sketch-final/generate'
     | '/api/style-transfer/generate'
     | '/manga'
@@ -545,7 +546,6 @@ export interface FileRouteTypes {
     | '/ai/plan'
     | '/ai/prompts'
     | '/ai/scene'
-    | '/ai/settings'
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/'
@@ -555,6 +555,7 @@ export interface FileRouteTypes {
     | '/api/decor/generate'
     | '/api/manga/generate-page'
     | '/api/manga/status'
+    | '/api/planche-transfer/generate'
     | '/api/sketch-final/generate'
     | '/api/style-transfer/generate'
     | '/_collab/manga/'
@@ -572,6 +573,7 @@ export interface RootRouteChildren {
   ApiDecorGenerateRoute: typeof ApiDecorGenerateRoute
   ApiMangaGeneratePageRoute: typeof ApiMangaGeneratePageRoute
   ApiMangaStatusRoute: typeof ApiMangaStatusRoute
+  ApiPlancheTransferGenerateRoute: typeof ApiPlancheTransferGenerateRoute
   ApiSketchFinalGenerateRoute: typeof ApiSketchFinalGenerateRoute
   ApiStyleTransferGenerateRoute: typeof ApiStyleTransferGenerateRoute
 }
@@ -632,13 +634,6 @@ declare module '@tanstack/react-router' {
       path: '/sketch-final'
       fullPath: '/ai/sketch-final'
       preLoaderRoute: typeof AiSketchFinalRouteImport
-      parentRoute: typeof AiRoute
-    }
-    '/ai/settings': {
-      id: '/ai/settings'
-      path: '/settings'
-      fullPath: '/ai/settings'
-      preLoaderRoute: typeof AiSettingsRouteImport
       parentRoute: typeof AiRoute
     }
     '/ai/scene': {
@@ -837,6 +832,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSketchFinalGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/planche-transfer/generate': {
+      id: '/api/planche-transfer/generate'
+      path: '/api/planche-transfer/generate'
+      fullPath: '/api/planche-transfer/generate'
+      preLoaderRoute: typeof ApiPlancheTransferGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/manga/status': {
       id: '/api/manga/status'
       path: '/api/manga/status'
@@ -964,7 +966,6 @@ interface AiRouteChildren {
   AiPlanRoute: typeof AiPlanRoute
   AiPromptsRoute: typeof AiPromptsRoute
   AiSceneRoute: typeof AiSceneRoute
-  AiSettingsRoute: typeof AiSettingsRoute
   AiSketchFinalRoute: typeof AiSketchFinalRoute
   AiStyleTransferRoute: typeof AiStyleTransferRoute
   AiIndexRoute: typeof AiIndexRoute
@@ -983,7 +984,6 @@ const AiRouteChildren: AiRouteChildren = {
   AiPlanRoute: AiPlanRoute,
   AiPromptsRoute: AiPromptsRoute,
   AiSceneRoute: AiSceneRoute,
-  AiSettingsRoute: AiSettingsRoute,
   AiSketchFinalRoute: AiSketchFinalRoute,
   AiStyleTransferRoute: AiStyleTransferRoute,
   AiIndexRoute: AiIndexRoute,
@@ -1001,6 +1001,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDecorGenerateRoute: ApiDecorGenerateRoute,
   ApiMangaGeneratePageRoute: ApiMangaGeneratePageRoute,
   ApiMangaStatusRoute: ApiMangaStatusRoute,
+  ApiPlancheTransferGenerateRoute: ApiPlancheTransferGenerateRoute,
   ApiSketchFinalGenerateRoute: ApiSketchFinalGenerateRoute,
   ApiStyleTransferGenerateRoute: ApiStyleTransferGenerateRoute,
 }
