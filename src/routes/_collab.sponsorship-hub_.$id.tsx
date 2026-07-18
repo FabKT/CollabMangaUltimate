@@ -13,6 +13,7 @@ import {
 } from "../features/sponsorships/store";
 import { StatusBadge, PlatformIcon, Divider } from "../features/sponsorships/ui";
 import { ServiceModal } from "../features/sponsorships/ServiceModal";
+import { loadStudioProjects } from "@/lib/studio-projects";
 
 export const Route = createFileRoute("/_collab/sponsorship-hub_/$id")({
   component: SponsorshipDetailPage,
@@ -25,6 +26,7 @@ function SponsorshipDetailPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [serviceModal, setServiceModal] = useState<{ open: boolean; initial?: Service }>({ open: false });
+  const [projectId, setProjectId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +36,17 @@ function SponsorshipDetailPage() {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  // Résout l'id du projet Studio (pour « View project ») en associant le titre.
+  const projectName = s?.project;
+  useEffect(() => {
+    if (!projectName) return;
+    let active = true;
+    void loadStudioProjects<{ id: string; title: string }>()
+      .then((rows) => { if (active) setProjectId(rows.find((p) => p.title === projectName)?.id ?? null); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [projectName]);
 
   if (!s) {
     return (
@@ -56,6 +69,18 @@ function SponsorshipDetailPage() {
       deleteSponsorship(s.id);
       navigate({ to: "/sponsorship-hub" });
     }
+  };
+  // Quitter le parrainage : on sort de la collaboration (statut annulé) et on
+  // revient à la liste. Distinct de « Cancel » qui reste sur la fiche.
+  const onLeave = () => {
+    setMenuOpen(false);
+    if (confirm(`Leave "${s.name}"? You will be removed from this collaboration.`)) {
+      updateSponsorship(s.id, { status: "cancelled" });
+      navigate({ to: "/sponsorship-hub" });
+    }
+  };
+  const openProject = () => {
+    navigate(projectId ? { to: "/manga/$id", params: { id: projectId } } : { to: "/manga" });
   };
 
   return (
@@ -94,7 +119,6 @@ function SponsorshipDetailPage() {
             </button>
             {menuOpen && (
               <div role="menu" className="absolute right-0 z-[90] mt-2 w-60 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-2xl">
-                <MenuItem label="Edit sponsorship" onClick={() => { setMenuOpen(false); alert("Open sponsorship editor (demo)."); }} />
                 <div className="relative">
                   <MenuItem
                     label="Change status"
@@ -117,11 +141,11 @@ function SponsorshipDetailPage() {
                     </div>
                   )}
                 </div>
-                <MenuItem label="Mark as activated" onClick={() => setStatus("activated")} />
-                <MenuItem label="Mark as finished" onClick={() => setStatus("finished")} />
-                <MenuItem label="Cancel sponsorship" onClick={() => setStatus("cancelled")} />
                 <div className="border-t border-border" />
-                <MenuItem label="Archive sponsorship" onClick={() => { setMenuOpen(false); alert("Archived (demo)."); }} />
+                <MenuItem label="Finish sponsorship" onClick={() => setStatus("finished")} />
+                <MenuItem label="Cancel sponsorship" onClick={() => setStatus("cancelled")} />
+                <MenuItem label="Leave sponsorship" onClick={onLeave} />
+                <div className="border-t border-border" />
                 <MenuItem label="Delete sponsorship" danger onClick={onDelete} />
               </div>
             )}
@@ -309,7 +333,10 @@ function SponsorshipDetailPage() {
                     {p.meta && <div className="mt-0.5 truncate text-xs text-text-muted">{p.meta}</div>}
                   </div>
                   {p.role === "owner" ? (
-                    <button className="shrink-0 rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-xs font-semibold text-text-secondary hover:border-neon/50 hover:text-neon">
+                    <button
+                      onClick={openProject}
+                      className="shrink-0 rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-xs font-semibold text-text-secondary hover:border-neon/50 hover:text-neon"
+                    >
                       View project
                     </button>
                   ) : (
