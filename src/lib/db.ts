@@ -93,7 +93,11 @@ export async function getMyRoles(): Promise<{ role: string | null; secondaryRole
   if (!supabase) return { role: null, secondaryRole: null };
   const uid = (await supabase.auth.getSession()).data.session?.user.id;
   if (!uid) return { role: null, secondaryRole: null };
-  const { data } = await supabase.from("profiles").select("role, secondary_role").eq("id", uid).single();
+  const { data } = await supabase
+    .from("profiles")
+    .select("role, secondary_role")
+    .eq("id", uid)
+    .single();
   return { role: data?.role ?? null, secondaryRole: data?.secondary_role ?? null };
 }
 
@@ -185,14 +189,25 @@ export async function listIdeas(): Promise<DbIdea[]> {
   return (data ?? []) as DbIdea[];
 }
 
-export async function addIdea(input: { title: string; category: string; description: string; file?: File | null }) {
+export async function addIdea(input: {
+  title: string;
+  category: string;
+  description: string;
+  file?: File | null;
+}) {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour publier une proposition.");
   const image_url = input.file ? await uploadImage(input.file, "ideas") : null;
   const { data, error } = await sb
     .from("ideas")
-    .insert({ author_id: uid, title: input.title, category: input.category, description: input.description, image_url })
+    .insert({
+      author_id: uid,
+      title: input.title,
+      category: input.category,
+      description: input.description,
+      image_url,
+    })
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .single();
   if (error) throw new Error(error.message);
@@ -261,7 +276,11 @@ export async function listMessages(conversationId: string): Promise<DbMessage[]>
   return (data ?? []) as DbMessage[];
 }
 
-export async function sendMessage(conversationId: string, content: string, file?: File | null): Promise<DbMessage> {
+export async function sendMessage(
+  conversationId: string,
+  content: string,
+  file?: File | null,
+): Promise<DbMessage> {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour envoyer un message.");
@@ -281,7 +300,11 @@ export async function sendMessage(conversationId: string, content: string, file?
       .select("profile_id")
       .eq("conversation_id", conversationId)
       .neq("profile_id", uid);
-    const { data: me } = await sb.from("profiles").select("display_name, username").eq("id", uid).single();
+    const { data: me } = await sb
+      .from("profiles")
+      .select("display_name, username")
+      .eq("id", uid)
+      .single();
     const senderName = me?.display_name || me?.username || "Un membre";
     if (members?.length) {
       await sb.from("notifications").insert(
@@ -304,13 +327,21 @@ export async function sendMessage(conversationId: string, content: string, file?
 }
 
 /** Abonnement Realtime aux nouveaux messages d'une conversation. Retourne un unsubscribe. */
-export function subscribeMessages(conversationId: string, onInsert: (m: DbMessage) => void): () => void {
+export function subscribeMessages(
+  conversationId: string,
+  onInsert: (m: DbMessage) => void,
+): () => void {
   if (!supabase) return () => {};
   const channel = supabase
     .channel(`messages-${conversationId}`)
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` },
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${conversationId}`,
+      },
       (payload) => onInsert(payload.new as DbMessage),
     )
     .subscribe();
@@ -350,7 +381,11 @@ export async function sendFriendRequestDb(recipientId: string): Promise<void> {
   );
   if (relationship?.status === "accepted") throw new Error("Vous êtes déjà amis.");
   if (relationship?.status === "pending") throw new Error("Une demande d'ami est déjà en attente.");
-  const { data: me } = await sb.from("profiles").select("display_name, username").eq("id", uid).single();
+  const { data: me } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", uid)
+    .single();
   const senderName = me?.display_name || me?.username || "Un membre";
   const { data: record, error } = await sb
     .from("workflow_records")
@@ -398,7 +433,8 @@ export async function sendProfileWorkflowDb(
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour effectuer cette action.");
-  if (uid === recipientId) throw new Error("Cette action n'est pas disponible sur ton propre profil.");
+  if (uid === recipientId)
+    throw new Error("Cette action n'est pas disponible sur ton propre profil.");
 
   if (input.kind === "subscription") {
     const { data: existingSubscription, error: existingSubscriptionError } = await sb
@@ -456,7 +492,9 @@ export async function listPendingFriendRequests(): Promise<DbFriendRequest[]> {
   if (!uid) return [];
   const { data, error } = await sb
     .from("workflow_records")
-    .select(`id, status, initiator_id, recipient_id, created_at, initiator:profiles!workflow_records_initiator_id_fkey(${PROFILE_COLS}), recipient:profiles!workflow_records_recipient_id_fkey(${PROFILE_COLS})`)
+    .select(
+      `id, status, initiator_id, recipient_id, created_at, initiator:profiles!workflow_records_initiator_id_fkey(${PROFILE_COLS}), recipient:profiles!workflow_records_recipient_id_fkey(${PROFILE_COLS})`,
+    )
     .eq("kind", "friend_request")
     .eq("status", "pending")
     .eq("recipient_id", uid);
@@ -476,7 +514,11 @@ export async function respondFriendRequestDb(recordId: string, accept: boolean):
     .select("initiator_id")
     .single();
   if (error) throw new Error(error.message);
-  const { data: me } = await sb.from("profiles").select("display_name, username").eq("id", uid).single();
+  const { data: me } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", uid)
+    .single();
   const myName = me?.display_name || me?.username || "Un membre";
   await sb.from("notifications").insert({
     record_id: recordId,
@@ -498,7 +540,9 @@ export async function listFriendsDb(): Promise<DbProfile[]> {
   if (!uid) return [];
   const { data, error } = await sb
     .from("workflow_records")
-    .select(`initiator_id, recipient_id, initiator:profiles!workflow_records_initiator_id_fkey(${PROFILE_COLS}), recipient:profiles!workflow_records_recipient_id_fkey(${PROFILE_COLS})`)
+    .select(
+      `initiator_id, recipient_id, initiator:profiles!workflow_records_initiator_id_fkey(${PROFILE_COLS}), recipient:profiles!workflow_records_recipient_id_fkey(${PROFILE_COLS})`,
+    )
     .eq("kind", "friend_request")
     .eq("status", "accepted")
     .or(`initiator_id.eq.${uid},recipient_id.eq.${uid}`);
@@ -558,9 +602,13 @@ export type DbComment = {
   author: DbProfile | null;
 };
 
-export type CommentEntityType = "illustration" | "idea" | "announcement" | "manga_chapter" | "sponsor_option";
+export type CommentEntityType =
+  "illustration" | "idea" | "announcement" | "manga_chapter" | "sponsor_option";
 
-export async function listComments(entityType: CommentEntityType, entityId: string): Promise<DbComment[]> {
+export async function listComments(
+  entityType: CommentEntityType,
+  entityId: string,
+): Promise<DbComment[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("comments")
@@ -572,13 +620,22 @@ export async function listComments(entityType: CommentEntityType, entityId: stri
   return (data ?? []) as DbComment[];
 }
 
-export async function addComment(entityType: CommentEntityType, entityId: string, content: string): Promise<DbComment> {
+export async function addComment(
+  entityType: CommentEntityType,
+  entityId: string,
+  content: string,
+): Promise<DbComment> {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour commenter.");
   const { data, error } = await sb
     .from("comments")
-    .insert({ entity_type: entityType, entity_id: entityId, author_id: uid, content: content.trim() })
+    .insert({
+      entity_type: entityType,
+      entity_id: entityId,
+      author_id: uid,
+      content: content.trim(),
+    })
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .single();
   if (error) throw new Error(error.message);
@@ -588,7 +645,9 @@ export async function addComment(entityType: CommentEntityType, entityId: string
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Profil public résolu par UUID (page Discover) OU par pseudo (liens divers). */
-export async function getProfileByUsername(slugOrId: string): Promise<(DbProfile & { role?: string | null; secondary_role?: string | null }) | null> {
+export async function getProfileByUsername(
+  slugOrId: string,
+): Promise<(DbProfile & { role?: string | null; secondary_role?: string | null }) | null> {
   if (!supabase) return null;
   const cols = "id, username, display_name, avatar_url, role, secondary_role";
   const clean = slugOrId.replace(/^@/, "");
@@ -602,7 +661,9 @@ export async function getProfileByUsername(slugOrId: string): Promise<(DbProfile
     .ilike("username", clean)
     .limit(1)
     .maybeSingle();
-  return (data as (DbProfile & { role?: string | null; secondary_role?: string | null }) | null) ?? null;
+  return (
+    (data as (DbProfile & { role?: string | null; secondary_role?: string | null }) | null) ?? null
+  );
 }
 
 /** Liste des profils inscrits (page Discover). */
@@ -620,10 +681,12 @@ export async function listProfiles(limit = 60): Promise<DbProfile[]> {
 /** Recherche de profils par pseudo (pour démarrer une conversation). */
 export async function searchProfiles(query: string): Promise<DbProfile[]> {
   if (!supabase) return [];
+  const clean = query.replace(/[,%()]/g, " ").trim();
+  if (!clean) return [];
   const { data, error } = await supabase
     .from("profiles")
     .select(PROFILE_COLS)
-    .ilike("username", `%${query}%`)
+    .or(`username.ilike.%${clean}%,display_name.ilike.%${clean}%`)
     .limit(8);
   if (error) throw new Error(error.message);
   return (data ?? []) as DbProfile[];

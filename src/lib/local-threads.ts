@@ -26,11 +26,12 @@ function load(): ThreadMap {
   }
 }
 
-function save(map: ThreadMap) {
+function save(map: ThreadMap): boolean {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    return true;
   } catch {
-    /* quota */
+    return false;
   }
 }
 
@@ -42,7 +43,11 @@ export function listThreadMessages(key: string): LocalThreadMessage[] {
   return load()[key] ?? [];
 }
 
-export function appendThreadMessage(key: string, author: string, content: string): LocalThreadMessage {
+export function appendThreadMessage(
+  key: string,
+  author: string,
+  content: string,
+): LocalThreadMessage {
   const message: LocalThreadMessage = {
     id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     author,
@@ -51,6 +56,6 @@ export function appendThreadMessage(key: string, author: string, content: string
   };
   const map = load();
   map[key] = [...(map[key] ?? []), message];
-  save(map);
+  if (!save(map)) throw new Error("Le message n'a pas pu être enregistré sur cet appareil.");
   return message;
 }
