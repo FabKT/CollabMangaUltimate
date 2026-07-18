@@ -40,6 +40,7 @@ type SwapPair = {
 type SwapSnapshot = {
   tab?: SwapTab;
   pageImage?: string | null;
+  pageAspect?: "2:3" | "3:2";
   pairs?: SwapPair[];
   prompt?: string;
   result?: SwapImageResult | null;
@@ -121,6 +122,9 @@ function profileReferences(profile: MangaCharacterProfile) {
 function SwapPage() {
   const [tab, setTab] = useState<SwapTab>("page");
   const [pageImage, setPageImage] = useState<string | null>(null);
+  // Ratio de la planche : les cadres (import + résultat) gardent une taille fixe
+  // basée dessus ; l'image est recadrée (object-cover) au cadre de base.
+  const [pageAspect, setPageAspect] = useState<"2:3" | "3:2">("2:3");
   const [characters, setCharacters] = useState<MangaCharacterProfile[]>([]);
   const [pairs, setPairs] = useState<SwapPair[]>([
     newPair(),
@@ -141,6 +145,7 @@ function SwapPage() {
       if (snapshot) {
         setTab(snapshot.tab ?? "page");
         setPageImage(snapshot.pageImage ?? null);
+        setPageAspect(snapshot.pageAspect === "3:2" ? "3:2" : "2:3");
         setPairs(
           snapshot.pairs?.length
             ? snapshot.pairs.map((pair) => ({ ...newPair(), ...pair }))
@@ -158,7 +163,7 @@ function SwapPage() {
 
   useEffect(() => {
     if (!loaded) return;
-    saveSession<SwapSnapshot>("swap", { tab, pageImage, pairs, prompt, result });
+    saveSession<SwapSnapshot>("swap", { tab, pageImage, pageAspect, pairs, prompt, result });
   }, [loaded, tab, pageImage, pairs, prompt, result]);
 
   const characterMap = useMemo(
@@ -182,11 +187,14 @@ function SwapPage() {
     [characterMap, pairs],
   );
   const canGenerate = Boolean(pageImage && validPairs.length === pairs.length && pairs.length > 0);
+  const pageAspectCss = pageAspect === "3:2" ? "3 / 2" : "2 / 3";
 
   const importPage = async (files: FileList | null) => {
     const file = Array.from(files ?? []).find((candidate) => candidate.type.startsWith("image/"));
     if (!file) return;
-    setPageImage(await fileToDataUrl(file));
+    const dataUrl = await fileToDataUrl(file);
+    setPageImage(dataUrl);
+    setPageAspect(await getAspectRatio(dataUrl));
     setResult(null);
     setError(null);
   };
@@ -330,6 +338,7 @@ function SwapPage() {
             {tab === "page" && (
               <PageUploader
                 image={pageImage}
+                aspect={pageAspectCss}
                 onImport={importPage}
                 onRemove={() => setPageImage(null)}
               />
@@ -424,10 +433,15 @@ function SwapPage() {
               <Download className="h-4 w-4" />
             </button>
           </header>
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4">
-            <div className="flex h-full min-h-[580px] w-full items-center justify-center overflow-hidden rounded-[12px] bg-stage">
+          <div className="p-4">
+            {/* Cadre de taille fixe (ratio de la planche) : l'image générée est
+                recadrée dedans (object-cover), l'emplacement ne bouge plus. */}
+            <div
+              className="w-full overflow-hidden rounded-[12px] bg-stage"
+              style={{ aspectRatio: pageAspectCss }}
+            >
               {isGenerating ? (
-                <div className="flex flex-col items-center gap-3 text-center text-text-secondary">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center text-text-secondary">
                   <Sparkles className="h-8 w-8 animate-pulse text-accent" />
                   <p className="text-[13px] font-semibold">Remplacement des personnages...</p>
                 </div>
@@ -435,16 +449,17 @@ function SwapPage() {
                 <button
                   type="button"
                   onClick={() => setLightbox(true)}
-                  className="flex h-full w-full cursor-zoom-in items-center justify-center"
+                  className="h-full w-full cursor-zoom-in"
+                  title="Voir en grand"
                 >
                   <img
                     src={result.imageUrl}
                     alt="Planche avec personnages echanges"
-                    className="max-h-full max-w-full object-contain"
+                    className="h-full w-full object-cover"
                   />
                 </button>
               ) : (
-                <div className="flex flex-col items-center gap-3 px-8 text-center text-text-muted">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-8 text-center text-text-muted">
                   <ImageIcon className="h-9 w-9" />
                   <p className="text-[13px] font-semibold">La planche modifiee apparaitra ici.</p>
                 </div>
@@ -485,10 +500,12 @@ function SwapPage() {
 
 function PageUploader({
   image,
+  aspect,
   onImport,
   onRemove,
 }: {
   image: string | null;
+  aspect: string;
   onImport: (files: FileList | null) => void;
   onRemove: () => void;
 }) {
@@ -517,13 +534,11 @@ function PageUploader({
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="flex min-h-[460px] w-full items-center justify-center overflow-hidden rounded-[12px] bg-stage"
+            className="w-full overflow-hidden rounded-[12px] bg-stage"
+            style={{ aspectRatio: aspect }}
           >
-            <img
-              src={image}
-              alt="Planche source"
-              className="max-h-[560px] max-w-full object-contain"
-            />
+            {/* Planche recadrée au cadre de base (object-cover). */}
+            <img src={image} alt="Planche source" className="h-full w-full object-cover" />
           </button>
           <div className="flex gap-2">
             <button
@@ -547,7 +562,8 @@ function PageUploader({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex min-h-[500px] w-full flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed border-border-strong bg-surface-2 hover:border-accent"
+          className="flex w-full flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed border-border-strong bg-surface-2 hover:border-accent"
+          style={{ aspectRatio: aspect }}
         >
           <Upload className="h-9 w-9 text-text-muted" />
           <span className="text-[14px] font-bold">Importer la planche</span>
