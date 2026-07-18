@@ -3,10 +3,9 @@ import { useMemo, useState, useEffect, type ReactNode } from "react";
 import { addIdea, listIdeas } from "@/lib/db";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
-  Search, X, Plus, Bookmark, MessageCircle, Copy,
+  Search, X, Bookmark, MessageCircle,
   Sparkles, LayoutGrid, List, Images, ChevronDown, Filter, Check,
-  ArrowUpRight, Link2, Trash2, Share2,
-  Flag, RotateCcw, User, Send, ImageIcon, Wand2,
+  RotateCcw, ImageIcon,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_collab/ideas")({
@@ -22,10 +21,7 @@ const GENRES = ["Action","Adventure","Fantasy","Romance","Comedy","Drama","Horro
 const TONES = ["Dark","Epic","Emotional","Funny","Mysterious","Heroic","Tragic","Light-hearted","Violent","Poetic","Realistic","Surreal","Other"];
 const USAGES = ["Character creation","Story arc","Chapter scene","Combat system","Villain concept","Hero motivation","World rules","Visual reference","Project inspiration","Dialogue inspiration","Other"];
 const COMPLEXITY = ["Simple idea","Developed concept","Detailed system","Advanced lore","To expand"];
-const FORMATS = ["Text only","Image included","Sketch included","Reference board","AI-assisted concept","Project-linked concept"];
 const VISIBILITY = ["Public","Private","Project-only","Friends-only"];
-const STATUSES = ["All","Open for discussion","Draft","Published","Archived","Used in project"];
-const SORTS = ["Most recent","Recently updated","Most saved","Most discussed","Most relevant","Category order","Project-linked first"];
 
 type Prop = {
   id: string;
@@ -135,21 +131,6 @@ function Chip({ children, tone="neutral", onRemove, className="", onClick, selec
 }
 
 // One filter row: title + all options shown at once as selectable chips (no dropdown).
-function FilterChoiceRow({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void; options: string[];
-}) {
-  return (
-    <div>
-      <div className="mb-2 text-[12px] font-bold text-[var(--text-secondary)]">{label}</div>
-      <div className="flex flex-wrap gap-2">
-        {options.map((o) => (
-          <Chip key={o} selected={value===o} onClick={()=>onChange(o)}>{o}</Chip>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function PrimaryBtn({ children, className="", ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
@@ -171,14 +152,6 @@ function GhostBtn({ children, className="", ...rest }: React.ButtonHTMLAttribute
     <button
       {...rest}
       className={`inline-flex items-center gap-2 h-9 px-3 rounded-[12px] text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-white/[0.04] transition-colors text-sm font-semibold ${className}`}
-    >{children}</button>
-  );
-}
-function DangerBtn({ children, className="", ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      {...rest}
-      className={`inline-flex items-center justify-center gap-2 h-11 px-[18px] rounded-[14px] bg-[rgba(255,95,126,0.10)] border border-[rgba(255,95,126,0.35)] text-[var(--danger)] font-bold text-sm hover:bg-[rgba(255,95,126,0.18)] transition-colors ${className}`}
     >{children}</button>
   );
 }
@@ -267,19 +240,6 @@ function NoImagePlaceholder() {
     </div>
   );
 }
-
-function statusTone(s: string): "neutral"|"neon"|"warning"|"info"|"danger" {
-  switch (s) {
-    case "Published": return "neon";
-    case "Open for discussion": return "info";
-    case "Draft": return "warning";
-    case "Archived": return "danger";
-    case "Used in project": return "neon";
-    default: return "neutral";
-  }
-}
-
-/* ---------------- Page ---------------- */
 
 function PropositionsPage() {
   const [search, setSearch] = useState("");
@@ -502,17 +462,6 @@ function PropositionsPage() {
 
 /* ---------------- Card variants ---------------- */
 
-function CardMeta({ p }: { p: Prop }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {p.genres.slice(0,2).map(g => <Chip key={g}>{g}</Chip>)}
-      <Chip tone="info">{p.tone}</Chip>
-      <Chip>{p.usage}</Chip>
-      <Chip tone="warning">{p.complexity}</Chip>
-    </div>
-  );
-}
-
 function PropCard({ p, saved, onSave, onOpen }: {
   p: Prop; saved: boolean; onSave: ()=>void; onOpen: ()=>void;
 }) {
@@ -687,104 +636,6 @@ function ModalShell({ children, onClose, maxWidth="1080px", label }: {
 
 /* ---------------- Detail modal ---------------- */
 
-function DetailBlock({ title, items }: { title: string; items: [string,string][] }) {
-  return (
-    <div className="rounded-[16px] bg-[var(--card)] border border-[var(--border)] p-5">
-      <h4 className="font-display text-[18px] leading-[26px] font-bold mb-3">{title}</h4>
-      <dl className="grid gap-3">
-        {items.map(([k,v]) => (
-          <div key={k} className="grid gap-1">
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">{k}</dt>
-            <dd className="text-[14px] leading-[22px] text-[var(--text-secondary)]">{v}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-function categoryDetail(p: Prop): { title:string; items:[string,string][] } {
-  const gen: [string,string][] = [
-    ["Concept", p.description],
-    ["Creative usage notes", "Use as a foundation for a chapter arc, a character introduction, or a visual motif that repeats through the story."],
-    ["Possible variations", "Swap tone from tragic to heroic, or bind the idea to a secondary character to shift the story weight."],
-    ["Limitations", "Requires narrative setup and consistent visual language to remain believable."],
-  ];
-  switch (p.category) {
-    case "Character design":
-      return { title:"Character breakdown", items: [
-        ["Visual traits","Distinct silhouette, worn textures, a single vivid accent color."],
-        ["Silhouette","Readable at a glance, sharp shoulders, long trailing element."],
-        ["Outfit / equipment","Layered and functional, hides its most important tool."],
-        ["Personality hook","A vow, a wound, or a promise that shapes every choice."],
-        ["Role in story","Catalyst, foil, or mirror to the main protagonist."],
-        ["Possible evolution","Breaks the vow, changes silhouette, redefines their role."],
-      ]};
-    case "Worldbuilding":
-      return { title:"World breakdown", items: [
-        ["World rule","A single unbreakable law that shapes daily life."],
-        ["Society / culture","How people live under that law, and who profits from it."],
-        ["Environment","Distinct climate, architecture and light."],
-        ["Conflict potential","Where the rule cracks, and who tries to widen the crack."],
-        ["Contradictions","Exceptions the world refuses to speak about openly."],
-      ]};
-    case "Equipment": case "Weapon": case "Object":
-      return { title:"Object breakdown", items: [
-        ["Function","What it does, precisely, and how it changes a scene."],
-        ["Visual identity","A shape a reader can draw from memory."],
-        ["Owner / user","Who wields it now, and who lost it before."],
-        ["Strengths","One thing it does better than anything else."],
-        ["Limitations","One cost that keeps it from being a solved problem."],
-        ["Symbolic meaning","What it says about the person carrying it."],
-      ]};
-    case "Power":
-      return { title:"Power breakdown", items: [
-        ["Ability","A precise description with a clean rule."],
-        ["Activation","What must be true for the power to trigger."],
-        ["Limitation","A hard line the power cannot cross."],
-        ["Cost / risk","What the user pays, every time."],
-        ["Combat usage","How it lands in a fight scene."],
-        ["Narrative usage","How it shapes plot beyond combat."],
-      ]};
-    case "Power system":
-      return { title:"System breakdown", items: [
-        ["Source","Where the power originates."],
-        ["Rules","Two or three laws every user obeys."],
-        ["Progression","How mastery is earned or revealed."],
-        ["Ranks / categories","How readers keep score."],
-        ["Weaknesses","The seam every antagonist looks for."],
-        ["Consequences","What the world loses as users gain."],
-      ]};
-    case "Motivation":
-      return { title:"Motivation breakdown", items: [
-        ["Character goal","The concrete outcome they chase."],
-        ["Emotional origin","The moment the goal was born."],
-        ["Internal conflict","The part of themselves that resists."],
-        ["External obstacle","The world's answer to their goal."],
-        ["Possible arc","How the goal is fulfilled, rewritten, or lost."],
-      ]};
-    case "Faction":
-      return { title:"Faction breakdown", items: [
-        ["Ideology","What they believe, in one sentence."],
-        ["Goal","What they are trying to build or destroy."],
-        ["Hierarchy","How power moves inside the group."],
-        ["Visual identity","How a reader recognizes them on any page."],
-        ["Enemies / allies","Who sharpens them, who softens them."],
-        ["Narrative role","Antagonist, ally, mirror, or all three."],
-      ]};
-    case "Location":
-      return { title:"Location breakdown", items: [
-        ["Atmosphere","What the air feels like in one line."],
-        ["Visual description","Two or three details a reader can draw."],
-        ["Dangers","What can go wrong here that cannot go wrong elsewhere."],
-        ["Story use","The kind of scene that only works in this place."],
-        ["Connected factions / characters","Who owns it, who haunts it."],
-      ]};
-    default:
-      return { title:"Concept breakdown", items: gen };
-  }
-}
-
 function PropModal({ p, saved, onSave, onClose }: {
   p: Prop; saved: boolean; onSave: ()=>void; onClose: ()=>void;
 }) {
@@ -855,42 +706,6 @@ function PropModal({ p, saved, onSave, onClose }: {
 }
 
 /* ---------------- Legacy project attach modal ---------------- */
-
-function LegacyProjectAttachModal({ p, onClose }: { p: Prop; onClose: ()=>void }) {
-  const [project, setProject] = useState("Select a project…");
-  const [target, setTarget] = useState("Project notes");
-  return (
-    <ModalShell onClose={onClose} maxWidth="560px" label="Legacy project attach">
-      <div className="p-6 border-b border-[var(--border)] flex items-start justify-between gap-4">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--neon)] mb-1">Legacy project attach</div>
-          <h3 className="font-display text-[20px] leading-[28px] font-bold">{p.title}</h3>
-          <p className="text-[13px] text-[var(--text-muted)] mt-1">{p.category} · {p.tone}</p>
-        </div>
-        <IconBtn label="Close" onClick={onClose}><X className="h-4 w-4"/></IconBtn>
-      </div>
-      <div className="p-6 space-y-4">
-        <Field label="Manga project">
-          <Select value={project} onChange={setProject} options={["Select a project…","— placeholder project A —","— placeholder project B —","— placeholder project C —"]}/>
-        </Field>
-        <Field label="Add to">
-          <Select value={target} onChange={setTarget} options={[
-            "Project notes","Character notes","Worldbuilding notes","Chapter notes","Asset library","Inspiration board",
-          ]}/>
-        </Field>
-        <Field label="Optional note" hint="Add context on how this idea will be used.">
-          <TextArea placeholder="A short note for your project…" className="min-h-[100px]"/>
-        </Field>
-      </div>
-      <div className="p-5 border-t border-[var(--border)] flex items-center justify-end gap-2">
-        <SecondaryBtn onClick={onClose}>Cancel</SecondaryBtn>
-        <PrimaryBtn onClick={onClose}><Check className="h-4 w-4"/>Add to Project</PrimaryBtn>
-      </div>
-    </ModalShell>
-  );
-}
-
-/* ---------------- Create modal ---------------- */
 
 function StepDot({ n, active, done, label }: { n:number; active:boolean; done:boolean; label:string }) {
   return (
