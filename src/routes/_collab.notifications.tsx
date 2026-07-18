@@ -1,5 +1,5 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearWorkflowState,
   loadWorkflowState,
@@ -8,7 +8,12 @@ import {
   subscribeWorkflowState,
   type WorkflowNotification,
 } from "@/lib/user-workflows";
-import { listMyNotifications, type DbNotification } from "@/lib/db";
+import {
+  listMyNotifications,
+  respondFriendRequestDb,
+  startConversationWith,
+  type DbNotification,
+} from "@/lib/db";
 import {
   Bell,
   Search,
@@ -79,6 +84,8 @@ type Notification = {
   status: Status;
   importance: Importance;
   archived?: boolean;
+  actorId?: string; // profil de l'expéditeur (pour « Voir le profil » / ouvrir une conversation)
+  recordId?: string; // workflow_record lié (demande d'ami à accepter/refuser)
   entity?: RelatedEntity;
   meta?: { label: string; value: string }[];
   actions: ActionSpec[];
@@ -127,6 +134,7 @@ function NotificationsPage() {
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [workflowNotifications, setWorkflowNotifications] = useState<WorkflowNotification[]>([]);
   const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const refresh = () => setWorkflowNotifications(loadWorkflowState().notifications);
@@ -135,9 +143,49 @@ function NotificationsPage() {
   }, []);
 
   // Notifications réelles (Supabase) : demandes d'ami, messages reçus…
-  useEffect(() => {
+  const refreshDb = useCallback(() => {
     void listMyNotifications().then(setDbNotifications).catch(() => setDbNotifications([]));
   }, []);
+  useEffect(() => refreshDb(), [refreshDb]);
+
+  // Routage des boutons d'action vers la vraie navigation / les workflows Supabase.
+  const runAction = useCallback(
+    async (n: Notification, a: ActionSpec) => {
+      const label = a.label.toLowerCase();
+      try {
+        // Demande d'ami : accepter / refuser (met à jour le workflow_record).
+        if (n.recordId && (label.includes("accept") || label.includes("accepte"))) {
+          await respondFriendRequestDb(n.recordId, true);
+          refreshDb();
+          return;
+        }
+        if (n.recordId && (label.includes("refus") || label.includes("declin") || label.includes("decline"))) {
+          await respondFriendRequestDb(n.recordId, false);
+          refreshDb();
+          return;
+        }
+        // Voir le profil de l'expéditeur.
+        if ((label.includes("profil") || label.includes("profile")) && n.actorId) {
+          navigate({ to: "/profile/$profileId", params: { profileId: n.actorId } });
+          return;
+        }
+        // Message / conversation : on ouvre (ou démarre) la conversation avec l'expéditeur.
+        if (n.category === "message" || label.includes("conversation") || label.includes("message")) {
+          let conversation: string | undefined;
+          if (n.actorId) {
+            try { conversation = await startConversationWith(n.actorId); } catch { /* fallback liste */ }
+          }
+          navigate({ to: "/messages", search: { conversation } });
+          return;
+        }
+        // Sinon : routage par contexte (catégorie / entité liée).
+        routeByContext(n, navigate);
+      } catch {
+        // Erreur réseau silencieuse : on ne bloque pas l'UI.
+      }
+    },
+    [navigate, refreshDb],
+  );
 
   const notifications = useMemo(
     () => [...dbNotifications.map(dbToNotification), ...workflowNotifications.map(workflowToNotification)],
@@ -206,7 +254,7 @@ function NotificationsPage() {
           />
 
           <div className="hidden lg:block">
-            <DetailPanel notification={selected} />
+            <DetailPanel notification={selected} onAction={runAction} />
           </div>
         </section>
       </div>
@@ -227,7 +275,7 @@ function NotificationsPage() {
             <span className="w-10" />
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-slim p-4">
-            <DetailPanel notification={selected} embedded />
+            <DetailPanel notification={selected} onAction={runAction} embedded />
           </div>
         </div>
       )}
@@ -253,16 +301,43 @@ function dbToNotification(n: DbNotification): Notification {
     time: relativeTime(n.created_at),
     status: n.read ? "read" : "unread",
     importance: n.category === "friend" ? "action" : "normal",
+    actorId: n.actor_id ?? undefined,
+    recordId: n.record_id ?? undefined,
     entity: n.entity_title
       ? { kind: category === "message" ? "conversation" : "profile", title: n.entity_title, subtitle: n.entity_type ?? "", status: n.read ? "Lu" : "Nouveau" }
       : undefined,
     actions:
       n.category === "friend" && n.type === "demande_ami"
-        ? [{ label: "Ouvrir l'onglet Amis du profil", kind: "primary" }]
+        ? [
+            { label: "Accepter", kind: "primary" },
+            { label: "Refuser", kind: "danger" },
+          ]
         : n.category === "message"
-          ? [{ label: "Ouvrir Messages", kind: "primary" }]
-          : [],
+          ? [{ label: "Ouvrir la conversation", kind: "primary" }]
+          : n.actor_id
+            ? [{ label: "Voir le profil", kind: "secondary" }]
+            : [],
+    secondaryActions:
+      n.category === "friend" && n.type === "demande_ami" && n.actor_id
+        ? [{ label: "Voir le profil", kind: "secondary" }]
+        : undefined,
   };
+}
+
+/** Fallback de navigation : route vers la page de section selon la catégorie/l'entité. */
+function routeByContext(n: Notification, navigate: ReturnType<typeof useNavigate>) {
+  const kind = n.entity?.kind;
+  if (n.category === "manga" || kind === "manga" || kind === "chapter") {
+    navigate({ to: "/manga" });
+  } else if (n.category === "sponsorship" || kind === "sponsorship") {
+    navigate({ to: "/sponsorship-hub" });
+  } else if (n.category === "project" || kind === "project") {
+    navigate({ to: "/studio", search: { project: undefined, chapter: undefined } });
+  } else if (n.category === "friend" || kind === "profile") {
+    if (n.actorId) navigate({ to: "/profile/$profileId", params: { profileId: n.actorId } });
+  } else if (n.category === "message" || kind === "conversation") {
+    navigate({ to: "/messages", search: { conversation: undefined } });
+  }
 }
 
 function workflowToNotification(n: WorkflowNotification): Notification {
@@ -568,9 +643,11 @@ function NotificationRow({
 
 function DetailPanel({
   notification,
+  onAction,
   embedded = false,
 }: {
   notification: Notification | null;
+  onAction: (n: Notification, a: ActionSpec) => void;
   embedded?: boolean;
 }) {
   const wrapper = embedded
@@ -618,7 +695,12 @@ function DetailPanel({
 
         {/* Middle */}
         <div className="mt-6 space-y-4">
-          {notification.entity && <RelatedEntityCard entity={notification.entity} />}
+          {notification.entity && (
+            <RelatedEntityCard
+              entity={notification.entity}
+              onOpen={() => onAction(notification, { label: "open", kind: "ghost" })}
+            />
+          )}
 
           {notification.meta && notification.meta.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
@@ -658,29 +740,27 @@ function DetailPanel({
       <div className="mt-6 border-t border-[color:var(--color-border-default)] pt-5">
         <div className="flex flex-wrap gap-2">
           {notification.actions.map((a) => (
-            isProfileAction(a.label) ? (
-              <ProfileActionLink key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
-                {a.label}
-              </ProfileActionLink>
-            ) : (
-              <ActionButton key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
-                {a.label}
-              </ActionButton>
-            )
+            <ActionButton
+              key={a.label}
+              kind={a.kind}
+              icon={iconForAction(a.label)}
+              onClick={() => onAction(notification, a)}
+            >
+              {a.label}
+            </ActionButton>
           ))}
         </div>
         {notification.secondaryActions && notification.secondaryActions.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {notification.secondaryActions.map((a) => (
-              isProfileAction(a.label) ? (
-                <ProfileActionLink key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
-                  {a.label}
-                </ProfileActionLink>
-              ) : (
-                <ActionButton key={a.label} kind={a.kind} icon={iconForAction(a.label)}>
-                  {a.label}
-                </ActionButton>
-              )
+              <ActionButton
+                key={a.label}
+                kind={a.kind}
+                icon={iconForAction(a.label)}
+                onClick={() => onAction(notification, a)}
+              >
+                {a.label}
+              </ActionButton>
             ))}
           </div>
         )}
@@ -706,7 +786,7 @@ function iconForAction(label: string) {
   return null;
 }
 
-function RelatedEntityCard({ entity }: { entity: RelatedEntity }) {
+function RelatedEntityCard({ entity, onOpen }: { entity: RelatedEntity; onOpen: () => void }) {
   const iconMap: Record<RelatedEntity["kind"], React.ReactNode> = {
     project: <FolderKanban className="h-5 w-5" />,
     manga: <BookOpen className="h-5 w-5" />,
@@ -735,6 +815,7 @@ function RelatedEntityCard({ entity }: { entity: RelatedEntity }) {
           {entity.status}
         </Chip>
         <button
+          onClick={onOpen}
           className="inline-flex items-center gap-1 text-[12px] font-semibold text-text-secondary hover:text-text"
           aria-label="Open"
         >
@@ -821,27 +902,6 @@ function actionButtonClass(kind: ActionKind = "primary") {
       "border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] text-[color:var(--color-danger)] hover:bg-[rgba(255,95,126,0.18)]",
   };
   return [base, styles[kind]].join(" ");
-}
-
-function isProfileAction(label: string) {
-  return label.toLowerCase().includes("profile");
-}
-
-function ProfileActionLink({
-  children,
-  kind = "primary",
-  icon,
-}: {
-  children: React.ReactNode;
-  kind?: ActionKind;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <Link to="/profile/$profileId" params={{ profileId: "u1" }} className={actionButtonClass(kind)}>
-      {icon}
-      {children}
-    </Link>
-  );
 }
 
 function ActionButton({
