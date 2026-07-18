@@ -3,6 +3,9 @@ import type { ProjectAnnouncement } from "@/routes/_collab.announcements";
 /** Forme minimale d'une annonce de recrutement Studio (stockée dans le projet). */
 export type StudioRecruitLike = {
   id: string;
+  title?: string;
+  hook?: string;
+  language?: string;
   role: string;
   status: string; // "Ouverte" | "Brouillon"
   description: string;
@@ -20,10 +23,10 @@ export function projectAnnouncementFromRecruit(
   return {
     kind: "project",
     id: r.id,
-    title: r.role ? `Recherche ${r.role}` : "Annonce de recrutement",
+    title: r.title || (r.role ? `Recherche ${r.role}` : "Annonce de recrutement"),
     projectName: ctx.projectName,
     cover: ctx.cover,
-    description: r.description,
+    description: r.hook || r.description,
     roleNeeded: r.role,
     remuneration: r.remunerated,
     engagement: r.commitment === "Ponctuel" ? "Ponctuel" : "Long terme",
@@ -31,7 +34,7 @@ export function projectAnnouncementFromRecruit(
     mode: r.remunerated ? "Rémunéré" : "Non rémunéré",
     availability: "",
     status: r.status === "Ouverte" ? "Open" : "Draft",
-    language: ctx.language ?? "FR",
+    language: r.language || ctx.language || "FR",
     experience: "",
     requiredSkills: ctx.subgenres ?? [],
     fullDescription: r.description,

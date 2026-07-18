@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Plus, Search, LayoutGrid, List as ListIcon, MoreHorizontal,
-  Edit3, Copy, Trash2, Check, Upload, Image as ImageIcon, Eye, Calendar as CalendarIcon,
-  StickyNote, Megaphone, Settings as SettingsIcon, ChevronLeft, ChevronRight,
+  ArrowLeft, Plus, Search, MoreHorizontal,
+  Edit3, Copy, Trash2, Check, Upload, Image as ImageIcon, Calendar as CalendarIcon,
+  StickyNote, Megaphone, ChevronLeft, ChevronRight,
   BookOpen, Layers, AlertTriangle, FileImage, RefreshCw, Save, Play,
-  Filter, ArrowUpDown, Bell, Target, Sparkles, Star, X,
+  ArrowUpDown, Target, Star, X,
   Users, UserPlus, Rocket, Undo2, Handshake,
 } from "lucide-react";
 import { addSponsorOption } from "@/lib/sponsorship-options";
@@ -18,11 +18,18 @@ import {
   createAnnouncementWorkflow,
   createProjectNote,
   createProjectWorkflow,
+  removeCollaborator,
   sendCollaborationInvitation,
+  updateCollaboratorRole,
 } from "@/lib/user-workflows";
 import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
 
 export const Route = createFileRoute("/_collab/studio")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    project: typeof search.project === "string" && search.project.trim() ? search.project : undefined,
+    chapter: typeof search.chapter === "string" && search.chapter.trim() ? search.chapter : undefined,
+  }),
+  head: () => ({ meta: [{ title: "Mes projets — CollabManga" }] }),
   component: CollabMangaPage,
 });
 
@@ -54,7 +61,8 @@ interface Sponsorship {
   subscribers: number; subscribersMax?: number; quantity: number; price: string; paymentMode: string;
 }
 interface RecruitAnnouncement {
-  id: string; role: string; status: "Ouverte" | "Brouillon";
+  id: string; title: string; hook: string; language: string;
+  role: string; status: "Ouverte" | "Brouillon";
   description: string; commitment: string; compensation: string;
   remunerated: boolean; created: string;
 }
@@ -71,12 +79,35 @@ interface Project {
   catalogVisible?: boolean;
   /** Membres du projet avec leur niveau d'accès. */
   collaborators?: Collaborator[];
+  /** Note publique, lorsqu'elle est disponible depuis le catalogue. */
+  rating?: number;
 }
 
 const COLLAB_ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"];
 
 function hasPublishedChapter(p: Project) {
   return p.chapters.some((c) => c.status === "Published");
+}
+
+function deriveProjectState(p: Project): Project {
+  const chaptersCount = p.chapters.length;
+  const totalPages = p.chapters.reduce((total, chapter) => total + chapter.pages.length, 0);
+  const validatedPages = p.chapters.reduce(
+    (total, chapter) => total + chapter.pages.filter((page) => page.validatedCandidateId).length,
+    0,
+  );
+  const countsChanged = p.chaptersCount !== chaptersCount || p.totalPages !== totalPages || p.validatedPages !== validatedPages;
+  const withCounts = countsChanged ? { ...p, chaptersCount, totalPages, validatedPages } : p;
+  const published = hasPublishedChapter(withCounts);
+  if (!published) {
+    if (withCounts.status === "Draft" && !withCounts.catalogVisible) return withCounts;
+    return { ...withCounts, status: "Draft", catalogVisible: false };
+  }
+  if (withCounts.status === "Finished") {
+    return withCounts.catalogVisible ? withCounts : { ...withCounts, catalogVisible: true };
+  }
+  const status: ProjectStatus = withCounts.catalogVisible ? "In progress" : "Paused";
+  return withCounts.status === status ? withCounts : { ...withCounts, status };
 }
 
 /**
@@ -87,16 +118,92 @@ function hasPublishedChapter(p: Project) {
  * - Finished (choisi dans les paramètres) → reste visible dans le catalogue.
  */
 function normalizeProjectState(p: Project): Project {
-  const published = hasPublishedChapter(p);
-  if (!published) {
-    if (p.status === "Draft" && !p.catalogVisible) return p;
-    return { ...p, status: "Draft", catalogVisible: false };
-  }
-  if (p.status === "Finished") {
-    return p.catalogVisible ? p : { ...p, catalogVisible: true };
-  }
-  const status: ProjectStatus = p.catalogVisible ? "In progress" : "Paused";
-  return p.status === status ? p : { ...p, status };
+  const chapters = (Array.isArray(p.chapters) ? p.chapters : []).map((chapter, chapterIndex) => {
+    const rawPages = Array.isArray(chapter.pages) && chapter.pages.length > 0 ? chapter.pages : makeEmptyPages(1);
+    const pages = rawPages.map((page, pageIndex) => {
+      const rawCandidates = Array.isArray(page.candidates) && page.candidates.length > 0
+        ? page.candidates
+        : [{ id: `c-restored-${Date.now()}-${chapterIndex}-${pageIndex}`, status: "Empty" as CandidateStatus }];
+      const candidates = rawCandidates.map((candidate, candidateIndex) => ({
+        id: candidate.id || `c-restored-${Date.now()}-${chapterIndex}-${pageIndex}-${candidateIndex}`,
+        image: typeof candidate.image === "string" ? candidate.image : undefined,
+        status: (candidate.image ? "Imported" : "Empty") as CandidateStatus,
+      }));
+      const validatedCandidateId = candidates.some((candidate) => candidate.id === page.validatedCandidateId && candidate.image)
+        ? page.validatedCandidateId
+        : null;
+      return {
+        ...page,
+        id: page.id || `p-restored-${Date.now()}-${chapterIndex}-${pageIndex}`,
+        number: Number.isFinite(page.number) ? page.number : pageIndex + 1,
+        title: typeof page.title === "string" ? page.title : `Page ${pageIndex + 1}`,
+        description: typeof page.description === "string" ? page.description : "",
+        candidates: candidates.map((candidate) => ({
+          ...candidate,
+          status: candidate.id === validatedCandidateId ? "Validated" : candidate.status,
+        })),
+        validatedCandidateId,
+        updated: typeof page.updated === "string" ? page.updated : "À l'instant",
+      };
+    });
+    return {
+      ...chapter,
+      id: chapter.id || `ch-restored-${Date.now()}-${chapterIndex}`,
+      number: Number.isFinite(chapter.number) ? chapter.number : chapterIndex + 1,
+      title: typeof chapter.title === "string" ? chapter.title : `Chapitre ${chapterIndex + 1}`,
+      objective: typeof chapter.objective === "string" ? chapter.objective : "Objectif à définir.",
+      pages,
+      updated: typeof chapter.updated === "string" ? chapter.updated : "À l'instant",
+    };
+  });
+  const safeProject: Project = {
+    ...p,
+    chapters,
+    chaptersCount: chapters.length,
+    totalPages: chapters.reduce((total, chapter) => total + chapter.pages.length, 0),
+    validatedPages: chapters.reduce(
+      (total, chapter) => total + chapter.pages.filter((page) => page.validatedCandidateId).length,
+      0,
+    ),
+    genres: Array.isArray(p.genres) ? p.genres : [],
+    subgenres: Array.isArray(p.subgenres) ? p.subgenres : [],
+    notes: Array.isArray(p.notes) ? p.notes : [],
+    sponsorships: Array.isArray(p.sponsorships) ? p.sponsorships : [],
+    recruits: (Array.isArray(p.recruits) ? p.recruits : []).map((recruit) => ({
+      ...recruit,
+      title: recruit.title || (recruit.role ? `Recherche ${recruit.role}` : "Annonce de recrutement"),
+      hook: recruit.hook || "",
+      language: recruit.language || "FR",
+    })),
+    collaborators: Array.isArray(p.collaborators) && p.collaborators.length > 0 ? p.collaborators : defaultCollaborators(),
+  };
+  return deriveProjectState(safeProject);
+}
+
+function normalizeStoredProject(value: unknown): Project | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<Project>;
+  if (typeof raw.id !== "string" || typeof raw.title !== "string") return null;
+  return normalizeProjectState({
+    id: raw.id,
+    title: raw.title,
+    synopsis: typeof raw.synopsis === "string" ? raw.synopsis : "Synopsis à compléter.",
+    status: raw.status ?? "Draft",
+    chaptersCount: raw.chaptersCount ?? 0,
+    validatedPages: raw.validatedPages ?? 0,
+    totalPages: raw.totalPages ?? 0,
+    updated: typeof raw.updated === "string" ? raw.updated : "À l'instant",
+    genres: raw.genres ?? [],
+    subgenres: raw.subgenres ?? [],
+    chapters: raw.chapters ?? [],
+    notes: raw.notes ?? [],
+    sponsorships: raw.sponsorships ?? [],
+    recruits: raw.recruits ?? [],
+    coverDataUrl: raw.coverDataUrl,
+    catalogVisible: raw.catalogVisible,
+    collaborators: raw.collaborators,
+    rating: typeof raw.rating === "number" ? Math.max(0, Math.min(5, raw.rating)) : undefined,
+  });
 }
 
 // Chaque nouvelle page démarre avec un seul candidat vide ; d'autres peuvent être ajoutés librement.
@@ -113,6 +220,19 @@ const makeEmptyPages = (n: number): PageItem[] =>
       updated: "À l'instant",
     };
   });
+
+function readImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Le fichier sélectionné n'est pas une image."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Lecture de l'image impossible."));
+    reader.readAsDataURL(file);
+  });
+}
 
 /* ---------- Small UI primitives ---------- */
 
@@ -248,10 +368,17 @@ function PageHeader({
 
 function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[]; onOpen: (id: string) => void; onCreate: () => void }) {
   const [q, setQ] = useState("");
+  const [sortAscending, setSortAscending] = useState(true);
 
-  const filtered = projects.filter(p =>
-    q === "" || p.title.toLowerCase().includes(q.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const query = q.trim().toLocaleLowerCase("fr");
+    return projects
+      .filter((project) => !query || project.title.toLocaleLowerCase("fr").includes(query))
+      .sort((a, b) => {
+        const order = a.title.localeCompare(b.title, "fr", { sensitivity: "base" });
+        return sortAscending ? order : -order;
+      });
+  }, [projects, q, sortAscending]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -265,7 +392,9 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
       <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-4 shadow-[var(--shadow-panel)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <TextInput icon={Search} value={q} onChange={setQ} placeholder="Search manga projects…" className="sm:flex-1" />
-          <SecondaryButton icon={ArrowUpDown} className="!h-10 !px-3">Sort</SecondaryButton>
+          <SecondaryButton icon={ArrowUpDown} className="!h-10 !px-3" onClick={() => setSortAscending((value) => !value)}>
+            {sortAscending ? "A–Z" : "Z–A"}
+          </SecondaryButton>
         </div>
       </div>
 
@@ -286,10 +415,6 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
     </div>
   );
 }
-
-const PROJECT_RATING: Record<string, number> = {};
-
-const PROJECT_COLLABORATORS: Record<string, number> = {};
 
 /** Niveaux d'accès au projet : un seul chef (le créateur), des éditeurs, des collaborateurs. */
 type CollabLevel = "chef" | "editeur" | "collaborateur";
@@ -314,11 +439,6 @@ function myLevel(p: Project): CollabLevel {
   return projectCollaborators(p).find((c) => c.name === "Vous")?.level ?? "chef";
 }
 
-// Réalisés / en cours — parrainages liés au projet (alimentés quand des parrainages aboutissent).
-type RealizedParrainage = { id: string; creator: string; platform: string; status: "Terminé" | "En cours" | "Planifié"; price: string };
-
-const PROJECT_REALIZED_PARRAINAGES: Record<string, RealizedParrainage[]> = {};
-
 function StarRating({ value }: { value: number }) {
   const full = Math.round(value);
   return (
@@ -336,12 +456,15 @@ function StarRating({ value }: { value: number }) {
 }
 
 function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
-  const rating = PROJECT_RATING[project.id] ?? 4;
   return (
     <div className="group flex flex-col overflow-hidden rounded-[22px] border border-[var(--border-default)] bg-[var(--elevated)] p-4 shadow-[var(--shadow-card)] transition-all hover:border-[var(--neon-border)] hover:shadow-[var(--shadow-neon)]">
-      <CoverPlaceholder title={project.title} className="aspect-[3/4] w-full" />
+      {project.coverDataUrl ? (
+        <img src={project.coverDataUrl} alt={`Couverture de ${project.title}`} className="aspect-[3/4] w-full rounded-[14px] border border-[var(--border-default)] object-cover" />
+      ) : (
+        <CoverPlaceholder title={project.title} className="aspect-[3/4] w-full" />
+      )}
       <h3 className="mt-4 truncate text-[15px] font-bold">{project.title}</h3>
-      <div className="mt-2"><StarRating value={rating} /></div>
+      <div className="mt-2"><StarRating value={project.rating ?? 0} /></div>
       <div className="mt-4">
         <PrimaryButton onClick={onOpen} className="!h-10 w-full justify-center !px-3">Open</PrimaryButton>
       </div>
@@ -360,6 +483,7 @@ function ProjectWorkspace({
   onWorkflow,
   updateProject,
   onDeleteProject,
+  onLeaveProject,
 }: {
   project: Project;
   onBack: () => void;
@@ -367,25 +491,39 @@ function ProjectWorkspace({
   onWorkflow: (message: string) => void;
   updateProject: (updater: (p: Project) => Project) => void;
   onDeleteProject: () => void;
+  onLeaveProject: () => void;
 }) {
   const [tab, setTab] = useState<ProjectTab>("Chapters");
-  const editing = false;
   const [modal, setModal] = useState<"chapter" | "note" | "parrainage" | "recruit" | null>(null);
   const [noteDate, setNoteDate] = useState<string | undefined>(undefined);
   const tabsRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const level = myLevel(project);
+  const openManagedModal = (kind: "chapter" | "note" | "parrainage" | "recruit") => {
+    if (level === "collaborateur") {
+      onWorkflow("Action non autorisée pour ton statut : un collaborateur peut uniquement ajouter des images aux pages.");
+      return;
+    }
+    setModal(kind);
+  };
   const openNote = (date?: string) => {
+    if (level === "collaborateur") {
+      onWorkflow("Action non autorisée pour ton statut : un collaborateur ne peut pas créer de note.");
+      return;
+    }
     setNoteDate(date);
     setModal("note");
   };
   const onCoverFile = (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      updateProject((p) => ({ ...p, coverDataUrl: String(reader.result), updated: "À l'instant" }));
+    if (level === "collaborateur") {
+      onWorkflow("Action non autorisée pour ton statut : un collaborateur ne peut pas modifier la couverture.");
+      return;
+    }
+    void readImageFile(file).then((coverDataUrl) => {
+      updateProject((p) => ({ ...p, coverDataUrl, updated: "À l'instant" }));
       onWorkflow("Couverture mise à jour.");
-    };
-    reader.readAsDataURL(file);
+    }).catch(() => onWorkflow("La couverture n'a pas pu être importée."));
   };
   const openCalendar = () => {
     setTab("Calendar");
@@ -399,7 +537,7 @@ function ProjectWorkspace({
         eyebrow={<span className="tiny-meta text-[var(--neon)]">Project workspace</span>}
         title={project.title}
         description={`${project.status} · ${project.chaptersCount} chapters · ${project.validatedPages}/${project.totalPages} pages validated`}
-        actions={<PrimaryButton icon={Plus} onClick={() => setModal("chapter")}>Add Chapter</PrimaryButton>}
+        actions={<PrimaryButton icon={Plus} onClick={() => openManagedModal("chapter")}>Add Chapter</PrimaryButton>}
       />
 
       {/* Summary panel */}
@@ -431,25 +569,16 @@ function ProjectWorkspace({
           <div className="flex min-w-0 flex-col gap-4">
             <div>
               <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Project name</div>
-              {editing ? (
-                <TextInput value={project.title} placeholder="Project title" />
-              ) : (
-                <div className="font-display text-[20px] font-bold leading-7">{project.title}</div>
-              )}
+              <div className="font-display text-[20px] font-bold leading-7">{project.title}</div>
             </div>
             <div>
               <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Synopsis</div>
-              {editing ? (
-                <textarea defaultValue={project.synopsis} className="min-h-[96px] w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]" />
-              ) : (
-                <p className="text-[14px] leading-[22px] text-[var(--text-secondary)]">{project.synopsis}</p>
-              )}
+              <p className="text-[14px] leading-[22px] text-[var(--text-secondary)]">{project.synopsis}</p>
             </div>
             <div>
               <div className="tiny-meta mb-2 text-[var(--text-muted)]">Genres</div>
               <div className="flex flex-wrap gap-2">
                 {project.genres.map(g => <Chip key={g} label={g} active />)}
-                {editing && <button className="rounded-full border border-dashed border-[var(--border-strong)] px-3 py-1.5 text-[13px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Plus className="mr-1 inline h-3.5 w-3.5" />Add genre</button>}
               </div>
             </div>
             {(project.subgenres && project.subgenres.length > 0) && (
@@ -467,19 +596,19 @@ function ProjectWorkspace({
             <div className="grid grid-cols-2 gap-2">
               <StatBox label="Chapitres" value={project.chaptersCount} />
               <StatBox label="Parrainages" value={project.sponsorships.length} />
-              <StatBox label="Collaborateurs" value={PROJECT_COLLABORATORS[project.id] ?? 1} />
+              <StatBox label="Collaborateurs" value={projectCollaborators(project).length} />
               <div className="rounded-[16px] border border-[var(--border-default)] bg-[var(--elevated)] p-3">
                 <div className="flex items-center gap-1 font-display text-[20px] font-bold leading-7 text-[var(--warning)]">
                   <Star className="h-4 w-4" fill="var(--warning)" />
-                  {(PROJECT_RATING[project.id] ?? 4).toFixed(1)}
+                  {(project.rating ?? 0).toFixed(1)}
                 </div>
                 <div className="tiny-meta text-[var(--text-muted)]">Note</div>
               </div>
             </div>
             <div className="mt-1 grid gap-2">
-              <SecondaryButton icon={Plus} className="!h-10 justify-start !px-3" onClick={() => setModal("chapter")}>Add Chapter</SecondaryButton>
-              <SecondaryButton icon={StickyNote} className="!h-10 justify-start !px-3" onClick={() => setModal("note")}>Add Note</SecondaryButton>
-              <SecondaryButton icon={Megaphone} className="!h-10 justify-start !px-3" onClick={() => setModal("parrainage")}>Add Sponsorship</SecondaryButton>
+              <SecondaryButton icon={Plus} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("chapter")}>Add Chapter</SecondaryButton>
+              <SecondaryButton icon={StickyNote} className="!h-10 justify-start !px-3" onClick={() => openNote()}>Add Note</SecondaryButton>
+              <SecondaryButton icon={Megaphone} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("parrainage")}>Add Sponsorship</SecondaryButton>
               <SecondaryButton icon={CalendarIcon} className="!h-10 justify-start !px-3" onClick={openCalendar}>Open Calendar</SecondaryButton>
             </div>
           </div>
@@ -495,13 +624,13 @@ function ProjectWorkspace({
           icons={{ Recrutement: Megaphone, Parrainage: Handshake, Collaborateurs: Users }}
         />
 
-        {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => setModal("chapter")} updateProject={updateProject} onWorkflow={onWorkflow} />}
+        {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => openManagedModal("chapter")} updateProject={updateProject} onWorkflow={onWorkflow} />}
         {tab === "Notes" && <NotesTab project={project} onAdd={() => openNote()} updateProject={updateProject} onWorkflow={onWorkflow} />}
         {tab === "Calendar" && <CalendarTab project={project} onAddNote={openNote} />}
-        {tab === "Recrutement" && <RecrutementTab project={project} onAddRecruit={() => setModal("recruit")} updateProject={updateProject} onWorkflow={onWorkflow} />}
-        {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => setModal("parrainage")} updateProject={updateProject} onWorkflow={onWorkflow} />}
-        {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} updateProject={updateProject} onLeaveProject={onBack} />}
-        {tab === "Settings" && <SettingsTab project={project} updateProject={updateProject} onDeleteProject={onDeleteProject} onWorkflow={onWorkflow} onLeaveProject={onBack} />}
+        {tab === "Recrutement" && <RecrutementTab project={project} onAddRecruit={() => openManagedModal("recruit")} updateProject={updateProject} onWorkflow={onWorkflow} />}
+        {tab === "Parrainage" && <ParrainageTab project={project} onAddParrainage={() => openManagedModal("parrainage")} updateProject={updateProject} onWorkflow={onWorkflow} />}
+        {tab === "Collaborateurs" && <CollaborateursTab project={project} onWorkflow={onWorkflow} updateProject={updateProject} onLeaveProject={onLeaveProject} />}
+        {tab === "Settings" && <SettingsTab project={project} updateProject={updateProject} onDeleteProject={onDeleteProject} onWorkflow={onWorkflow} onLeaveProject={onLeaveProject} />}
       </div>
 
       {modal === "chapter" && (
@@ -510,7 +639,7 @@ function ProjectWorkspace({
           onAdd={(chapter) => {
             updateProject((p) => ({
               ...p,
-              chapters: [...p.chapters, { ...chapter, number: p.chapters.length + 1 }],
+              chapters: [...p.chapters, { ...chapter, number: p.chapters.length ? Math.max(...p.chapters.map((item) => item.number)) + 1 : 1 }],
               chaptersCount: p.chapters.length + 1,
               totalPages: p.totalPages + chapter.pages.length,
               updated: "À l'instant",
@@ -567,7 +696,7 @@ function ProjectWorkspace({
           onAdd={(recruit) => {
             updateProject((p) => ({ ...p, recruits: [recruit, ...(p.recruits ?? [])], updated: "À l'instant" }));
             createAnnouncementWorkflow({
-              title: `${recruit.role} — ${project.title}`,
+              title: recruit.title,
               category: "Recrutement",
               description: recruit.description,
               projectTitle: project.title,
@@ -624,21 +753,37 @@ function ChaptersTab({
 }) {
   const [editChapter, setEditChapter] = useState<Chapter | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const canManage = myLevel(project) !== "collaborateur";
+  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur peut uniquement ajouter des images aux pages.");
+  const visibleChapters = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("fr");
+    return normalized
+      ? project.chapters.filter((chapter) =>
+          `${chapter.number} ${chapter.title} ${chapter.objective}`.toLocaleLowerCase("fr").includes(normalized),
+        )
+      : project.chapters;
+  }, [project.chapters, query]);
 
   const duplicateChapter = (ch: Chapter) => {
+    if (!canManage) return denyManage();
     if (!updateProject) return;
     const stamp = Date.now();
     const copy: Chapter = {
       ...ch,
       id: `ch-${stamp}`,
-      number: project.chapters.length + 1,
+      number: project.chapters.length ? Math.max(...project.chapters.map((item) => item.number)) + 1 : 1,
       title: `${ch.title} (copie)`,
       status: "Draft",
       updated: "À l'instant",
       pages: ch.pages.map((p, i) => ({
         ...p,
         id: `p-${stamp}-${i}`,
-        candidates: p.candidates.map((c, j) => ({ ...c, id: `c-${stamp}-${i}-${j}` })),
+        candidates: p.candidates.map((c, j) => ({
+          ...c,
+          id: `c-${stamp}-${i}-${j}`,
+          status: c.image ? "Imported" : "Empty",
+        })),
         validatedCandidateId: null,
       })),
     };
@@ -653,6 +798,7 @@ function ChaptersTab({
   };
 
   const deleteChapter = (ch: Chapter) => {
+    if (!canManage) return denyManage();
     if (!updateProject) return;
     updateProject((prev) => ({
       ...prev,
@@ -667,10 +813,10 @@ function ChaptersTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="font-display text-[18px] font-bold">Chapters</h2>
-        <div className="flex items-center gap-2">
-          <TextInput icon={Search} placeholder="Find a chapter…" className="w-64" />
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <TextInput icon={Search} value={query} onChange={setQuery} placeholder="Find a chapter…" className="w-full sm:w-64" />
           <PrimaryButton icon={Plus} onClick={onAdd}>Add Chapter</PrimaryButton>
         </div>
       </div>
@@ -683,7 +829,7 @@ function ChaptersTab({
             <div className="mt-4 flex justify-center"><PrimaryButton icon={Plus} onClick={onAdd}>Add Chapter</PrimaryButton></div>
           </div>
         )}
-        {project.chapters.map(ch => {
+        {visibleChapters.map(ch => {
           const validated = ch.pages.filter(p => p.validatedCandidateId).length;
           const pct = ch.pages.length ? (validated / ch.pages.length) * 100 : 0;
           return (
@@ -705,7 +851,7 @@ function ChaptersTab({
                 <div className="flex items-center gap-2 md:flex-col md:items-stretch">
                   <PrimaryButton onClick={() => onOpenChapter(ch.id)} className="!h-10 !px-4">Open</PrimaryButton>
                   <div className="flex items-center gap-1.5">
-                    <IconButton ariaLabel="Edit" onClick={() => setEditChapter(ch)}><Edit3 className="h-4 w-4" /></IconButton>
+                    <IconButton ariaLabel="Edit" onClick={() => canManage ? setEditChapter(ch) : denyManage()}><Edit3 className="h-4 w-4" /></IconButton>
                     <IconButton ariaLabel="Duplicate" onClick={() => duplicateChapter(ch)}><Copy className="h-4 w-4" /></IconButton>
                     {confirmDeleteId === ch.id ? (
                       <button
@@ -723,6 +869,11 @@ function ChaptersTab({
             </div>
           );
         })}
+        {project.chapters.length > 0 && visibleChapters.length === 0 && (
+          <div className="rounded-[18px] border border-dashed border-[var(--border-strong)] bg-[var(--panel)] p-8 text-center text-[14px] text-[var(--text-muted)]">
+            Aucun chapitre ne correspond à cette recherche.
+          </div>
+        )}
       </div>
       {editChapter && updateProject && (
         <EditChapterModal
@@ -835,9 +986,24 @@ function NotesTab({
   const [selected, setSelected] = useState<string | null>(project.notes[0]?.id ?? null);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [query, setQuery] = useState("");
   const note = project.notes.find(n => n.id === selected) ?? null;
+  const canManage = myLevel(project) !== "collaborateur";
+  const visibleNotes = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("fr");
+    return normalized
+      ? project.notes.filter((item) => `${item.title} ${item.preview} ${item.content}`.toLocaleLowerCase("fr").includes(normalized))
+      : project.notes;
+  }, [project.notes, query]);
+  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas modifier les notes.");
+
+  useEffect(() => {
+    if (selected && project.notes.some((item) => item.id === selected)) return;
+    setSelected(project.notes[0]?.id ?? null);
+  }, [project.notes, selected]);
 
   const saveNote = (patch: Partial<Note>) => {
+    if (!canManage) return denyManage();
     if (!note) return;
     updateProject?.((p) => ({ ...p, notes: p.notes.map((n) => (n.id === note.id ? { ...n, ...patch } : n)), updated: "À l'instant" }));
     onWorkflow?.("Note mise à jour.");
@@ -845,6 +1011,7 @@ function NotesTab({
   };
 
   const deleteNote = () => {
+    if (!canManage) return denyManage();
     if (!note) return;
     updateProject?.((p) => ({ ...p, notes: p.notes.filter((n) => n.id !== note.id), updated: "À l'instant" }));
     onWorkflow?.("Note supprimée.");
@@ -859,9 +1026,9 @@ function NotesTab({
           <h2 className="font-display text-[18px] font-bold">Notes</h2>
           <PrimaryButton icon={Plus} className="!h-9 !px-3" onClick={onAdd}>New</PrimaryButton>
         </div>
-        <TextInput icon={Search} placeholder="Search notes…" className="mb-3" />
+        <TextInput icon={Search} value={query} onChange={setQuery} placeholder="Search notes…" className="mb-3" />
         <div className="flex flex-col gap-2">
-          {project.notes.map(n => (
+          {visibleNotes.map(n => (
             <button key={n.id} onClick={() => { setSelected(n.id); setEditing(false); setConfirmDelete(false); }} className={`rounded-[14px] border p-3 text-left transition-colors ${selected === n.id ? "border-[var(--neon-border)] bg-[var(--neon-soft)]" : "border-[var(--border-default)] bg-[var(--elevated)] hover:border-[var(--border-strong)]"}`}>
               <div className="truncate text-[14px] font-bold">{n.title}</div>
               <p className="mt-1 line-clamp-2 text-[13px] text-[var(--text-secondary)]">{n.preview}</p>
@@ -872,6 +1039,9 @@ function NotesTab({
               </div>
             </button>
           ))}
+          {project.notes.length > 0 && visibleNotes.length === 0 && (
+            <p className="px-2 py-4 text-center text-[13px] text-[var(--text-muted)]">Aucune note ne correspond à cette recherche.</p>
+          )}
         </div>
       </div>
       <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-6 shadow-[var(--shadow-panel)]">
@@ -883,7 +1053,7 @@ function NotesTab({
                 <h3 className="mt-1 font-display text-[20px] font-bold">{note.title}</h3>
               </div>
               <div className="flex items-center gap-2">
-                <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => setEditing(true)}>Edit</SecondaryButton>
+                <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canManage ? setEditing(true) : denyManage()}>Edit</SecondaryButton>
                 {confirmDelete ? (
                   <>
                     <DangerButton icon={Trash2} onClick={deleteNote}>Confirmer</DangerButton>
@@ -929,7 +1099,8 @@ function MetaField({ label, value }: { label: string; value: string }) {
 
 function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (date: string) => void }) {
   const [monthOffset, setMonthOffset] = useState(0);
-  const base = new Date(2026, 6, 1); // July 2026
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth(), 1);
   const shown = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
   const year = shown.getFullYear();
   const month = shown.getMonth();
@@ -1037,10 +1208,7 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
           </>
         ) : (
           <>
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-[18px] font-bold">Upcoming</h2>
-              <IconButton ariaLabel="Notifications"><Bell className="h-4 w-4" /></IconButton>
-            </div>
+            <h2 className="font-display text-[18px] font-bold">Upcoming</h2>
             {events.map(ev => (
               <button
                 key={ev.id}
@@ -1109,43 +1277,22 @@ function AnnonceCard({
   );
 }
 
-function RecruitDetailModal({ r, onClose, onEdit }: { r: RecruitAnnouncement; onClose: () => void; onEdit: () => void }) {
-  const rows: { label: string; value: string }[] = [
-    { label: "Statut recherché", value: r.role },
-    { label: "Engagement", value: r.commitment },
-    { label: "Rémunération", value: r.compensation },
-    { label: "Créée", value: r.created },
-    { label: "Statut de l'annonce", value: r.status },
-  ];
-  return (
-    <StudioModal
-      title={r.role}
-      onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Fermer</GhostButton><PrimaryButton icon={Edit3} onClick={onEdit}>Modifier</PrimaryButton></>}
-    >
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {rows.map(row => <MetaField key={row.label} label={row.label} value={row.value} />)}
-        </div>
-        <div>
-          <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Description</div>
-          <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">{r.description || "—"}</div>
-        </div>
-      </div>
-    </StudioModal>
-  );
-}
-
 function EditRecruitModal({ recruit, onClose, onSave }: { recruit: RecruitAnnouncement; onClose: () => void; onSave: (patch: Partial<RecruitAnnouncement>) => void }) {
   const [remuneration, setRemuneration] = useState(recruit.remunerated);
+  const [title, setTitle] = useState(recruit.title);
+  const [hook, setHook] = useState(recruit.hook);
   const [description, setDescription] = useState(recruit.description);
+  const [language, setLanguage] = useState<string[]>([recruit.language]);
   const [role, setRole] = useState<string[]>([recruit.role]);
   const [engagement, setEngagement] = useState<string[]>([recruit.commitment]);
   const [status, setStatus] = useState<string[]>([recruit.status]);
 
   const submit = () => {
     onSave({
+      title: title.trim() || recruit.title,
+      hook: hook.trim(),
       role: role[0] || recruit.role,
+      language: language[0] || recruit.language,
       description: description.trim() || recruit.description,
       commitment: engagement[0] || recruit.commitment,
       compensation: remuneration ? "Rémunéré" : "Sans rémunération",
@@ -1161,6 +1308,9 @@ function EditRecruitModal({ recruit, onClose, onSave }: { recruit: RecruitAnnoun
       footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Save} onClick={submit}>Enregistrer</PrimaryButton></>}
     >
       <div className="flex flex-col gap-6">
+        <ChoiceRow label="Langage" defaultValue={recruit.language} options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
+        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre" /></ModalField>
+        <ModalField label="Accroche"><TextInput value={hook} onChange={setHook} placeholder="Accroche" /></ModalField>
         <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} className={modalTextarea} /></ModalField>
         <ChoiceRow label="Statut recherché" defaultValue={recruit.role} options={COLLAB_ROLES} onChange={setRole} />
         <ChoiceRow label="Statut de l'annonce" defaultValue={recruit.status} options={["Ouverte", "Brouillon"]} onChange={setStatus} />
@@ -1205,7 +1355,10 @@ function RecrutementTab({
   const recruit = project.recruits ?? [];
   const [detail, setDetail] = useState<RecruitAnnouncement | null>(null);
   const [editing, setEditing] = useState<RecruitAnnouncement | null>(null);
+  const canManage = myLevel(project) !== "collaborateur";
+  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas gérer les annonces.");
   const saveRecruit = (id: string, patch: Partial<RecruitAnnouncement>) => {
+    if (!canManage) return denyManage();
     updateProject?.((p) => ({
       ...p,
       recruits: (p.recruits ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)),
@@ -1233,18 +1386,18 @@ function RecrutementTab({
         {recruit.map(r => (
           <AnnonceCard
             key={r.id}
-            title={r.role}
+            title={r.title}
             status={r.status}
             statusTone={r.status === "Ouverte" ? "neon" : "neutral"}
             description={r.description}
             metas={[
+              { label: "Rôle", value: r.role },
               { label: "Engagement", value: r.commitment },
               { label: "Rémunération", value: r.compensation },
-              { label: "Créée", value: r.created },
             ]}
             remunerated={r.remunerated}
             onView={() => setDetail(r)}
-            onManage={() => setEditing(r)}
+            onManage={() => canManage ? setEditing(r) : denyManage()}
           />
         ))}
       </div>
@@ -1272,37 +1425,6 @@ function RecrutementTab({
 }
 
 /* ----- Parrainage tab ----- */
-
-function ParrainageDetailModal({ s, onClose, onEdit }: { s: Sponsorship; onClose: () => void; onEdit: () => void }) {
-  const rows: { label: string; value: string }[] = [
-    { label: "Type de vidéo", value: s.videoType },
-    { label: "Durée de vidéo", value: s.duration },
-    { label: "Plateforme", value: s.platform },
-    { label: "Abonnés min.", value: String(s.subscribers) },
-    { label: "Abonnés max.", value: s.subscribersMax ? String(s.subscribersMax) : "—" },
-    { label: "Quantité", value: String(s.quantity) },
-    { label: "Prix", value: `${s.price} €` },
-    { label: "Mode de paiement", value: s.paymentMode },
-    { label: "Statut", value: s.status },
-  ];
-  return (
-    <StudioModal
-      title={s.title}
-      onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Fermer</GhostButton><PrimaryButton icon={Edit3} onClick={onEdit}>Modifier</PrimaryButton></>}
-    >
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {rows.map(r => <MetaField key={r.label} label={r.label} value={r.value} />)}
-        </div>
-        <div>
-          <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Description</div>
-          <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">{s.description || "—"}</div>
-        </div>
-      </div>
-    </StudioModal>
-  );
-}
 
 function EditParrainageModal({ sponsorship, onClose, onSave }: { sponsorship: Sponsorship; onClose: () => void; onSave: (patch: Partial<Sponsorship>) => void }) {
   return (
@@ -1358,8 +1480,10 @@ function ParrainageTab({
 }) {
   const [detail, setDetail] = useState<Sponsorship | null>(null);
   const [editing, setEditing] = useState<Sponsorship | null>(null);
-  const realized = PROJECT_REALIZED_PARRAINAGES[project.id] ?? [];
+  const canManage = myLevel(project) !== "collaborateur";
+  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas gérer les parrainages.");
   const saveSponsorship = (id: string, patch: Partial<Sponsorship>) => {
+    if (!canManage) return denyManage();
     updateProject?.((p) => ({
       ...p,
       sponsorships: p.sponsorships.map((s) => (s.id === id ? { ...s, ...patch } : s)),
@@ -1394,7 +1518,7 @@ function ParrainageTab({
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 <SecondaryButton className="!h-10 !px-3" onClick={() => setDetail(s)}>Voir détails</SecondaryButton>
-                <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => setEditing(s)}>Gérer</PrimaryButton>
+                <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canManage ? setEditing(s) : denyManage()}>Gérer</PrimaryButton>
               </div>
             </div>
           ))}
@@ -1414,24 +1538,7 @@ function ParrainageTab({
           <h2 className="font-display text-[18px] font-bold">Parrainages du projet</h2>
           <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">Parrainages réalisés ou en cours liés à ce projet.</p>
         </div>
-        {realized.length === 0 ? (
-          <p className="text-[14px] text-[var(--text-muted)]">Aucun parrainage pour l'instant.</p>
-        ) : (
-          <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-2 shadow-[var(--shadow-panel)]">
-            {realized.map((r, i) => (
-              <div key={r.id} className={`flex flex-wrap items-center gap-4 rounded-[16px] p-4 ${i > 0 ? "border-t border-[var(--border-default)]" : ""}`}>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--elevated)]"><Megaphone className="h-4 w-4 text-[var(--neon)]" /></div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-bold">{r.creator}</div>
-                  <div className="tiny-meta text-[var(--text-muted)]">{r.platform}</div>
-                </div>
-                <div className="text-[14px] font-bold text-[var(--neon)]">{r.price}</div>
-                <StatusChip label={r.status} tone={r.status === "Terminé" ? "neon" : r.status === "En cours" ? "info" : "neutral"} />
-                <SecondaryButton className="!h-9 !px-3">Ouvrir</SecondaryButton>
-              </div>
-            ))}
-          </div>
-        )}
+        <p className="text-[14px] text-[var(--text-muted)]">Aucun parrainage pour l'instant.</p>
       </section>
 
       {detail && (
@@ -1517,6 +1624,7 @@ function CollaborateursTab({
     if (me === "collaborateur") return deny("un collaborateur ne peut pas promouvoir.");
     if (target.level === "collaborateur") {
       setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "editeur" } : c)));
+      updateCollaboratorRole({ collaborator: target.name, projectTitle: project.title, role: LEVEL_LABEL.editeur });
       onWorkflow?.(`${target.name} est maintenant éditeur.`);
       return;
     }
@@ -1528,6 +1636,7 @@ function CollaborateursTab({
           c.id === target.id ? { ...c, level: "chef" } : c.level === "chef" ? { ...c, level: "editeur" } : c,
         ),
       );
+      updateCollaboratorRole({ collaborator: target.name, projectTitle: project.title, role: LEVEL_LABEL.chef });
       onWorkflow?.(`${target.name} est maintenant le chef du projet — tu deviens éditeur.`);
       return;
     }
@@ -1540,6 +1649,7 @@ function CollaborateursTab({
     if (me !== "chef") return deny("seul le chef peut rétrograder.");
     if (target.level === "editeur") {
       setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "collaborateur" } : c)));
+      updateCollaboratorRole({ collaborator: target.name, projectTitle: project.title, role: LEVEL_LABEL.collaborateur });
       onWorkflow?.(`${target.name} est maintenant collaborateur.`);
       return;
     }
@@ -1553,6 +1663,7 @@ function CollaborateursTab({
     if (me === "collaborateur") return deny("un collaborateur ne peut exclure personne.");
     if (me === "editeur" && target.level === "editeur") return deny("un éditeur ne peut pas exclure un autre éditeur.");
     setCollabs((list) => list.filter((c) => c.id !== target.id));
+    removeCollaborator({ collaborator: target.name, projectTitle: project.title });
     onWorkflow?.(`${target.name} a été exclu du projet.`);
   };
 
@@ -1565,7 +1676,7 @@ function CollaborateursTab({
             {collabs.length} personne{collabs.length > 1 ? "s" : ""} sur ce projet · ton statut : {LEVEL_LABEL[me]}
           </p>
         </div>
-        <PrimaryButton icon={UserPlus} onClick={() => setInviteOpen(true)}>Inviter un collaborateur</PrimaryButton>
+        <PrimaryButton icon={UserPlus} onClick={() => me === "collaborateur" ? deny("un collaborateur ne peut pas inviter.") : setInviteOpen(true)}>Inviter un collaborateur</PrimaryButton>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {collabs.map(c => (
@@ -1615,13 +1726,10 @@ function CollaborateursTab({
       {inviteOpen && (
         <InviteCollaboratorModal
           projectTitle={project.title}
+          existingRecipients={collabs.map((collaborator) => collaborator.name)}
           onClose={() => setInviteOpen(false)}
-          onDone={(message, member) => {
+          onDone={(message) => {
             setInviteOpen(false);
-            if (member) {
-              // Tout nouvel arrivant démarre comme collaborateur.
-              setCollabs((list) => [...list, { id: `co-${Date.now()}`, name: member.name, role: member.role, level: "collaborateur" }]);
-            }
             onWorkflow?.(message);
           }}
         />
@@ -1632,26 +1740,36 @@ function CollaborateursTab({
 
 function InviteCollaboratorModal({
   projectTitle,
+  existingRecipients,
   onClose,
   onDone,
 }: {
   projectTitle: string;
+  existingRecipients: string[];
   onClose: () => void;
-  onDone: (message: string, member?: { name: string; role: string }) => void;
+  onDone: (message: string) => void;
 }) {
   const [recipient, setRecipient] = useState("");
   const [role, setRole] = useState<string[]>(["Dessinateur"]);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const submit = () => {
-    if (!recipient.trim()) return;
+    if (!recipient.trim()) {
+      setError("Indique un email ou un pseudo.");
+      return;
+    }
+    if (existingRecipients.some((name) => name.toLocaleLowerCase("fr") === recipient.trim().toLocaleLowerCase("fr"))) {
+      setError("Cette personne fait déjà partie du projet.");
+      return;
+    }
     sendCollaborationInvitation({
       recipient: recipient.trim(),
       projectTitle,
       role: role[0] || "Dessinateur",
       message: message.trim() || undefined,
     });
-    onDone(`Invitation envoyée à ${recipient.trim()}.`, { name: recipient.trim(), role: role[0] || "Dessinateur" });
+    onDone(`Invitation envoyée à ${recipient.trim()}. Elle rejoindra le projet après acceptation.`);
   };
 
   return (
@@ -1664,6 +1782,7 @@ function InviteCollaboratorModal({
         <ModalField label="Email ou pseudo"><TextInput value={recipient} onChange={setRecipient} placeholder="collaborateur@email.com ou @username" /></ModalField>
         <ChoiceRow label="Rôle" defaultValue="Dessinateur" options={COLLAB_ROLES} onChange={setRole} />
         <ModalField label="Message"><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Expliquez le rôle attendu, le rythme et les prochaines étapes." className={modalTextarea} /></ModalField>
+        {error && <p className="text-[13px] font-semibold text-[var(--danger)]">{error}</p>}
       </div>
     </StudioModal>
   );
@@ -1673,7 +1792,20 @@ function InviteCollaboratorModal({
 
 /* ---------- Add modals ---------- */
 
-function StudioModal({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
+function StudioModal({ title, onClose, children, footer, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-0 backdrop-blur-sm sm:place-items-center sm:p-6"
@@ -1683,7 +1815,7 @@ function StudioModal({ title, onClose, children, footer }: { title: string; onCl
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-[640px] flex-col overflow-hidden rounded-t-[24px] border border-[var(--border-strong)] bg-[var(--panel)] shadow-[0_30px_80px_rgba(0,0,0,0.55)] sm:max-h-[85vh] sm:rounded-[24px]"
+        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-[24px] border border-[var(--border-strong)] bg-[var(--panel)] shadow-[0_30px_80px_rgba(0,0,0,0.55)] sm:max-h-[85vh] sm:rounded-[24px] ${wide ? "max-w-[980px]" : "max-w-[640px]"}`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-default)] px-6 py-4">
           <h3 className="font-display text-[18px] font-bold">{title}</h3>
@@ -1734,9 +1866,13 @@ function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chap
   const [title, setTitle] = useState("");
   const [objective, setObjective] = useState("");
   const [pageCount, setPageCount] = useState("12");
+  const [error, setError] = useState("");
 
   const submit = () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setError("Le titre du chapitre est obligatoire.");
+      return;
+    }
     const count = Math.max(1, Math.min(60, Number(pageCount) || 12));
     onAdd({
       id: `ch-${Date.now()}`,
@@ -1759,6 +1895,7 @@ function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chap
         <ModalField label="Titre du chapitre"><TextInput value={title} onChange={setTitle} placeholder="Titre du chapitre" /></ModalField>
         <ModalField label="Objectif"><textarea value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Objectif du chapitre" className={modalTextarea} /></ModalField>
         <ModalField label="Nombre de pages"><TextInput value={pageCount} onChange={setPageCount} placeholder="12" /></ModalField>
+        {error && <p className="text-[13px] font-semibold text-[var(--danger)]">{error}</p>}
       </div>
     </StudioModal>
   );
@@ -1770,9 +1907,24 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
   const [genres, setGenres] = useState<string[]>([]);
   const [subgenres, setSubgenres] = useState<string[]>([]);
   const [productionNote, setProductionNote] = useState("");
+  const [coverDataUrl, setCoverDataUrl] = useState<string | undefined>(undefined);
+  const [coverError, setCoverError] = useState("");
+  const [formError, setFormError] = useState("");
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const chooseCover = (file: File | undefined) => {
+    if (!file) return;
+    setCoverError("");
+    void readImageFile(file)
+      .then(setCoverDataUrl)
+      .catch(() => setCoverError("Cette image n'a pas pu être importée."));
+  };
 
   const submit = () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setFormError("Le titre du projet est obligatoire.");
+      return;
+    }
     const project: Project = {
       id: `prj-${Date.now()}`,
       title: title.trim(),
@@ -1799,6 +1951,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
       sponsorships: [],
       recruits: [],
       collaborators: defaultCollaborators(),
+      coverDataUrl,
     };
     createProjectWorkflow({ title: project.title, synopsis: project.synopsis, genres: project.genres });
     onCreate(project);
@@ -1807,20 +1960,39 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
   return (
     <StudioModal
       title="Créer un projet"
+      wide
       onClose={onClose}
       footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Créer le projet</PrimaryButton></>}
     >
-      <div className="flex flex-col gap-5">
-        <ModalField label="Titre du projet"><TextInput value={title} onChange={setTitle} placeholder="Nom du manga" /></ModalField>
-        <ModalField label="Synopsis"><textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Résumé court du projet, ton, objectif principal." className={modalTextarea} /></ModalField>
-        <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
-        <ChoiceRow
-          multi
-          label="Sous-genres"
-          options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
-          onChange={setSubgenres}
-        />
-        <ModalField label="Note de production"><textarea value={productionNote} onChange={(e) => setProductionNote(e.target.value)} placeholder="Indiquez ce dont l'équipe aura besoin pour démarrer." className={modalTextarea} /></ModalField>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div>
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            className="flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-[18px] border border-dashed border-[var(--border-strong)] bg-[var(--input-bg)] transition-colors hover:border-[var(--neon-border)]"
+          >
+            {coverDataUrl ? (
+              <img src={coverDataUrl} alt="Aperçu de la couverture" className="h-full w-full object-cover" />
+            ) : (
+              <span className="flex flex-col items-center gap-2 text-[var(--text-secondary)]"><Upload className="h-6 w-6" /><span className="text-[14px] font-bold">Importer une couverture</span></span>
+            )}
+          </button>
+          <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { chooseCover(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} />
+          {coverError && <p className="mt-2 text-[13px] font-semibold text-[var(--danger)]">{coverError}</p>}
+        </div>
+        <div className="flex flex-col gap-5">
+          <ModalField label="Titre du projet"><TextInput value={title} onChange={setTitle} placeholder="Nom du manga" /></ModalField>
+          <ModalField label="Synopsis"><textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Résumé court du projet, ton, objectif principal." className={modalTextarea} /></ModalField>
+          <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
+          <ChoiceRow
+            multi
+            label="Sous-genres"
+            options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
+            onChange={setSubgenres}
+          />
+          <ModalField label="Note de production"><textarea value={productionNote} onChange={(e) => setProductionNote(e.target.value)} placeholder="Indiquez ce dont l'équipe aura besoin pour démarrer." className={modalTextarea} /></ModalField>
+          {formError && <p className="text-[13px] font-semibold text-[var(--danger)]">{formError}</p>}
+        </div>
       </div>
     </StudioModal>
   );
@@ -1831,9 +2003,13 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
   const [content, setContent] = useState("");
   const [date, setDate] = useState(defaultDate ?? "");
   const [priority, setPriority] = useState<string[]>(["Medium"]);
+  const [error, setError] = useState("");
 
   const submit = () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setError("Le titre de la note est obligatoire.");
+      return;
+    }
     onAdd({
       id: `n-${Date.now()}`,
       title: title.trim(),
@@ -1867,6 +2043,7 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
           </ModalField>
           <ChoiceRow label="Priorité" defaultValue="Medium" options={["Low", "Medium", "High"]} onChange={setPriority} />
         </div>
+        {error && <p className="text-[13px] font-semibold text-[var(--danger)]">{error}</p>}
       </div>
     </StudioModal>
   );
@@ -1906,12 +2083,16 @@ function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recr
   const [title, setTitle] = useState("");
   const [hook, setHook] = useState("");
   const [description, setDescription] = useState("");
+  const [language, setLanguage] = useState<string[]>(["FR"]);
   const [role, setRole] = useState<string[]>(["Scénariste"]);
   const [engagement, setEngagement] = useState<string[]>(["Long terme"]);
 
   const submit = () => {
     onAdd({
       id: `r-${Date.now()}`,
+      title: title.trim() || `Recherche ${role[0] || "Scénariste"}`,
+      hook: hook.trim(),
+      language: language[0] || "FR",
       role: role[0] || "Scénariste",
       status: "Ouverte",
       description: description.trim() || hook.trim() || title.trim() || "Annonce de recrutement.",
@@ -1929,7 +2110,7 @@ function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recr
       footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Confirmer</PrimaryButton></>}
     >
       <div className="flex flex-col gap-6">
-        <ChoiceRow label="Langage" defaultValue="FR" options={["FR", "ENG"]} />
+        <ChoiceRow label="Langage" defaultValue="FR" options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
         <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre" /></ModalField>
         <ModalField label="Accroche"><TextInput value={hook} onChange={setHook} placeholder="Accroche" /></ModalField>
         <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className={modalTextarea} /></ModalField>
@@ -1954,13 +2135,6 @@ function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recr
           </span>
         </button>
         <ChoiceRow label="Engagement" defaultValue="Long terme" options={["Long terme", "Ponctuel"]} onChange={setEngagement} />
-        <div>
-          <div className="mb-3 font-display text-[15px] font-bold">Type de projet favori</div>
-          <div className="flex flex-col gap-4">
-            <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} />
-            <ChoiceRow multi label="Sous-genre" options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]} />
-          </div>
-        </div>
       </div>
     </StudioModal>
   );
@@ -1988,8 +2162,12 @@ function SettingsTab({
   const [subgenres, setSubgenres] = useState<string[]>(project.subgenres ?? []);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const catalogVisible = project.catalogVisible ?? false;
+  const level = myLevel(project);
+  const canEdit = level !== "collaborateur";
+  const denyEdit = () => onWorkflow("Action non autorisée pour ton statut : un collaborateur peut uniquement ajouter des images aux pages.");
 
   const saveEdits = () => {
+    if (!canEdit) return denyEdit();
     if (!title.trim()) return;
     updateProject((p) => ({ ...p, title: title.trim(), synopsis: synopsis.trim(), genres, subgenres, updated: "À l'instant" }));
     setEditing(false);
@@ -1998,12 +2176,11 @@ function SettingsTab({
 
   const onCoverChosen = (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      updateProject((p) => ({ ...p, coverDataUrl: String(reader.result), updated: "À l'instant" }));
+    if (!canEdit) return denyEdit();
+    void readImageFile(file).then((coverDataUrl) => {
+      updateProject((p) => ({ ...p, coverDataUrl, updated: "À l'instant" }));
       onWorkflow("Couverture mise à jour.");
-    };
-    reader.readAsDataURL(file);
+    }).catch(() => onWorkflow("La couverture n'a pas pu être importée."));
   };
 
   return (
@@ -2018,7 +2195,7 @@ function SettingsTab({
                 <PrimaryButton icon={Save} className="!h-10 !px-3" onClick={saveEdits}>Enregistrer</PrimaryButton>
               </div>
             ) : (
-              <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => setEditing(true)}>Modifier</SecondaryButton>
+              <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canEdit ? setEditing(true) : denyEdit()}>Modifier</SecondaryButton>
             )}
           </div>
           {editing ? (
@@ -2135,6 +2312,10 @@ function SettingsTab({
                 <SecondaryButton
                   className="!h-9 !px-3"
                   onClick={() => {
+                    if (level !== "chef") {
+                      onWorkflow("Action non autorisée pour ton statut : seul le chef peut reprendre la production.");
+                      return;
+                    }
                     updateProject((p) => ({ ...p, status: p.catalogVisible ? "In progress" : "Paused", updated: "À l'instant" }));
                     onWorkflow("Production reprise.");
                   }}
@@ -2145,6 +2326,10 @@ function SettingsTab({
                 <PrimaryButton
                   className="!h-9 !px-3"
                   onClick={() => {
+                    if (level !== "chef") {
+                      onWorkflow("Action non autorisée pour ton statut : seul le chef peut terminer le projet.");
+                      return;
+                    }
                     updateProject((p) => ({ ...p, status: "Finished", catalogVisible: true, updated: "À l'instant" }));
                     onWorkflow("Projet marqué comme terminé.");
                   }}
@@ -2209,25 +2394,6 @@ function SettingsTab({
   );
 }
 
-function SettingsSection({ title, items, action }: { title: string; items: { label: string; value: string }[]; action?: React.ReactNode }) {
-  return (
-    <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-display text-[18px] font-bold">{title}</h3>
-        {action}
-      </div>
-      <div className="flex flex-col divide-y divide-[var(--border-default)]">
-        {items.map(i => (
-          <div key={i.label} className="flex items-center justify-between py-3">
-            <span className="text-[13px] font-semibold text-[var(--text-secondary)]">{i.label}</span>
-            <span className="text-[14px] font-bold">{i.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /* ---------- STATE 3: Chapter Workspace ---------- */
 
 function ChapterWorkspace({
@@ -2235,11 +2401,15 @@ function ChapterWorkspace({
   chapter,
   onBack,
   onChapterChange,
+  onSavePageNote,
+  onWorkflow,
 }: {
   project: Project;
   chapter: Chapter;
   onBack: () => void;
   onChapterChange: (updater: (c: Chapter) => Chapter) => void;
+  onSavePageNote: (pageId: string, noteId: string | undefined, note: Omit<Note, "id" | "category" | "status">) => string;
+  onWorkflow: (message: string) => void;
 }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [pages, setPages] = useState<PageItem[]>(chapter.pages);
@@ -2248,6 +2418,11 @@ function ChapterWorkspace({
   const [selectedCand, setSelectedCand] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [published, setPublishedState] = useState(chapter.status === "Published");
+  const linkedNote = project.notes.find((note) => note.id === page?.noteRef);
+  const [noteTitle, setNoteTitle] = useState(linkedNote?.title ?? "");
+  const [noteContent, setNoteContent] = useState(linkedNote?.content ?? "");
+  const [noteDate, setNoteDate] = useState(linkedNote?.date ?? "");
+  const [notePriority, setNotePriority] = useState<Note["priority"]>(linkedNote?.priority ?? "Medium");
 
   // Persiste chaque modification de pages dans le projet (store IndexedDB).
   useEffect(() => {
@@ -2255,6 +2430,18 @@ function ChapterWorkspace({
     onChapterChange((c) => ({ ...c, pages, updated: "À l'instant" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages]);
+
+  useEffect(() => {
+    setSelectedCand(null);
+    setNoteTitle(linkedNote?.title ?? "");
+    setNoteContent(linkedNote?.content ?? "");
+    setNoteDate(linkedNote?.date ?? "");
+    setNotePriority(linkedNote?.priority ?? "Medium");
+  }, [page?.id, linkedNote?.content, linkedNote?.date, linkedNote?.id, linkedNote?.priority, linkedNote?.title]);
+
+  useEffect(() => {
+    setPublishedState(chapter.status === "Published");
+  }, [chapter.status]);
 
   // Permissions par niveau : le collaborateur peut seulement AJOUTER des images.
   const level = myLevel(project);
@@ -2267,6 +2454,10 @@ function ChapterWorkspace({
   const setPublished = (value: boolean) => {
     if (level === "collaborateur") {
       deny("un collaborateur ne peut pas publier un chapitre.");
+      return;
+    }
+    if (value && pages.some((item) => !item.validatedCandidateId)) {
+      deny("toutes les pages doivent avoir une image validée avant la publication.");
       return;
     }
     setPublishedState(value);
@@ -2288,6 +2479,11 @@ function ChapterWorkspace({
     if (!selectedCand) return;
     if (level === "collaborateur") {
       deny("un collaborateur ne peut pas valider la sélection d'une image.");
+      return;
+    }
+    const candidate = page.candidates.find((item) => item.id === selectedCand);
+    if (!candidate?.image) {
+      deny("sélectionne d'abord une image importée.");
       return;
     }
     setPage(p => ({
@@ -2314,25 +2510,37 @@ function ChapterWorkspace({
   const importInto = (candId: string) => triggerImport(candId);
 
   const onFileChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
     const candId = pendingCand.current;
     event.target.value = "";
     pendingCand.current = null;
-    if (!file || !candId) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = String(reader.result);
+    if (files.length === 0 || !candId) return;
+    void Promise.all(files.map(readImageFile)).then((images) => {
       setPage(p => ({
         ...p,
-        candidates: p.candidates.map(c => c.id === candId ? { ...c, status: "Imported", image: url } : c),
+        candidates: [
+          ...p.candidates.map(c => c.id === candId ? {
+            ...c,
+            status: (p.validatedCandidateId === candId ? "Validated" : "Imported") as CandidateStatus,
+            image: images[0],
+          } : c),
+          ...images.slice(1).map((image) => ({ ...newCandidate(), status: "Imported" as CandidateStatus, image })),
+        ],
       }));
-    };
-    reader.readAsDataURL(file);
+      onWorkflow(`${images.length} image${images.length > 1 ? "s" : ""} importée${images.length > 1 ? "s" : ""}.`);
+    }).catch(() => deny("une ou plusieurs images n'ont pas pu être importées."));
   };
 
   const importFirstEmpty = () => {
-    const target = page.candidates.find(c => c.status === "Empty") ?? page.candidates[0];
-    if (target) triggerImport(target.id);
+    const existing = page.candidates.find(c => c.status === "Empty");
+    if (existing) {
+      triggerImport(existing.id);
+      return;
+    }
+    const candidate = newCandidate();
+    setPage((current) => ({ ...current, candidates: [...current.candidates, candidate] }));
+    pendingCand.current = candidate.id;
+    fileInputRef.current?.click();
   };
 
   const removeCand = (candId: string) => {
@@ -2368,6 +2576,7 @@ function ChapterWorkspace({
   };
 
   const addPage = () => {
+    if (level === "collaborateur") return deny("un collaborateur ne peut pas ajouter de page.");
     const nextIndex = pages.length;
     setPages(prev => {
       const num = prev.length ? Math.max(...prev.map(p => p.number)) + 1 : 1;
@@ -2377,15 +2586,19 @@ function ChapterWorkspace({
   };
 
   const duplicatePage = () => {
+    if (level === "collaborateur") return deny("un collaborateur ne peut pas dupliquer de page.");
     setPages(prev => {
       const src = prev[pageIndex];
       const num = Math.max(...prev.map(p => p.number)) + 1;
       const stamp = Date.now();
+      const candidates = src.candidates.map((candidate, i) => ({ ...candidate, id: `${candidate.id}-dup-${stamp}-${i}` }));
+      const validatedIndex = src.candidates.findIndex((candidate) => candidate.id === src.validatedCandidateId);
       const copy: PageItem = {
         ...src,
         id: `p-dup-${stamp}`,
         number: num,
-        candidates: src.candidates.map((c, i) => ({ ...c, id: `${c.id}-dup-${stamp}-${i}` })),
+        candidates,
+        validatedCandidateId: validatedIndex >= 0 ? candidates[validatedIndex]?.id ?? null : null,
       };
       return [...prev.slice(0, pageIndex + 1), copy, ...prev.slice(pageIndex + 1)];
     });
@@ -2393,6 +2606,7 @@ function ChapterWorkspace({
   };
 
   const deletePage = () => {
+    if (level === "collaborateur") return deny("un collaborateur ne peut pas supprimer de page.");
     if (pages.length <= 1) return;
     setPages(prev => prev.filter((_, i) => i !== pageIndex));
     setPageIndex(i => Math.max(0, Math.min(i, pages.length - 2)));
@@ -2405,9 +2619,26 @@ function ChapterWorkspace({
   // The candidate shown large: the one currently selected, otherwise the validated one.
   const activeCand = (selectedCand ? page.candidates.find(c => c.id === selectedCand) : null) ?? validatedCand;
 
+  const savePageNote = () => {
+    if (level === "collaborateur") return deny("un collaborateur ne peut pas modifier les notes.");
+    if (!noteTitle.trim() && !noteContent.trim()) {
+      deny("ajoute un titre ou un contenu avant d'enregistrer la note.");
+      return;
+    }
+    const noteId = onSavePageNote(page.id, page.noteRef, {
+      title: noteTitle.trim() || `Note — page ${page.number}`,
+      preview: (noteContent.trim() || noteTitle.trim()).slice(0, 120),
+      content: noteContent.trim(),
+      date: noteDate || undefined,
+      priority: notePriority,
+    });
+    setPage((current) => ({ ...current, noteRef: noteId, updated: "À l'instant" }));
+    onWorkflow("Note de page enregistrée.");
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChosen} />
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onFileChosen} />
       {permNotice && (
         <div className="rounded-[14px] border border-[rgba(255,184,77,0.4)] bg-[rgba(255,184,77,0.10)] px-4 py-3 text-[13px] font-bold text-[var(--warning)]">
           {permNotice}
@@ -2428,7 +2659,7 @@ function ChapterWorkspace({
             ) : (
               <PrimaryButton icon={Rocket} onClick={() => setPublished(true)}>Publier le chapitre</PrimaryButton>
             )}
-            <SecondaryButton icon={Save}>Save Chapter</SecondaryButton>
+            <SecondaryButton icon={Save} onClick={() => onWorkflow("Chapitre enregistré automatiquement.")}>Save Chapter</SecondaryButton>
           </>
         }
       />
@@ -2466,6 +2697,11 @@ function ChapterWorkspace({
             <IconButton ariaLabel="Duplicate page" onClick={duplicatePage}><Copy className="h-4 w-4" /></IconButton>
             <IconButton ariaLabel="Delete page" onClick={deletePage}><Trash2 className="h-4 w-4" /></IconButton>
           </div>
+        </div>
+        <div className="mt-3 flex items-center justify-end gap-1.5 md:hidden">
+          <SecondaryButton icon={Plus} className="!h-9 !px-3" onClick={addPage}>Add Page</SecondaryButton>
+          <IconButton ariaLabel="Duplicate page" onClick={duplicatePage}><Copy className="h-4 w-4" /></IconButton>
+          <IconButton ariaLabel="Delete page" onClick={deletePage}><Trash2 className="h-4 w-4" /></IconButton>
         </div>
       </div>
 
@@ -2577,11 +2813,24 @@ function ChapterWorkspace({
             <div className="flex flex-col gap-3">
               <div>
                 <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Page number</label>
-                <TextInput value={String(page.number)} />
+                <TextInput
+                  value={String(page.number)}
+                  onChange={(value) => {
+                    if (level === "collaborateur") return;
+                    const number = Number.parseInt(value, 10);
+                    if (Number.isFinite(number) && number > 0) setPage((current) => ({ ...current, number, updated: "À l'instant" }));
+                  }}
+                />
               </div>
               <div>
                 <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Page title (optional)</label>
-                <TextInput placeholder="Page title" />
+                <TextInput
+                  value={page.title}
+                  onChange={(title) => {
+                    if (level !== "collaborateur") setPage((current) => ({ ...current, title, updated: "À l'instant" }));
+                  }}
+                  placeholder="Page title"
+                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <MetaField label="Validation" value={pageStatus.label} />
@@ -2593,18 +2842,34 @@ function ChapterWorkspace({
           <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display text-[18px] font-bold">Page note</h3>
-              <IconButton ariaLabel="Add note"><Plus className="h-4 w-4" /></IconButton>
+              <IconButton ariaLabel="Enregistrer la note" onClick={savePageNote}><Save className="h-4 w-4" /></IconButton>
             </div>
-            <TextInput placeholder="Note title" className="mb-2" />
-            <textarea placeholder="Notes to complete." className="min-h-[80px] w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--neon)]" />
+            <TextInput value={noteTitle} onChange={level === "collaborateur" ? undefined : setNoteTitle} placeholder="Note title" className="mb-2" />
+            <textarea value={noteContent} onChange={level === "collaborateur" ? undefined : (event) => setNoteContent(event.target.value)} placeholder="Notes to complete." className="min-h-[80px] w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--neon)]" />
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
                 <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Linked date</label>
-                <div className="inline-flex h-11 w-full items-center gap-2 rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 text-[14px] text-[var(--text-secondary)]"><CalendarIcon className="h-4 w-4" />Date to define</div>
+                <input
+                  type="date"
+                  value={noteDate}
+                  onChange={(event) => { if (level !== "collaborateur") setNoteDate(event.target.value); }}
+                  className="h-11 w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-3 text-[13px] text-[var(--text-secondary)] outline-none focus:border-[var(--neon)] [color-scheme:dark]"
+                />
               </div>
               <div>
                 <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Priority</label>
-                <div className="inline-flex h-11 w-full items-center gap-2 rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 text-[14px] text-[var(--text-secondary)]"><Target className="h-4 w-4" />Medium</div>
+                <div className="relative">
+                  <Target className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <select
+                    value={notePriority}
+                    onChange={(event) => { if (level !== "collaborateur") setNotePriority(event.target.value as Note["priority"]); }}
+                    className="h-11 w-full appearance-none rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] pl-9 pr-3 text-[13px] text-[var(--text-secondary)] outline-none focus:border-[var(--neon)]"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -2673,16 +2938,17 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
 function CollabMangaPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const feedbackTimeoutRef = useRef<number | null>(null);
+  const { project: selectedProject, chapter: selectedChapter } = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   useEffect(() => {
     let cancelled = false;
-    void loadStudioProjects<Project>().then((saved) => {
+    void loadStudioProjects<unknown>().then((saved) => {
       if (cancelled) return;
-      setProjects(saved.map(normalizeProjectState));
+      setProjects(saved.map(normalizeStoredProject).filter((project): project is Project => project !== null));
       setLoaded(true);
     });
     return () => {
@@ -2692,53 +2958,106 @@ function CollabMangaPage() {
 
   useEffect(() => {
     if (!loaded) return;
-    void saveStudioProjects(projects);
+    const timer = window.setTimeout(() => {
+      void saveStudioProjects(projects).then((saved) => {
+        if (!saved) setFeedback("L'enregistrement local des projets a échoué.");
+      });
+    }, 180);
+    return () => window.clearTimeout(timer);
   }, [projects, loaded]);
-
-  const showFeedback = (message: string) => {
-    setFeedback(message);
-    window.setTimeout(() => setFeedback(null), 3200);
-  };
-
-  const addProject = (project: Project) => {
-    setProjects((current) => [project, ...current]);
-    setSelectedProject(project.id);
-    showFeedback("Projet créé.");
-  };
-
-  const updateProject = (id: string, updater: (project: Project) => Project) => {
-    setProjects((current) => current.map((p) => (p.id === id ? normalizeProjectState(updater(p)) : p)));
-  };
-
-  const deleteProject = (id: string) => {
-    setProjects((current) => current.filter((p) => p.id !== id));
-    setSelectedProject(null);
-    setSelectedChapter(null);
-    showFeedback("Projet supprimé.");
-  };
 
   const project = useMemo(() => projects.find(p => p.id === selectedProject) ?? null, [projects, selectedProject]);
   const chapter = useMemo(() => project?.chapters.find(c => c.id === selectedChapter) ?? null, [project, selectedChapter]);
 
+  useEffect(() => {
+    if (!loaded) return;
+    if (selectedProject && !project) {
+      void navigate({ search: { project: undefined, chapter: undefined }, replace: true });
+      return;
+    }
+    if (selectedChapter && !chapter) {
+      void navigate({ search: { project: selectedProject, chapter: undefined }, replace: true });
+    }
+  }, [chapter, loaded, navigate, project, selectedChapter, selectedProject]);
+
+  const showFeedback = (message: string) => {
+    setFeedback(message);
+    if (feedbackTimeoutRef.current) window.clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = window.setTimeout(() => setFeedback(null), 3200);
+  };
+
+  const addProject = (project: Project) => {
+    setProjects((current) => [project, ...current]);
+    void navigate({ search: { project: project.id, chapter: undefined } });
+    showFeedback("Projet créé.");
+  };
+
+  const updateProject = (id: string, updater: (project: Project) => Project) => {
+    setProjects((current) => current.map((p) => (p.id === id ? deriveProjectState(updater(p)) : p)));
+  };
+
+  const deleteProject = (id: string) => {
+    setProjects((current) => current.filter((p) => p.id !== id));
+    void navigate({ search: { project: undefined, chapter: undefined } });
+    showFeedback("Projet supprimé.");
+  };
+
+  const leaveProject = (id: string) => {
+    setProjects((current) => current.filter((project) => project.id !== id));
+    void navigate({ search: { project: undefined, chapter: undefined } });
+    showFeedback("Tu as quitté le projet.");
+  };
+
+  if (!loaded) {
+    return (
+      <main className="min-h-screen bg-[var(--background)] px-4 py-6 md:px-6 md:py-8 lg:px-8 lg:py-8">
+        <div className="mx-auto w-full max-w-[1440px] rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-10 text-center text-[14px] font-semibold text-[var(--text-secondary)]">
+          Chargement des projets…
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[var(--background)] px-4 py-6 md:px-6 md:py-8 lg:px-8 lg:py-8">
       <div className="mx-auto w-full max-w-[1440px]">
-        {!project && <ProjectSelection projects={projects} onOpen={setSelectedProject} onCreate={() => setCreateProjectOpen(true)} />}
+        {!project && <ProjectSelection projects={projects} onOpen={(id) => void navigate({ search: { project: id, chapter: undefined } })} onCreate={() => setCreateProjectOpen(true)} />}
         {project && !chapter && (
           <ProjectWorkspace
             project={project}
-            onBack={() => setSelectedProject(null)}
-            onOpenChapter={setSelectedChapter}
+            onBack={() => void navigate({ search: { project: undefined, chapter: undefined } })}
+            onOpenChapter={(id) => void navigate({ search: { project: project.id, chapter: id } })}
             onWorkflow={showFeedback}
             updateProject={(updater) => updateProject(project.id, updater)}
             onDeleteProject={() => deleteProject(project.id)}
+            onLeaveProject={() => leaveProject(project.id)}
           />
         )}
         {project && chapter && (
           <ChapterWorkspace
             project={project}
             chapter={chapter}
-            onBack={() => setSelectedChapter(null)}
+            onBack={() => void navigate({ search: { project: project.id, chapter: undefined } })}
+            onWorkflow={showFeedback}
+            onSavePageNote={(pageId, noteId, note) => {
+              const id = noteId ?? `n-page-${Date.now()}`;
+              updateProject(project.id, (current) => {
+                const nextNote: Note = { ...note, id, category: "Other", status: "Open" };
+                const notes = current.notes.some((item) => item.id === id)
+                  ? current.notes.map((item) => item.id === id ? nextNote : item)
+                  : [nextNote, ...current.notes];
+                return {
+                  ...current,
+                  notes,
+                  chapters: current.chapters.map((item) => item.id === chapter.id
+                    ? { ...item, pages: item.pages.map((page) => page.id === pageId ? { ...page, noteRef: id } : page) }
+                    : item),
+                  updated: "À l'instant",
+                };
+              });
+              if (!noteId) createProjectNote({ projectTitle: project.title, content: note.content || note.title });
+              return id;
+            }}
             onChapterChange={(updater) =>
               updateProject(project.id, (p) => {
                 const publishedBefore = hasPublishedChapter(p);
