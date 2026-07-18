@@ -31,7 +31,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "CollabManga connects writers, artists, illustrators, content creators and readers to create, publish and grow original manga — with AI-assisted workflows.",
+          "CollabManga connects writers, artists, content creators and readers to create, publish and grow original manga — with AI-assisted workflows.",
       },
     ],
   }),
@@ -303,13 +303,13 @@ function IntroPage() {
           <p style={{ fontSize: 17, lineHeight: 1.7, color: C.text2, margin: 0 }}>
             CollabManga gives creators the tools to collaborate, organize production, publish chapters, and gain
             visibility — with AI-assisted workflows available whenever they're needed. The platform supports the growth
-            of original manga creation in Western markets, connecting writers, artists, illustrators, content creators,
-            and readers in one place.
+            of original manga creation in Western markets, connecting writers, artists, content creators and readers
+            in one place.
           </p>
         </div>
         <div style={{ maxWidth: 960, margin: "48px auto 0" }}>
           <CardGrid min={240}>
-            <FeatureCard icon={Users} title="Collaborate" text="Find writers, artists and illustrators, form a team, and manage roles on every project." />
+            <FeatureCard icon={Users} title="Collaborate" text="Find writers and artists, form a team, and manage roles on every project." />
             <FeatureCard icon={FolderKanban} title="Organize production" text="Plan chapters and pages, keep notes and a calendar, and track what's ready to publish." />
             <FeatureCard icon={Rocket} title="Publish & grow" text="Release chapters to the catalog, gather readers, and build an audience for your series." />
           </CardGrid>
@@ -349,8 +349,7 @@ function IntroPage() {
           </div>
           <CardGrid min={200}>
             <FeatureCard icon={PenLine} title="Writers" text="Build worlds and scenarios, recruit artists, and lead projects." />
-            <FeatureCard icon={Palette} title="Artists" text="Draw pages and covers, join teams, and grow a portfolio." />
-            <FeatureCard icon={Sparkles} title="Illustrators" text="Showcase illustrations and get discovered for collaborations." />
+            <FeatureCard icon={Palette} title="Artists" text="Draw pages, covers and illustrations, join teams, showcase a portfolio, and get discovered for collaborations." />
             <FeatureCard icon={Megaphone} title="Content creators" text="Promote manga through sponsorships and reach new readers." />
             <FeatureCard icon={UserCheck} title="Readers" text="Discover series, follow chapters, and support creators." />
           </CardGrid>
