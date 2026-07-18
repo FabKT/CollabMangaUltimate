@@ -1,4 +1,4 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   FileImage,
@@ -16,11 +16,9 @@ import {
   Users,
   ArrowLeft,
   ShieldCheck,
-  LogOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { signOut } from "@/lib/auth";
 import { amIAdmin } from "@/server-functions/admin-billing";
 import { getMyBilling } from "@/server-functions/stripe-billing";
 import { onCreditsChanged } from "@/lib/credits-events";
@@ -58,12 +56,6 @@ const groups: Group[] = [
 export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => (to === "/ai" ? pathname === "/ai" : pathname.startsWith(to));
-  const navigate = useNavigate();
-  const logout = async () => {
-    await signOut();
-    void navigate({ to: "/login" });
-  };
-
   // Lien admin affiché uniquement pour les administrateurs (vérifié côté serveur).
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
@@ -326,16 +318,6 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         </Link>
       </div>
 
-      <button
-        onClick={() => void logout()}
-        className="mt-2 flex items-center justify-center gap-2"
-        style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: 10, padding: "8px 10px", color: "var(--text-secondary)", cursor: "pointer" }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,95,126,0.45)"; e.currentTarget.style.color = "#ff5f7e"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-      >
-        <LogOut size={15} strokeWidth={2} />
-        <span style={{ font: "700 12px/16px var(--font-sans)" }}>Se déconnecter</span>
-      </button>
     </aside>
   );
 }

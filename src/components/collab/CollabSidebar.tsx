@@ -1,4 +1,4 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Home,
   Compass,
@@ -15,10 +15,8 @@ import {
   Zap,
   Sparkles,
   ArrowRight,
-  LogOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { signOut } from "@/lib/auth";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -62,12 +60,6 @@ const groups: Group[] = [
 export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
-  const navigate = useNavigate();
-  const logout = async () => {
-    await signOut();
-    void navigate({ to: "/login" });
-  };
-
   return (
     <aside
       className={`${forceVisible ? "flex" : "hidden md:flex"} flex-col shrink-0 sticky top-0 h-screen`}
@@ -208,55 +200,6 @@ export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean
         ))}
       </nav>
 
-      {/* Account footer */}
-      <Link
-        to="/profile"
-        className="mt-2 flex items-center gap-2 transition-colors"
-        style={{
-          background: "var(--bg-elevated)",
-          border: "1px solid var(--border-default)",
-          borderRadius: 12,
-          padding: 10,
-        }}
-      >
-        {/* Profile picture (placeholder avatar) */}
-        <span
-          className="grid shrink-0 place-items-end overflow-hidden"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            background: "linear-gradient(135deg,#4ea8ff,#39ff88)",
-            border: "1px solid var(--border-default)",
-          }}
-        >
-          <User size={26} color="rgba(4,17,30,0.55)" fill="rgba(4,17,30,0.55)" strokeWidth={1.5} style={{ marginBottom: -3 }} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[12px] font-bold leading-tight truncate">Mon profil</span>
-          <span className="block text-[11px] leading-tight truncate" style={{ color: "var(--text-muted)" }}>
-            Voir et gérer
-          </span>
-        </span>
-      </Link>
-
-      <button
-        onClick={() => void logout()}
-        className="mt-2 flex items-center justify-center gap-2 transition-colors"
-        style={{
-          background: "transparent",
-          border: "1px solid var(--border-default)",
-          borderRadius: 10,
-          padding: "8px 10px",
-          color: "var(--text-secondary)",
-          cursor: "pointer",
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,95,126,0.45)"; e.currentTarget.style.color = "#ff5f7e"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-      >
-        <LogOut size={15} strokeWidth={2} />
-        <span style={{ font: "700 12px/16px var(--font-sans)" }}>Se déconnecter</span>
-      </button>
     </aside>
   );
 }

@@ -25,6 +25,7 @@ import {
   type DbProfile,
 } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
+import { signOut } from "@/lib/auth";
 import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
 import { addSponsorOption, listSponsorOptions, updateSponsorOption, type SponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
@@ -65,6 +66,7 @@ import {
   Globe2,
   Image as ImageIcon,
   Link2,
+  LogOut,
   MessageSquare,
   Palette,
   Plus,
@@ -1845,6 +1847,11 @@ function AccountTab({
     onFeedback(error ? error.message : "E-mail de réinitialisation envoyé.");
   };
 
+  const logout = async () => {
+    await signOut();
+    void navigate({ to: "/login" });
+  };
+
   const saveMainRole = async (role: string) => {
     try {
       await updateMyRole(role);
@@ -1912,10 +1919,11 @@ function AccountTab({
 
       <Panel className="lg:col-span-2">
         <SectionTitle title="Security" subtitle="Account access and notifications." />
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
           <Field label="Email"><input className="cm-input" value={email || "Adresse du compte connecté"} readOnly /></Field>
           <Field label="Password"><SecondaryButton full onClick={() => void sendPasswordReset()}>Change password</SecondaryButton></Field>
           <Field label="Notifications"><SecondaryButton full onClick={() => void navigate({ to: "/notifications" })}>Manage notifications</SecondaryButton></Field>
+          <Field label="Session"><SecondaryButton full icon={<LogOut size={16} />} onClick={() => void logout()}>Se déconnecter</SecondaryButton></Field>
         </div>
       </Panel>
     </div>
