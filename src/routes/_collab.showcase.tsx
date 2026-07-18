@@ -4,8 +4,8 @@ import { addIllustration, listIllustrations, startConversationWith } from "@/lib
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
   X, Upload, Bookmark, BookmarkCheck, MessageSquare, Send, ChevronRight, ChevronLeft,
-  LayoutGrid, Rows3, Columns3, Sparkles, Eye, Heart, Plus, Image as ImageIcon,
-  UserPlus, ExternalLink, MoreHorizontal, ZoomIn, ZoomOut, Palette, Zap, Check,
+  LayoutGrid, Rows3, Columns3, Heart, Plus,
+  UserPlus, ZoomIn, ZoomOut, Palette,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_collab/showcase")({
@@ -518,14 +518,6 @@ function ArtCard({
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.input, border: `1px solid ${C.border}`, borderRadius: 12 }}>
-      <span style={{ ...manrope, fontSize: 13, color: C.text2 }}>{label}</span>
-      <span style={{ ...manrope, fontSize: 15, fontWeight: 800, color: value === "--" ? C.muted : C.neon }}>{value}</span>
-    </div>
-  );
-}
 
 /* ---------------- Modal shell ---------------- */
 function ModalShell({ children, onClose, width = 1100 }: { children: ReactNode; onClose: () => void; width?: number }) {
@@ -706,14 +698,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>{label}</div>
-      <div style={{ ...manrope, fontSize: 14, fontWeight: 700, color: C.text, marginTop: 4 }}>{value}</div>
-    </div>
-  );
-}
 
 /* ---------------- Invite Modal ---------------- */
 function InviteModal({ art, onClose }: { art: Art; onClose: () => void }) {
@@ -918,30 +902,6 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
   );
 }
 
-function Toggle({ label, defaultOn }: { label: string; defaultOn?: boolean }) {
-  const [on, setOn] = useState(!!defaultOn);
-  return (
-    <button
-      onClick={() => setOn((v) => !v)}
-      style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 14px", background: C.input, border: `1px solid ${C.border}`,
-        borderRadius: 12, cursor: "pointer",
-      }}
-    >
-      <span style={{ ...manrope, fontSize: 13, fontWeight: 600, color: C.text }}>{label}</span>
-      <span style={{
-        width: 38, height: 22, borderRadius: 999, background: on ? C.neon : C.card,
-        position: "relative", transition: "all 160ms", border: `1px solid ${on ? C.neonSoftBorder : C.border}`,
-      }}>
-        <span style={{
-          position: "absolute", top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: "50%",
-          background: on ? "#04111E" : C.text2, transition: "all 160ms",
-        }} />
-      </span>
-    </button>
-  );
-}
 
 /* ---------------- Portfolio Modal ---------------- */
 function PortfolioModal({ art, works, onClose, onOpenArt }: { art: Art; works: Art[]; onClose: () => void; onOpenArt: (a: Art) => void }) {
