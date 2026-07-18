@@ -940,7 +940,7 @@ function CollabMangaAIPage() {
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:gap-5 xl:[grid-template-columns:minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-4 xl:gap-5 xl:[grid-template-columns:minmax(0,3fr)_minmax(0,2fr)]">
         {showCanvas ? (
           <PanelCard className="xl:max-h-[calc(100vh-105px)]">
             <PlancheCanvas

@@ -152,7 +152,7 @@
   --accent-hover: var(--neon-hover);
   --accent-soft: var(--neon-soft);
   --accent-border: var(--neon-soft-border);
-  --accent-foreground: #ffffff;
+  --accent-foreground: #04111e;
 }
 
 @layer base {
@@ -166,6 +166,12 @@
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
+  }
+  /* Réserve en permanence la gouttière de la scrollbar : la largeur du contenu
+     ne varie plus selon l'apparition/disparition de la scrollbar verticale
+     (sinon les colonnes changent de largeur d'une page/onglet à l'autre). */
+  html {
+    scrollbar-gutter: stable;
   }
   h1,
   h2,
