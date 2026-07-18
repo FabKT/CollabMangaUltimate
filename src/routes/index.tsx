@@ -260,9 +260,9 @@ function IntroPage() {
           </div>
           <nav className="intro-nav" style={{ display: "flex", alignItems: "center", gap: 32 }}>
             <a href="#home" className="intro-nav-link active">Home</a>
-            <Link to="/manga" className="intro-nav-link">Catalog</Link>
             <a href="#about" className="intro-nav-link">About</a>
             <a href="#ai" className="intro-nav-link">CollabManga AI</a>
+            <a href="#catalog" className="intro-nav-link">Catalog</a>
           </nav>
         </div>
         <HeaderAuth />

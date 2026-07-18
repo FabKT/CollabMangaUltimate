@@ -172,6 +172,15 @@
      (sinon les colonnes changent de largeur d'une page/onglet à l'autre). */
   html {
     scrollbar-gutter: stable;
+    scroll-behavior: smooth;
+  }
+  /* Ancres de la page d'introduction : on décale la cible sous le header
+     sticky (80px) pour que le titre de section ne soit pas masqué. */
+  #home,
+  #about,
+  #ai,
+  #catalog {
+    scroll-margin-top: 96px;
   }
   h1,
   h2,
