@@ -116,7 +116,10 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
     [project.title],
   );
 
-  const collaborators = project.collaborators ?? [];
+  // Le créateur apparaît toujours (à défaut de collaborateurs enregistrés).
+  const collaborators = (project.collaborators && project.collaborators.length > 0)
+    ? project.collaborators
+    : [{ id: "co-owner", name: "Vous", role: "Créateur", level: "chef" }];
 
   const TABS: { id: MangaTab; label: string; icon: typeof BookOpen; count: number }[] = [
     { id: "chapters", label: "Chapitres", icon: BookOpen, count: published.length },
@@ -171,8 +174,8 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
         </div>
       </section>
 
-      {/* Onglets */}
-      <div className="mb-6 flex flex-wrap gap-2">
+      {/* Onglets — même design que la page « projet sélectionné » (studio) */}
+      <div className="scrollbar-thin mb-6 flex gap-1 overflow-x-auto rounded-[16px] border border-[var(--border-default)] bg-[var(--panel)] p-1.5">
         {TABS.map((t) => {
           const active = tab === t.id;
           const Icon = t.icon;
@@ -181,15 +184,9 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-bold transition-colors"
-              style={
-                active
-                  ? { background: "rgba(57,255,136,0.12)", border: "1px solid rgba(57,255,136,0.45)", color: "#39ff88" }
-                  : { background: "transparent", border: "1px solid var(--color-border-default)", color: "var(--color-text-secondary)" }
-              }
+              className={`inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[12px] px-4 text-[13px] font-bold transition-colors ${active ? "bg-[var(--neon-soft)] text-[var(--neon)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
             >
               <Icon className="h-4 w-4" /> {t.label}
-              <span style={{ opacity: 0.65 }}>{t.count}</span>
             </button>
           );
         })}

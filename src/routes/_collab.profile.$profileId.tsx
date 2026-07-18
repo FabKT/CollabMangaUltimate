@@ -20,5 +20,5 @@ export const Route = createFileRoute("/_collab/profile/$profileId")({
 function OtherProfileRoute() {
   const { profileId } = Route.useParams();
   const identity = getPublicProfileIdentity(profileId);
-  return <PublicProfilePage identity={identity} />;
+  return <PublicProfilePage identity={identity} profileId={profileId} />;
 }

@@ -11,6 +11,7 @@ import {
   listIllustrations,
   listPendingFriendRequests,
   getMyRoles,
+  getProfileByUsername,
   respondFriendRequestDb,
   startConversationWith,
   updateMyRole,
@@ -209,48 +210,76 @@ function OwnProfilePage() {
 
 export function PublicProfilePage({
   identity,
+  profileId,
 }: {
   identity: PublicProfileIdentity;
+  profileId?: string;
 }) {
-  return <ProfilePage initialMode="public" initialProfileType={identity.profileType} identity={identity} />;
+  return <ProfilePage initialMode="public" initialProfileType={identity.profileType} identity={identity} profileId={profileId} />;
 }
 
 function ProfilePage({
   initialMode = "own",
   initialProfileType = "creator",
   identity = DEFAULT_PROFILE_IDENTITY,
+  profileId,
 }: {
   initialMode?: ViewMode;
   initialProfileType?: ProfileType;
   identity?: PublicProfileIdentity;
+  profileId?: string;
 }) {
   const publicLocked = initialMode === "public";
   const [profileType, setProfileType] = useState<ProfileType>(initialProfileType);
   const [mode] = useState<ViewMode>(initialMode);
   const [tab, setTab] = useState("overview");
-  // Identité réelle de l'utilisateur connecté (remplace l'identité de démonstration).
+  // Identité réelle affichée (utilisateur connecté en mode own, profil visité en mode public).
   const [liveIdentity, setLiveIdentity] = useState<PublicProfileIdentity | null>(null);
   const [identityRefreshKey, setIdentityRefreshKey] = useState(0);
+  // Id Supabase du profil affiché (le mien en own ; celui visité en public).
+  const [shownUserId, setShownUserId] = useState<string | null>(null);
+
+  const identityFromProfile = (p: { username: string; display_name: string | null; avatar_url: string | null }): PublicProfileIdentity => {
+    const displayName = p.display_name || p.username;
+    const initials = displayName.split(/[\s_.-]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+    return {
+      displayName,
+      username: p.username.startsWith("@") ? p.username : `@${p.username}`,
+      initials: initials || "?",
+      tagline: "",
+      profileType: "creator",
+      avatarUrl: p.avatar_url ?? undefined,
+    };
+  };
 
   useEffect(() => {
-    if (publicLocked) return; // profil public visité : identité fournie par la route
     let cancelled = false;
     void (async () => {
       try {
         if (!supabase) return;
+        if (publicLocked) {
+          // Profil d'un AUTRE utilisateur : on le résout par pseudo.
+          const slug = profileId ?? identity.username;
+          const other = slug ? await getProfileByUsername(slug) : null;
+          if (cancelled) return;
+          if (other) {
+            setShownUserId(other.id);
+            setLiveIdentity(identityFromProfile(other));
+            setProfileType(other.role === "Créateur de contenu" ? "content" : "creator");
+          } else {
+            setShownUserId(null); // profil introuvable en base → contenu vide
+          }
+          return;
+        }
+        // Mode own : identité de l'utilisateur connecté.
         const { data } = await supabase.auth.getSession();
         const user = data.session?.user;
         if (!user || cancelled) return;
+        setShownUserId(user.id);
         const meta = user.user_metadata as Record<string, string | undefined>;
         const username = meta?.username || user.email?.split("@")[0] || "utilisateur";
         const displayName = meta?.display_name || meta?.full_name || username;
-        const initials = displayName
-          .split(/[\s_.-]+/)
-          .filter(Boolean)
-          .map((w) => w[0])
-          .slice(0, 2)
-          .join("")
-          .toUpperCase();
+        const initials = displayName.split(/[\s_.-]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
         setLiveIdentity({
           displayName,
           username: username.startsWith("@") ? username : `@${username}`,
@@ -269,11 +298,11 @@ function ProfilePage({
     return () => {
       cancelled = true;
     };
-  }, [publicLocked, identityRefreshKey]);
+  }, [publicLocked, identityRefreshKey, profileId]);
 
   const effectiveIdentity = liveIdentity ?? identity;
 
-  // Contenus réels de l'utilisateur (DB Supabase + stores locaux).
+  // Contenus affichés (DB Supabase pour illustrations/annonces/idées ; stores locaux pour le reste).
   const [myIllustrations, setMyIllustrations] = useState<DbIllustration[]>([]);
   const [myAnnouncements, setMyAnnouncements] = useState<DbAnnouncement[]>([]);
   const [myIdeas, setMyIdeas] = useState<DbIdea[]>([]);
@@ -283,11 +312,23 @@ function ProfilePage({
 
   const refreshOwnContent = () => {
     void (async () => {
-      const uid = await currentUserId().catch(() => null);
+      const uid = publicLocked ? shownUserId : await currentUserId().catch(() => null);
       if (uid) {
         void listIllustrations().then((rows) => setMyIllustrations(rows.filter((r) => r.author_id === uid))).catch(() => {});
         void listAnnouncements().then((rows) => setMyAnnouncements(rows.filter((r) => r.author_id === uid))).catch(() => {});
         void listIdeas().then((rows) => setMyIdeas(rows.filter((r) => r.author_id === uid))).catch(() => {});
+      } else {
+        setMyIllustrations([]);
+        setMyAnnouncements([]);
+        setMyIdeas([]);
+      }
+      if (publicLocked) {
+        // Données locales (projets/options/favoris) = celles de CET appareil → non pertinentes
+        // pour un autre utilisateur : on ne les affiche pas sur un profil visité.
+        setMyProjects([]);
+        setMyOptions([]);
+        setFavorites([]);
+        return;
       }
       void loadStudioProjects<StudioProjectLite>().then(setMyProjects).catch(() => {});
       setMyOptions(listSponsorOptions().filter((o) => o.mode === "creator"));
@@ -295,7 +336,8 @@ function ProfilePage({
     })();
   };
 
-  useEffect(refreshOwnContent, []);
+  // Recharge quand l'id du profil affiché est connu (public : après résolution).
+  useEffect(refreshOwnContent, [shownUserId, publicLocked]);
   const [editOpen, setEditOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState<null | { title: string; kind: string; source: "own" | "favorite" }>(null);
   const [addOpen, setAddOpen] = useState<AddKind | null>(null);

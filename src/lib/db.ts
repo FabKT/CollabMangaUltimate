@@ -502,6 +502,26 @@ export async function addComment(entityType: CommentEntityType, entityId: string
   return data as DbComment;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Profil public résolu par UUID (page Discover) OU par pseudo (liens divers). */
+export async function getProfileByUsername(slugOrId: string): Promise<(DbProfile & { role?: string | null; secondary_role?: string | null }) | null> {
+  if (!supabase) return null;
+  const cols = "id, username, display_name, avatar_url, role, secondary_role";
+  const clean = slugOrId.replace(/^@/, "");
+  if (UUID_RE.test(clean)) {
+    const { data } = await supabase.from("profiles").select(cols).eq("id", clean).maybeSingle();
+    if (data) return data as DbProfile & { role?: string | null; secondary_role?: string | null };
+  }
+  const { data } = await supabase
+    .from("profiles")
+    .select(cols)
+    .ilike("username", clean)
+    .limit(1)
+    .maybeSingle();
+  return (data as (DbProfile & { role?: string | null; secondary_role?: string | null }) | null) ?? null;
+}
+
 /** Liste des profils inscrits (page Discover). */
 export async function listProfiles(limit = 60): Promise<DbProfile[]> {
   if (!supabase) return [];
