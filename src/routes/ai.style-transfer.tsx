@@ -18,6 +18,8 @@ import {
   Sparkles,
   ImageIcon,
   Trash2,
+  Layers,
+  User,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ai/style-transfer")({
@@ -25,10 +27,55 @@ export const Route = createFileRoute("/ai/style-transfer")({
   component: StyleTransferPage,
 });
 
+/* ---------------- Modes (onglets) ---------------- */
+
+type TransferMode = "planche" | "personnage";
+
+type ModeConfig = {
+  label: string;
+  icon: typeof Layers;
+  endpoint: string;
+  baseBadge: string;
+  baseTitle: string;
+  importCta: string;
+  resultTitle: string;
+  resultEmpty: string;
+  /** Ratio fixe du cadre : l'image importée/générée est recadrée dedans. */
+  aspect: string;
+};
+
+const MODE_CONFIG: Record<TransferMode, ModeConfig> = {
+  planche: {
+    label: "Planche",
+    icon: Layers,
+    endpoint: "/api/planche-transfer/generate",
+    baseBadge: "Avant",
+    baseTitle: "Planche de base",
+    importCta: "Importer la planche de base",
+    resultTitle: "Planche restylée",
+    resultEmpty: "La planche restylée apparaîtra ici.",
+    aspect: "3 / 4",
+  },
+  personnage: {
+    label: "Personnage",
+    icon: User,
+    endpoint: "/api/style-transfer/generate",
+    baseBadge: "Avant",
+    baseTitle: "Personnage de base",
+    importCta: "Importer le personnage de base",
+    resultTitle: "Carte personnage",
+    resultEmpty: "La carte personnage restylée apparaîtra ici.",
+    aspect: "3 / 2",
+  },
+};
+
+const MODES: TransferMode[] = ["planche", "personnage"];
+
 type StyleTransferSnapshot = {
+  mode?: TransferMode;
   targetStyleId?: string;
-  baseImage?: string | null;
-  result?: StyleTransferResult | null;
+  baseImages?: Partial<Record<TransferMode, string | null>>;
+  results?: Partial<Record<TransferMode, StyleTransferResult | null>>;
 };
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -41,11 +88,18 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 function StyleTransferPage() {
+  const [mode, setMode] = useState<TransferMode>("personnage");
   const [targetStyleId, setTargetStyleId] = useState<string>(MANGA_STYLES[0].id);
   const [customStyles, setCustomStyles] = useState<CustomMangaStyle[]>([]);
   const [createStyleOpen, setCreateStyleOpen] = useState(false);
-  const [baseImage, setBaseImage] = useState<string | null>(null);
-  const [result, setResult] = useState<StyleTransferResult | null>(null);
+  const [baseImages, setBaseImages] = useState<Record<TransferMode, string | null>>({
+    planche: null,
+    personnage: null,
+  });
+  const [results, setResults] = useState<Record<TransferMode, StyleTransferResult | null>>({
+    planche: null,
+    personnage: null,
+  });
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [lightbox, setLightbox] = useState(false);
@@ -54,9 +108,16 @@ function StyleTransferPage() {
   useEffect(() => {
     const snap = loadSession<StyleTransferSnapshot>("style-transfer");
     if (snap) {
+      setMode(snap.mode === "planche" ? "planche" : "personnage");
       setTargetStyleId(snap.targetStyleId ?? MANGA_STYLES[0].id);
-      setBaseImage(snap.baseImage ?? null);
-      if (snap.result) setResult(snap.result);
+      setBaseImages({
+        planche: snap.baseImages?.planche ?? null,
+        personnage: snap.baseImages?.personnage ?? null,
+      });
+      setResults({
+        planche: snap.results?.planche ?? null,
+        personnage: snap.results?.personnage ?? null,
+      });
     }
     setLoaded(true);
     void loadCustomMangaStyles().then(setCustomStyles);
@@ -65,11 +126,21 @@ function StyleTransferPage() {
   useEffect(() => {
     if (!loaded) return;
     saveSession<StyleTransferSnapshot>("style-transfer", {
+      mode,
       targetStyleId,
-      baseImage,
-      result,
+      baseImages,
+      results,
     });
-  }, [loaded, targetStyleId, baseImage, result]);
+  }, [loaded, mode, targetStyleId, baseImages, results]);
+
+  const cfg = MODE_CONFIG[mode];
+  const baseImage = baseImages[mode];
+  const result = results[mode];
+
+  const setBaseImage = (value: string | null) =>
+    setBaseImages((current) => ({ ...current, [mode]: value }));
+  const setResult = (value: StyleTransferResult | null) =>
+    setResults((current) => ({ ...current, [mode]: value }));
 
   const activeCustomStyle = customStyles.find((style) => style.id === targetStyleId);
   const isCustom = Boolean(activeCustomStyle);
@@ -87,7 +158,7 @@ function StyleTransferPage() {
     setError(null);
     setIsGenerating(true);
     try {
-      const response = await fetch("/api/style-transfer/generate", {
+      const response = await fetch(cfg.endpoint, {
         method: "POST",
         headers: await authJsonHeaders(),
         body: JSON.stringify({
@@ -119,11 +190,18 @@ function StyleTransferPage() {
     link.click();
   };
 
+  const switchMode = (next: TransferMode) => {
+    if (next === mode) return;
+    setMode(next);
+    setError(null);
+    setIsGenerating(false);
+  };
+
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
         title="Transfert de style"
-        description="Prends un personnage comme base et régénère-le dans un autre style."
+        description="Prends une planche ou un personnage comme base et régénère-le dans un autre style."
         actions={
           <button
             onClick={generate}
@@ -135,6 +213,27 @@ function StyleTransferPage() {
           </button>
         }
       />
+
+      {/* Onglets : Planche / Personnage */}
+      <div className="mb-4 inline-flex items-center gap-1 rounded-[14px] border border-border bg-surface-2 p-1">
+        {MODES.map((id) => {
+          const entry = MODE_CONFIG[id];
+          const active = id === mode;
+          const Icon = entry.icon;
+          return (
+            <button
+              key={id}
+              onClick={() => switchMode(id)}
+              className={`inline-flex h-[38px] items-center gap-2 rounded-[10px] px-4 text-[13px] font-bold transition ${
+                active ? "bg-accent-soft text-accent" : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {entry.label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Style band — full width */}
       <section className="shadow-panel mb-4 rounded-[18px] border border-border bg-surface-2 p-3">
@@ -204,9 +303,9 @@ function StyleTransferPage() {
           <header className="flex items-center justify-between gap-2 border-b border-border p-4">
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-border bg-surface-3 px-2 py-0.5 text-[11px] font-bold text-text-secondary">
-                Avant
+                {cfg.baseBadge}
               </span>
-              <h2 className="font-display text-base font-bold">Personnage de base</h2>
+              <h2 className="font-display text-base font-bold">{cfg.baseTitle}</h2>
             </div>
             {baseImage && (
               <button
@@ -218,8 +317,13 @@ function StyleTransferPage() {
               </button>
             )}
           </header>
-          <div className="flex flex-1 items-center justify-center p-4">
-            <BeforeArea baseImage={baseImage} onImport={importBase} />
+          <div className="p-4">
+            <BeforeArea
+              baseImage={baseImage}
+              aspect={cfg.aspect}
+              importCta={cfg.importCta}
+              onImport={importBase}
+            />
           </div>
         </section>
 
@@ -228,7 +332,7 @@ function StyleTransferPage() {
           <header className="flex items-center justify-between gap-2 border-b border-border p-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <h2 className="font-display text-base font-bold">Résultat</h2>
+              <h2 className="font-display text-base font-bold">{cfg.resultTitle}</h2>
             </div>
             <button
               onClick={download}
@@ -239,12 +343,18 @@ function StyleTransferPage() {
               <Download className="h-4 w-4" />
             </button>
           </header>
-          <div className="flex flex-1 items-center justify-center p-4">
-            <div className="flex h-full min-h-[320px] w-full items-center justify-center overflow-hidden rounded-[12px] bg-stage">
+          <div className="p-4">
+            {/* Cadre de taille fixe : l'image est recadrée (object-cover). */}
+            <div
+              className="w-full overflow-hidden rounded-[12px] bg-stage"
+              style={{ aspectRatio: cfg.aspect }}
+            >
               {isGenerating ? (
-                <GeneratingIndicator />
+                <div className="flex h-full w-full items-center justify-center">
+                  <GeneratingIndicator />
+                </div>
               ) : error ? (
-                <div className="flex flex-col items-center justify-center px-8 text-center text-text-secondary">
+                <div className="flex h-full w-full flex-col items-center justify-center px-8 text-center text-text-secondary">
                   <X className="mb-3 h-8 w-8 text-danger" />
                   <p className="text-[13px] font-semibold">{error}</p>
                 </div>
@@ -252,19 +362,19 @@ function StyleTransferPage() {
                 <button
                   type="button"
                   onClick={() => setLightbox(true)}
-                  className="flex h-full w-full cursor-zoom-in items-center justify-center"
+                  className="h-full w-full cursor-zoom-in"
                   title="Voir en grand"
                 >
                   <img
                     src={result.imageUrl}
-                    alt="Personnage restylé"
-                    className="max-h-full max-w-full object-contain"
+                    alt={cfg.resultTitle}
+                    className="h-full w-full object-cover"
                   />
                 </button>
               ) : (
-                <div className="flex flex-col items-center justify-center gap-2 px-8 text-center text-text-muted">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-8 text-center text-text-muted">
                   <Sparkles className="h-8 w-8" />
-                  <p className="text-[13px] font-semibold">Le personnage restylé apparaîtra ici.</p>
+                  <p className="text-[13px] font-semibold">{cfg.resultEmpty}</p>
                 </div>
               )}
             </div>
@@ -291,7 +401,7 @@ function StyleTransferPage() {
             </button>
             <img
               src={result.imageUrl}
-              alt="Personnage restylé"
+              alt={cfg.resultTitle}
               className="w-full rounded-[14px] object-contain"
               style={{ maxHeight: "82vh" }}
             />
@@ -312,9 +422,13 @@ function StyleTransferPage() {
 
 function BeforeArea({
   baseImage,
+  aspect,
+  importCta,
   onImport,
 }: {
   baseImage: string | null;
+  aspect: string;
+  importCta: string;
   onImport: (files: FileList | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -323,7 +437,8 @@ function BeforeArea({
     return (
       <button
         onClick={() => inputRef.current?.click()}
-        className="flex h-full min-h-[320px] w-full items-center justify-center overflow-hidden rounded-[12px] bg-stage"
+        className="w-full overflow-hidden rounded-[12px] bg-stage"
+        style={{ aspectRatio: aspect }}
         title="Remplacer l'image"
       >
         <input
@@ -336,14 +451,16 @@ function BeforeArea({
             event.currentTarget.value = "";
           }}
         />
-        <img src={baseImage} alt="Personnage de base" className="max-h-full max-w-full object-contain" />
+        {/* Image recadrée par rapport au cadre de base (object-cover). */}
+        <img src={baseImage} alt="Image de base" className="h-full w-full object-cover" />
       </button>
     );
   }
 
   return (
     <div
-      className="flex h-full min-h-[320px] w-full flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed border-border-strong bg-surface-3/40 p-6 text-center"
+      className="flex w-full flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed border-border-strong bg-surface-3/40 p-6 text-center"
+      style={{ aspectRatio: aspect }}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -366,7 +483,7 @@ function BeforeArea({
         className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
       >
         <Upload className="h-4 w-4" />
-        Importer le personnage de base
+        {importCta}
       </button>
       <p className="text-[12px] text-text-muted">ou glisse-dépose une image ici</p>
     </div>
@@ -383,7 +500,7 @@ function GeneratingIndicator() {
       </div>
       <div>
         <p className="text-[14px] font-bold text-text-primary">Transfert en cours</p>
-        <p className="mt-1 text-[12px] text-text-muted">Re-rendu du personnage dans le style choisi…</p>
+        <p className="mt-1 text-[12px] text-text-muted">Re-rendu dans le style choisi…</p>
       </div>
       <div className="flex items-center gap-1.5">
         {[0, 1, 2].map((index) => (
