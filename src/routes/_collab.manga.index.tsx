@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Search, SlidersHorizontal, Star, X, ChevronDown } from "lucide-react";
+import { Search, Star, X, ChevronDown } from "lucide-react";
 import {
   CATALOG_MANGA,
   DEMOGRAPHICS,

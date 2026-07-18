@@ -1,12 +1,4 @@
 import { MANGA_LIST } from "@/lib/manga-data";
-import cover1 from "@/assets/haven/cover-1.jpg";
-import cover2 from "@/assets/haven/cover-2.jpg";
-import cover3 from "@/assets/haven/cover-3.jpg";
-import cover4 from "@/assets/haven/cover-4.jpg";
-import cover5 from "@/assets/haven/cover-5.jpg";
-import cover6 from "@/assets/haven/cover-6.jpg";
-import cover7 from "@/assets/haven/cover-7.jpg";
-import cover8 from "@/assets/haven/cover-8.jpg";
 import hero1 from "@/assets/haven/hero-1.jpg";
 
 export type Demographic = "Shonen" | "Seinen" | "Shojo" | "Josei";
@@ -25,7 +17,9 @@ export type CatalogManga = {
   language: "FR" | "ENG" | "ES" | "IT" | "JP";
 };
 
-const HAVEN_COVERS = [cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8];
+// Catalogue statique (MANGA_LIST) vide en production → aucune couverture d'exemple
+// n'est affichée. On garde une seule image (déjà utilisée par le héros) comme repli.
+const HAVEN_COVERS = [hero1];
 
 export type HeroSlide = {
   id: string;
