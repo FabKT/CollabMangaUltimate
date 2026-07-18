@@ -13,6 +13,8 @@ import {
   getMyRoles,
   getProfileByUsername,
   respondFriendRequestDb,
+  sendFriendRequestDb,
+  sendProfileWorkflowDb,
   startConversationWith,
   updateMyRole,
   uploadImage,
@@ -60,12 +62,6 @@ import {
   Users,
   X,
 } from "lucide-react";
-import {
-  followCreator,
-  sendCollaborationInvitation,
-  sendFriendRequest,
-  sendPatronageRequest,
-} from "@/lib/user-workflows";
 
 export const Route = createFileRoute("/_collab/profile")({
   head: () => ({
@@ -97,6 +93,9 @@ export type PublicProfileIdentity = {
   initials: string;
   tagline: string;
   profileType: ProfileType;
+  mainRole?: string;
+  secondaryRole?: string;
+  languages?: string[];
   avatarUrl?: string;
   bannerUrl?: string;
 };
@@ -116,6 +115,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "IW",
     tagline: "Dessinateur seinen, encrage intense et compositions urbaines dramatiques.",
     profileType: "creator",
+    mainRole: "Dessinateur",
   },
   u2: {
     displayName: "Nova Scriptor",
@@ -123,6 +123,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "NS",
     tagline: "Scénariste shonen, worldbuilding et systèmes de pouvoirs sur le long terme.",
     profileType: "creator",
+    mainRole: "Scénariste",
   },
   u3: {
     displayName: "PanelPulse",
@@ -130,6 +131,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "PP",
     tagline: "Créateur de contenu manga, reviews hebdomadaires et mise en avant de projets indépendants.",
     profileType: "content",
+    mainRole: "Créateur de contenu",
   },
   u4: {
     displayName: "Sakura Lines",
@@ -137,6 +139,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "SL",
     tagline: "Décors manga, rues nocturnes, intérieurs et ambiance slice of life.",
     profileType: "creator",
+    mainRole: "Dessinateur",
   },
   u5: {
     displayName: "Lorekeeper",
@@ -144,6 +147,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "LK",
     tagline: "Scénariste orienté lore, factions, chronologies et arcs longs.",
     profileType: "creator",
+    mainRole: "Scénariste",
   },
   u6: {
     displayName: "Bento Reader",
@@ -151,6 +155,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "BR",
     tagline: "Lecteur bêta, retours structurés chapitre par chapitre et notes de rythme.",
     profileType: "creator",
+    mainRole: "Lecteur",
   },
   u7: {
     displayName: "Kaiju Hex",
@@ -158,6 +163,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "KH",
     tagline: "Illustrateur de créatures, mecha et couvertures à silhouette forte.",
     profileType: "creator",
+    mainRole: "Dessinateur",
   },
   u8: {
     displayName: "Storycraft HQ",
@@ -165,6 +171,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "SC",
     tagline: "Studio éditorial manga, anthologies seinen et recrutement d'équipes créatives.",
     profileType: "creator",
+    mainRole: "Scénariste",
   },
   u9: {
     displayName: "Midori Talks",
@@ -172,6 +179,7 @@ const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
     initials: "MT",
     tagline: "Créatrice de contenu, essais vidéo sur le shojo classique et le josei moderne.",
     profileType: "content",
+    mainRole: "Créateur de contenu",
   },
 };
 
@@ -229,6 +237,7 @@ function ProfilePage({
   identity?: PublicProfileIdentity;
   profileId?: string;
 }) {
+  const navigate = useNavigate();
   const publicLocked = initialMode === "public";
   const [profileType, setProfileType] = useState<ProfileType>(initialProfileType);
   const [mode] = useState<ViewMode>(initialMode);
@@ -239,7 +248,13 @@ function ProfilePage({
   // Id Supabase du profil affiché (le mien en own ; celui visité en public).
   const [shownUserId, setShownUserId] = useState<string | null>(null);
 
-  const identityFromProfile = (p: { username: string; display_name: string | null; avatar_url: string | null }): PublicProfileIdentity => {
+  const identityFromProfile = (p: {
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    role?: string | null;
+    secondary_role?: string | null;
+  }): PublicProfileIdentity => {
     const displayName = p.display_name || p.username;
     const initials = displayName.split(/[\s_.-]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
     return {
@@ -248,6 +263,8 @@ function ProfilePage({
       initials: initials || "?",
       tagline: "",
       profileType: "creator",
+      mainRole: p.role ?? undefined,
+      secondaryRole: p.secondary_role ?? undefined,
       avatarUrl: p.avatar_url ?? undefined,
     };
   };
@@ -289,8 +306,15 @@ function ProfilePage({
           avatarUrl: meta?.avatar_url,
           bannerUrl: meta?.banner_url,
         });
-        const { data: row } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-        if (!cancelled && row?.role) setProfileType(row.role === "Créateur de contenu" ? "content" : "creator");
+        const { data: row } = await supabase.from("profiles").select("role, secondary_role").eq("id", user.id).single();
+        if (!cancelled && row?.role) {
+          setProfileType(row.role === "Créateur de contenu" ? "content" : "creator");
+          setLiveIdentity((current) => current ? {
+            ...current,
+            mainRole: row.role,
+            secondaryRole: row.secondary_role ?? undefined,
+          } : current);
+        }
       } catch {
         /* identité par défaut conservée */
       }
@@ -301,6 +325,10 @@ function ProfilePage({
   }, [publicLocked, identityRefreshKey, profileId]);
 
   const effectiveIdentity = liveIdentity ?? identity;
+  const effectiveMainRole =
+    effectiveIdentity.mainRole ??
+    (profileType === "content" ? "Créateur de contenu" : "Dessinateur");
+  const effectiveSecondaryRole = effectiveIdentity.secondaryRole;
 
   // Contenus affichés (DB Supabase pour illustrations/annonces/idées ; stores locaux pour le reste).
   const [myIllustrations, setMyIllustrations] = useState<DbIllustration[]>([]);
@@ -345,6 +373,25 @@ function ProfilePage({
   const [workflowOpen, setWorkflowOpen] = useState<ProfileWorkflow | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [available, setAvailable] = useState(true);
+  const [contacting, setContacting] = useState(false);
+
+  const openConversation = async () => {
+    if (contacting) return;
+    if (!shownUserId) {
+      setFeedback("Ce profil ne peut pas encore être contacté.");
+      return;
+    }
+    setContacting(true);
+    try {
+      const conversation = await startConversationWith(shownUserId);
+      await navigate({ to: "/messages", search: { conversation } });
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Impossible d'ouvrir la conversation.");
+      window.setTimeout(() => setFeedback(null), 3200);
+    } finally {
+      setContacting(false);
+    }
+  };
 
   const tabs = useMemo(() => {
     const base =
@@ -379,6 +426,8 @@ function ProfilePage({
           profileType={profileType}
           mode={mode}
           identity={effectiveIdentity}
+          mainRole={effectiveMainRole}
+          secondaryRole={effectiveSecondaryRole}
           onEdit={() => setEditOpen(true)}
           onAdd={setAddOpen}
           available={available}
@@ -387,6 +436,8 @@ function ProfilePage({
           onPatronage={() => setWorkflowOpen("patronage")}
           onFollow={() => setWorkflowOpen("follow")}
           onFriend={() => setWorkflowOpen("friend")}
+          onMessage={() => void openConversation()}
+          contacting={contacting}
         />
 
         <div className="mt-6">
@@ -412,6 +463,10 @@ function ProfilePage({
                 <OverviewTab
                   profileType={profileType}
                   mode={mode}
+                  identity={effectiveIdentity}
+                  mainRole={effectiveMainRole}
+                  secondaryRole={effectiveSecondaryRole}
+                  available={available}
                   options={myOptions}
                   onAdd={setAddOpen}
                   onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
@@ -518,6 +573,7 @@ function ProfilePage({
           type={workflowOpen}
           profileType={profileType}
           profileName={effectiveIdentity.displayName}
+          recipientId={shownUserId}
           onClose={() => setWorkflowOpen(null)}
           onDone={(message) => {
             setWorkflowOpen(null);
@@ -800,6 +856,8 @@ function ProfileHeader({
   profileType,
   mode,
   identity,
+  mainRole,
+  secondaryRole,
   onEdit,
   onAdd,
   available,
@@ -808,10 +866,14 @@ function ProfileHeader({
   onPatronage,
   onFollow,
   onFriend,
+  onMessage,
+  contacting,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
   identity: PublicProfileIdentity;
+  mainRole: string;
+  secondaryRole?: string;
   onEdit: () => void;
   onAdd: (kind: AddKind) => void;
   available: boolean;
@@ -820,7 +882,10 @@ function ProfileHeader({
   onPatronage: () => void;
   onFollow: () => void;
   onFriend: () => void;
+  onMessage: () => void;
+  contacting: boolean;
 }) {
+  const languages = identity.languages ?? (mode === "own" ? ["EN", "FR", "JP"] : []);
   return (
     <div>
       <div
@@ -892,23 +957,17 @@ function ProfileHeader({
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Chip tone="active" icon={<Sparkles size={12} />}>
-                {profileType === "content" ? "Créateur de contenu" : "Dessinateur"}
+                {mainRole}
               </Chip>
-              {profileType === "creator" ? (
-                <>
-                  <Chip>Scénariste</Chip>
-                </>
-              ) : (
-                <>
-                  <Chip>Lecteur</Chip>
-                </>
-              )}
+              {secondaryRole && secondaryRole !== mainRole ? <Chip>{secondaryRole}</Chip> : null}
               {mode === "own" ? (
                 <AvailabilitySwitch available={available} onChange={onAvailabilityChange} />
               ) : (
                 <Chip tone={available ? "active" : "neutral"}>{available ? "Available" : "Unavailable"}</Chip>
               )}
-              <Chip tone="info" icon={<Globe2 size={12} />}>EN · FR · JP</Chip>
+              {languages.length ? (
+                <Chip tone="info" icon={<Globe2 size={12} />}>{languages.join(" · ")}</Chip>
+              ) : null}
             </div>
           </div>
         </div>
@@ -925,14 +984,14 @@ function ProfileHeader({
           ) : profileType === "content" ? (
             <>
               <PrimaryButton icon={<Send size={16} />} onClick={onPatronage}>Propose Sponsorship</PrimaryButton>
-              <SecondaryButton icon={<MessageSquare size={16} />}>Message</SecondaryButton>
+              <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton>
               <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
               <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
             </>
           ) : (
             <>
               <PrimaryButton icon={<Users size={16} />} onClick={onInvite}>Invite to Project</PrimaryButton>
-              <SecondaryButton icon={<MessageSquare size={16} />}>Message</SecondaryButton>
+              <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton>
               <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
               <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
             </>
@@ -1039,12 +1098,20 @@ function AvailabilitySwitch({
 function OverviewTab({
   profileType,
   mode,
+  identity,
+  mainRole,
+  secondaryRole,
+  available,
   onAdd,
   onDetails,
   options,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
+  identity: PublicProfileIdentity;
+  mainRole: string;
+  secondaryRole?: string;
+  available: boolean;
   onAdd: (kind: AddKind) => void;
   onDetails: (title: string, kind: string) => void;
   options?: SponsorOption[];
@@ -1052,7 +1119,14 @@ function OverviewTab({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-1">
-        <BioPanel profileType={profileType} mode={mode} />
+        <BioPanel
+          profileType={profileType}
+          mode={mode}
+          identity={identity}
+          mainRole={mainRole}
+          secondaryRole={secondaryRole}
+          available={available}
+        />
       </div>
       <div className="lg:col-span-2 space-y-6">
         {profileType === "creator" ? (
@@ -1065,34 +1139,46 @@ function OverviewTab({
   );
 }
 
-function BioPanel({ profileType, mode }: { profileType: ProfileType; mode: ViewMode }) {
+function BioPanel({
+  profileType,
+  mode,
+  identity,
+  mainRole,
+  secondaryRole,
+  available,
+}: {
+  profileType: ProfileType;
+  mode: ViewMode;
+  identity: PublicProfileIdentity;
+  mainRole: string;
+  secondaryRole?: string;
+  available: boolean;
+}) {
+  const publicBio = identity.tagline.trim() || "Cet utilisateur n'a pas encore renseigné sa bio.";
+  const languages = identity.languages ?? (mode === "own" ? ["English", "French", "Japanese"] : []);
   return (
     <Panel>
       <SectionTitle title="About" />
       <p className="text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
-        Bio placeholder — a short paragraph describing the creator's background,
-        style and current focus. This area supports a few lines of context before
-        readers explore projects, illustrations or sponsorship options.
+        {mode === "public"
+          ? publicBio
+          : "Présente ton parcours, ton univers et ce que tu recherches actuellement."}
       </p>
 
       <div className="mt-6 space-y-4">
-        <InfoRow label="Languages">
-          <Chip tone="info">English</Chip>
-          <Chip tone="info">French</Chip>
-          <Chip tone="info">Japanese</Chip>
-        </InfoRow>
+        {languages.length ? (
+          <InfoRow label="Languages">
+            {languages.map((language) => <Chip key={language} tone="info">{language}</Chip>)}
+          </InfoRow>
+        ) : null}
         <InfoRow label="Main role">
-          <Chip tone="active">{profileType === "content" ? "Créateur de contenu" : "Dessinateur"}</Chip>
+          <Chip tone="active">{mainRole}</Chip>
+          {secondaryRole && secondaryRole !== mainRole ? <Chip>{secondaryRole}</Chip> : null}
         </InfoRow>
         <InfoRow label="Availability">
-          <Chip tone="active">Open to collaborations</Chip>
+          <Chip tone={available ? "active" : "neutral"}>{available ? "Open to collaborations" : "Unavailable"}</Chip>
         </InfoRow>
-        <InfoRow label="Preferred genres">
-          <Chip>Shonen</Chip>
-          <Chip>Seinen</Chip>
-          <Chip>Slice of life</Chip>
-        </InfoRow>
-        {profileType === "content" ? (
+        {profileType === "content" && mode === "own" ? (
           <>
             <InfoRow label="Platforms">
               <Chip>YouTube</Chip>
@@ -1514,8 +1600,8 @@ function ProfileFriendsTab() {
 
   const contact = async (profileId: string) => {
     try {
-      await startConversationWith(profileId);
-      void navigate({ to: "/messages", search: { conversation: undefined } });
+      const conversation = await startConversationWith(profileId);
+      void navigate({ to: "/messages", search: { conversation } });
     } catch {
       setFeedback("Impossible d'ouvrir la conversation.");
     }
@@ -2758,12 +2844,14 @@ function ProfileWorkflowModal({
   type,
   profileType,
   profileName,
+  recipientId,
   onClose,
   onDone,
 }: {
   type: ProfileWorkflow;
   profileType: ProfileType;
   profileName: string;
+  recipientId: string | null;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -2773,6 +2861,7 @@ function ProfileWorkflowModal({
   const [startDate, setStartDate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const title =
     type === "invite"
@@ -2783,43 +2872,76 @@ function ProfileWorkflowModal({
           ? "Ajouter en ami"
           : "S'abonner";
 
-  const submit = () => {
+  const submit = async () => {
+    if (submitting) return;
     setError("");
+    if (!recipientId) {
+      setError("Ce profil n'est pas relié à un compte utilisateur actif.");
+      return;
+    }
     if (type === "invite") {
       if (!projectTitle.trim()) {
         setError("Le projet concerné est obligatoire.");
         return;
       }
-      sendCollaborationInvitation({
-        recipient: profileName,
-        projectTitle,
-        role,
-        message,
-      });
-      onDone("Invitation de collaboration envoyée et notification créée.");
-      return;
-    }
-    if (type === "patronage") {
+    } else if (type === "patronage") {
       if (!level.trim()) {
         setError("Le niveau de parrainage est obligatoire.");
         return;
       }
-      sendPatronageRequest({
-        recipient: profileName,
-        level,
-        startDate,
-        message,
+    }
+
+    setSubmitting(true);
+    try {
+      if (type === "invite") {
+        await sendProfileWorkflowDb(recipientId, {
+          kind: "collaboration_invitation",
+          status: "pending",
+          category: "project",
+          type: "invitation_collab",
+          title: `Invitation à rejoindre ${projectTitle.trim()}`,
+          content: message.trim() || `Rôle proposé : ${role}.`,
+          entityType: "project",
+          entityTitle: projectTitle.trim(),
+        });
+        onDone("Invitation de collaboration envoyée et notification créée.");
+        return;
+      }
+      if (type === "patronage") {
+        await sendProfileWorkflowDb(recipientId, {
+          kind: "patronage_request",
+          status: "pending",
+          category: "sponsorship",
+          type: "demande_parrainage",
+          title: `Nouvelle proposition de parrainage (${level})`,
+          content: [message.trim(), startDate ? `Début souhaité : ${startDate}.` : ""].filter(Boolean).join(" "),
+          entityType: "sponsorship",
+          entityTitle: profileName,
+        });
+        onDone("Demande de parrainage envoyée et notification créée.");
+        return;
+      }
+      if (type === "friend") {
+        await sendFriendRequestDb(recipientId);
+        onDone("Demande d'amitié envoyée.");
+        return;
+      }
+      await sendProfileWorkflowDb(recipientId, {
+        kind: "subscription",
+        status: "active",
+        category: "friend",
+        type: "abonnement",
+        title: "Un membre s'est abonné à ton profil",
+        content: "Un nouvel utilisateur suit maintenant ton activité.",
+        entityType: "profile",
+        entityTitle: profileName,
       });
-      onDone("Demande de parrainage envoyée et notification créée.");
-      return;
+      onDone("Abonnement ajouté. Le créateur recevra une notification.");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Action impossible.");
+    } finally {
+      setSubmitting(false);
     }
-    if (type === "friend") {
-      sendFriendRequest({ recipient: profileName });
-      onDone("Demande d'amitié envoyée.");
-      return;
-    }
-    followCreator({ creatorName: profileName });
-    onDone("Abonnement ajouté. Le créateur recevra une notification.");
   };
 
   return (
@@ -2831,7 +2953,9 @@ function ProfileWorkflowModal({
       footer={
         <>
           <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={submit}>{type === "follow" || type === "friend" ? "Confirmer" : "Envoyer"}</PrimaryButton>
+          <PrimaryButton onClick={() => void submit()}>
+            {submitting ? "Envoi…" : type === "follow" || type === "friend" ? "Confirmer" : "Envoyer"}
+          </PrimaryButton>
         </>
       }
     >

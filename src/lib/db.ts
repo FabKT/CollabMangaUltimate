@@ -337,6 +337,19 @@ export async function sendFriendRequestDb(recipientId: string): Promise<void> {
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour envoyer une demande d'ami.");
   if (uid === recipientId) throw new Error("Tu ne peux pas t'ajouter toi-même.");
+  const { data: existing, error: existingError } = await sb
+    .from("workflow_records")
+    .select("status, initiator_id, recipient_id")
+    .eq("kind", "friend_request")
+    .or(`initiator_id.eq.${uid},recipient_id.eq.${uid}`);
+  if (existingError) throw new Error(existingError.message);
+  const relationship = (existing ?? []).find(
+    (record) =>
+      (record.initiator_id === uid && record.recipient_id === recipientId) ||
+      (record.initiator_id === recipientId && record.recipient_id === uid),
+  );
+  if (relationship?.status === "accepted") throw new Error("Vous êtes déjà amis.");
+  if (relationship?.status === "pending") throw new Error("Une demande d'ami est déjà en attente.");
   const { data: me } = await sb.from("profiles").select("display_name, username").eq("id", uid).single();
   const senderName = me?.display_name || me?.username || "Un membre";
   const { data: record, error } = await sb
@@ -364,6 +377,76 @@ export async function sendFriendRequestDb(recipientId: string): Promise<void> {
     entity_type: "friend_request",
     entity_title: senderName,
   });
+}
+
+export type ProfileWorkflowDbInput = {
+  kind: "collaboration_invitation" | "patronage_request" | "subscription";
+  status: "pending" | "active";
+  category: "project" | "sponsorship" | "friend";
+  type: string;
+  title: string;
+  content: string;
+  entityType: string;
+  entityTitle: string;
+};
+
+/** Enregistre une action de profil et notifie réellement le compte visé. */
+export async function sendProfileWorkflowDb(
+  recipientId: string,
+  input: ProfileWorkflowDbInput,
+): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour effectuer cette action.");
+  if (uid === recipientId) throw new Error("Cette action n'est pas disponible sur ton propre profil.");
+
+  if (input.kind === "subscription") {
+    const { data: existingSubscription, error: existingSubscriptionError } = await sb
+      .from("workflow_records")
+      .select("id")
+      .eq("kind", "subscription")
+      .eq("status", "active")
+      .eq("initiator_id", uid)
+      .eq("recipient_id", recipientId)
+      .limit(1)
+      .maybeSingle();
+    if (existingSubscriptionError) throw new Error(existingSubscriptionError.message);
+    if (existingSubscription) throw new Error("Tu suis déjà ce profil.");
+  }
+
+  const { data: me } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", uid)
+    .single();
+  const senderName = me?.display_name || me?.username || "Un membre";
+  const { data: record, error } = await sb
+    .from("workflow_records")
+    .insert({
+      kind: input.kind,
+      status: input.status,
+      initiator_id: uid,
+      recipient_id: recipientId,
+      title: input.title,
+      entity_type: input.entityType,
+      entity_title: input.entityTitle,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const { error: notificationError } = await sb.from("notifications").insert({
+    record_id: record.id,
+    recipient_id: recipientId,
+    actor_id: uid,
+    category: input.category,
+    type: input.type,
+    title: `${senderName} — ${input.title}`,
+    content: input.content,
+    entity_type: input.entityType,
+    entity_title: input.entityTitle || senderName,
+  });
+  if (notificationError) throw new Error(notificationError.message);
 }
 
 /** Demandes d'ami en attente reçues par l'utilisateur connecté. */

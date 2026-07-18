@@ -1,6 +1,6 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { listProfiles, sendFriendRequestDb } from "@/lib/db";
+import { listProfiles, sendFriendRequestDb, startConversationWith } from "@/lib/db";
 import { SITE_LANGUAGES } from "@/lib/languages";
 import {
   Search,
@@ -10,10 +10,8 @@ import {
   List,
   X,
   ChevronDown,
-  MapPin,
   MessageSquare,
   UserPlus,
-  BadgeCheck,
   Sparkles,
   Radio,
   Youtube,
@@ -24,7 +22,6 @@ import {
   Handshake,
   FolderKanban,
 } from "lucide-react";
-import { sendFriendRequest } from "@/lib/user-workflows";
 
 export const Route = createFileRoute("/_collab/discover")({
   head: () => ({
@@ -52,21 +49,7 @@ type Role =
   | "Artist"
   | "Writer"
   | "Content creator"
-  | "Reader"
-  | "Project owner"
-  | "Illustrator"
-  | "Assistant"
-  | "Editor"
-  | "Translator"
-  | "Community manager";
-
-const LANGUAGES = [
-  { code: "fr", label: "Français", flag: "FR" },
-  { code: "en", label: "English", flag: "EN" },
-  { code: "es", label: "Español", flag: "ES" },
-  { code: "it", label: "Italiano", flag: "IT" },
-  { code: "ja", label: "日本語", flag: "JP" },
-];
+  | "Reader";
 
 const STATUSES: Role[] = [
   "Artist",
@@ -81,35 +64,6 @@ const SUBGENRES = [
   "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Science fiction",
   "Romance", "Slice of life", "Horror", "Mystery", "Historical", "Sport",
   "Isekai", "Psychological",
-];
-
-const SKILLS = {
-  Artists: [
-    "Character design", "Backgrounds", "Manga pages", "Inking", "Coloring",
-    "Storyboarding", "Cover art", "Expressions", "Action scenes", "Creature design",
-  ],
-  Writers: [
-    "Scenario", "Dialogue", "Worldbuilding", "Character writing",
-    "Chapter structure", "Lore", "Power systems", "Editing",
-  ],
-  "Content creators": [
-    "Manga review", "Reaction", "Short videos", "Long videos",
-    "Analysis", "Presentation", "Social media promotion",
-  ],
-};
-
-const AVAILABILITY = [
-  "Available now", "Open to projects", "Open to paid work",
-  "Open to unpaid collaboration", "Busy", "Not available",
-];
-
-const COLLAB_TYPES = ["Rémunéré", "Non rémunéré"];
-
-const EXPERIENCE = ["Beginner", "Intermediate", "Advanced", "Professional"];
-
-const PROFILE_FILTERS = [
-  "Has portfolio", "Has illustrations", "Has projects", "Has propositions",
-  "Has sponsorship options", "Verified profile", "Recently active",
 ];
 
 const PLATFORMS = ["YouTube", "TikTok", "Instagram", "Twitter / X", "Twitch", "Other"];
@@ -153,8 +107,8 @@ type Profile = {
   id: string;
   username: string;
   initials: string;
+  avatarUrl?: string;
   role: Role;
-  secondary: string[];
   languages: string[];
   rating: number;
   availability: string;
@@ -162,12 +116,9 @@ type Profile = {
   genres: string[];
   skills: string[];
   projects: number;
-  verified?: boolean;
   platforms?: string[];
-  sponsorship?: boolean;
   audience?: string;
   sponsorshipOptions?: SponsorshipOption[];
-  portfolioTiles?: number;
 };
 
 // Plus de profils fictifs : la page charge les utilisateurs réellement inscrits (Supabase).
@@ -183,14 +134,14 @@ const ROLE_FROM_PROFILE: Record<string, Role> = {
   "Lecteur": "Reader",
 };
 
-function profileFromDb(db: { id: string; username: string; display_name: string | null; role?: string | null }): Profile {
+function profileFromDb(db: { id: string; username: string; display_name: string | null; avatar_url: string | null; role?: string | null }): Profile {
   const name = db.display_name || db.username;
   return {
     id: db.id,
     username: db.username.startsWith("@") ? db.username : `@${db.username}`,
     initials: initialsOf(name),
+    avatarUrl: db.avatar_url ?? undefined,
     role: (db.role && ROLE_FROM_PROFILE[db.role]) || "Reader",
-    secondary: [],
     languages: ["Français"],
     rating: 0,
     availability: "Disponible",
@@ -419,18 +370,13 @@ function PlatformIcon({ name }: { name: string }) {
 /* ---------------- page ---------------- */
 
 function UsersPage() {
+  const navigate = useNavigate();
   const [languages, setLanguages] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<string[]>([]);
   const [minRating, setMinRating] = useState(0);
   const [maxRating, setMaxRating] = useState(5);
   const [genres, setGenres] = useState<string[]>([]);
   const [subgenres, setSubgenres] = useState<string[]>([]);
-  const [skills, setSkills] = useState<string[]>([]);
-  const [availability, setAvailability] = useState<string[]>([]);
-  const [collab, setCollab] = useState<string[]>([]);
-  const [experience, setExperience] = useState<string[]>([]);
-  const [profileFilters, setProfileFilters] = useState<string[]>([]);
-  const [platforms, setPlatforms] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -453,6 +399,22 @@ function UsersPage() {
   const [creatorFilters, setCreatorFilters] = useState<CreatorAdvancedFilters>(EMPTY_CREATOR_FILTERS);
   const [sponsorshipProfile, setSponsorshipProfile] = useState<Profile | null>(null);
   const [friendTarget, setFriendTarget] = useState<Profile | null>(null);
+  const [contactingId, setContactingId] = useState<string | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
+
+  const contactProfile = async (profile: Profile) => {
+    if (contactingId) return;
+    setContactingId(profile.id);
+    setContactError(null);
+    try {
+      const conversation = await startConversationWith(profile.id);
+      await navigate({ to: "/messages", search: { conversation } });
+    } catch (error) {
+      setContactError(error instanceof Error ? error.message : "Impossible d'ouvrir la conversation.");
+    } finally {
+      setContactingId(null);
+    }
+  };
 
   const activeFilters: { key: string; label: string; onRemove: () => void }[] = useMemo(() => {
     const list: { key: string; label: string; onRemove: () => void }[] = [];
@@ -464,12 +426,6 @@ function UsersPage() {
     push("status", statuses, setStatuses);
     push("genre", genres, setGenres);
     push("sub", subgenres, setSubgenres);
-    push("skill", skills, setSkills);
-    push("avail", availability, setAvailability);
-    push("collab", collab, setCollab);
-    push("exp", experience, setExperience);
-    push("profile", profileFilters, setProfileFilters);
-    push("plat", platforms, setPlatforms);
     if (minRating > 0)
       list.push({ key: "min", label: `Min ${minRating}★`, onRemove: () => setMinRating(0) });
     if (maxRating < 5)
@@ -508,11 +464,10 @@ function UsersPage() {
       });
     }
     return list;
-  }, [languages, statuses, genres, subgenres, skills, availability, collab, experience, profileFilters, platforms, minRating, maxRating, creatorFilters]);
+  }, [languages, statuses, genres, subgenres, minRating, maxRating, creatorFilters]);
 
   const resetAll = () => {
-    setLanguages([]); setStatuses([]); setGenres([]); setSubgenres([]); setSkills([]);
-    setAvailability([]); setCollab([]); setExperience([]); setProfileFilters([]); setPlatforms([]);
+    setLanguages([]); setStatuses([]); setGenres([]); setSubgenres([]);
     setCreatorFilters(EMPTY_CREATOR_FILTERS);
     setMinRating(0); setMaxRating(5); setQuery("");
   };
@@ -523,9 +478,6 @@ function UsersPage() {
     if (languages.length && !languages.some((language) => p.languages.includes(language))) return false;
     if (genres.length && !genres.some((genre) => p.genres.includes(genre))) return false;
     if (subgenres.length && !subgenres.some((subgenre) => p.genres.includes(subgenre))) return false;
-    if (skills.length && !skills.some((skill) => p.skills.includes(skill))) return false;
-    if (availability.length && !availability.includes(p.availability)) return false;
-    if (platforms.length && !platforms.every((platform) => p.platforms?.includes(platform))) return false;
     if (!matchesCreatorAdvancedFilters(p, creatorFilters)) return false;
     if (query) {
       const q = query.toLowerCase();
@@ -762,13 +714,27 @@ function UsersPage() {
           ) : view === "grid" ? (
             <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {results.map((p) => (
-                <UserCard key={p.id} profile={p} onSponsorshipOptions={setSponsorshipProfile} onAddFriend={setFriendTarget} />
+                <UserCard
+                  key={p.id}
+                  profile={p}
+                  onSponsorshipOptions={setSponsorshipProfile}
+                  onAddFriend={setFriendTarget}
+                  onContact={(profile) => void contactProfile(profile)}
+                  contacting={contactingId === p.id}
+                />
               ))}
             </div>
           ) : (
             <div className="mt-4 flex flex-col gap-3">
               {results.map((p) => (
-                <UserRow key={p.id} profile={p} onSponsorshipOptions={setSponsorshipProfile} onAddFriend={setFriendTarget} />
+                <UserRow
+                  key={p.id}
+                  profile={p}
+                  onSponsorshipOptions={setSponsorshipProfile}
+                  onAddFriend={setFriendTarget}
+                  onContact={(profile) => void contactProfile(profile)}
+                  contacting={contactingId === p.id}
+                />
               ))}
             </div>
           )}
@@ -814,7 +780,17 @@ function UsersPage() {
         <CreatorSponsorshipOptionsModal
           profile={sponsorshipProfile}
           onClose={() => setSponsorshipProfile(null)}
+          onContact={(profile) => void contactProfile(profile)}
+          contacting={contactingId === sponsorshipProfile.id}
         />
+      )}
+      {contactError && (
+        <div
+          role="alert"
+          className="fixed bottom-6 right-6 z-[70] max-w-[420px] rounded-[16px] border border-red-400/40 bg-[color:var(--cm-section)] px-4 py-3 text-[13px] font-semibold text-red-300 shadow-2xl"
+        >
+          {contactError}
+        </div>
       )}
     </div>
   );
@@ -822,13 +798,17 @@ function UsersPage() {
 
 /* ---------------- cards ---------------- */
 
-function Avatar({ initials, size = 48 }: { initials: string; size?: number }) {
+function Avatar({ initials, avatarUrl, size = 48 }: { initials: string; avatarUrl?: string; size?: number }) {
   return (
     <div
       className="grid shrink-0 place-items-center rounded-2xl border border-[color:var(--cm-border)] bg-gradient-to-br from-[color:var(--cm-panel)] to-[color:var(--cm-card)] font-display font-bold text-[color:var(--cm-accent)]"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
-      {initials}
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="h-full w-full rounded-[inherit] object-cover" />
+      ) : (
+        initials
+      )}
     </div>
   );
 }
@@ -916,36 +896,20 @@ function LangFlag({ lang }: { lang: string }) {
   );
 }
 
-function PortfolioStrip() {
-  return (
-    <div className="mt-3 grid grid-cols-3 gap-1.5">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="aspect-[4/3] rounded-lg border border-[color:var(--cm-border)] bg-gradient-to-br from-[color:var(--cm-panel)] via-[color:var(--cm-card)] to-[color:var(--cm-input)]"
-        >
-          <div className="flex h-full items-end justify-start p-1.5">
-            <span className="rounded bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold text-[color:var(--cm-text-2)]">
-              Art {i + 1}
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function UserCard({
   profile,
   onSponsorshipOptions,
   onAddFriend,
+  onContact,
+  contacting,
 }: {
   profile: Profile;
   onSponsorshipOptions: (profile: Profile) => void;
   onAddFriend: (profile: Profile) => void;
+  onContact: (profile: Profile) => void;
+  contacting: boolean;
 }) {
   const isCreator = profile.role === "Content creator";
-  const isArtist = profile.role === "Artist" || profile.role === "Illustrator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
   const mainGenres = profile.genres.filter((g) => GENRES.includes(g));
   const subGenres = profile.genres.filter((g) => !GENRES.includes(g)).slice(0, 3);
@@ -954,7 +918,7 @@ function UserCard({
       className="group flex h-full flex-col rounded-[18px] border border-[color:var(--cm-border)] bg-[color:var(--cm-card)] p-[18px] transition hover:border-[color:var(--cm-border-hover)]"
     >
       <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
-        <Avatar initials={profile.initials} />
+        <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} />
         <div className="min-w-0">
           <h3 className="truncate font-display text-[15px] font-semibold text-[color:var(--cm-text)]">
             {profile.username}
@@ -1001,9 +965,7 @@ function UserCard({
         ))}
       </div>
 
-      {isArtist && profile.portfolioTiles ? <PortfolioStrip /> : null}
-
-      {isCreator && profile.platforms ? (
+      {isCreator ? (
         <button
           type="button"
           onClick={() => onSponsorshipOptions(profile)}
@@ -1017,20 +979,22 @@ function UserCard({
               <div>
                 <div className="text-[13px] font-bold text-[color:var(--cm-text)]">Options de parrainage</div>
                 <div className="mt-0.5 text-[11px] text-[color:var(--cm-text-3)]">
-                  {optionCount} option{optionCount > 1 ? "s" : ""} · {profile.audience}
+                  {optionCount
+                    ? `${optionCount} option${optionCount > 1 ? "s" : ""}${profile.audience ? ` · ${profile.audience}` : ""}`
+                    : "Aucune option publiée"}
                 </div>
               </div>
             </div>
             <ChevronRight size={16} className="text-[color:var(--cm-text-3)]" />
           </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          {profile.platforms?.length ? <div className="mt-3 flex flex-wrap gap-1.5">
             {profile.platforms.map((p) => (
               <span key={p} className="inline-flex items-center gap-1 rounded-full bg-[color:var(--cm-input)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--cm-text-2)]">
                 <PlatformIcon name={p} />
                 {p}
               </span>
             ))}
-          </div>
+          </div> : null}
         </button>
       ) : null}
 
@@ -1048,14 +1012,16 @@ function UserCard({
         >
           View profile <ChevronRight size={14} />
         </Link>
-        <Link
-          to="/messages"
+        <button
+          type="button"
+          onClick={() => onContact(profile)}
+          disabled={contacting}
           aria-label="Contacter"
           title="Contacter"
-          className="grid h-10 w-10 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] transition hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)]"
+          className="grid h-10 w-10 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] transition hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] disabled:cursor-wait disabled:opacity-50"
         >
           <MessageSquare size={14} />
-        </Link>
+        </button>
         <button
           aria-label="Ajouter en ami"
           title="Ajouter en ami"
@@ -1073,16 +1039,20 @@ function UserRow({
   profile,
   onSponsorshipOptions,
   onAddFriend,
+  onContact,
+  contacting,
 }: {
   profile: Profile;
   onSponsorshipOptions: (profile: Profile) => void;
   onAddFriend: (profile: Profile) => void;
+  onContact: (profile: Profile) => void;
+  contacting: boolean;
 }) {
   const isCreator = profile.role === "Content creator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
   return (
     <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border border-[color:var(--cm-border)] bg-[color:var(--cm-card)] p-4 transition hover:border-[color:var(--cm-border-hover)]">
-      <Avatar initials={profile.initials} size={56} />
+      <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} size={56} />
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h3 className="truncate font-display text-[15px] font-semibold">{profile.username}</h3>
@@ -1115,14 +1085,16 @@ function UserRow({
         ) : null}
       </div>
       <div className="flex items-center gap-2">
-        <Link
-          to="/messages"
+        <button
+          type="button"
+          onClick={() => onContact(profile)}
+          disabled={contacting}
           aria-label="Contacter"
           title="Contacter"
-          className="hidden h-9 w-9 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] md:grid"
+          className="hidden h-9 w-9 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] disabled:cursor-wait disabled:opacity-50 md:grid"
         >
           <MessageSquare size={14} />
-        </Link>
+        </button>
         <button
           aria-label="Ajouter en ami"
           title="Ajouter en ami"
@@ -1344,13 +1316,20 @@ function CreatorNumberField({
 
 function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: () => void }) {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const confirm = () => {
-    // Vraie demande d'ami (Supabase) : le destinataire la reçoit dans son onglet Amis.
-    sendFriendRequestDb(profile.id)
-      .then(() => setSent(true))
-      .catch((err) => setError(err instanceof Error ? err.message : "Envoi impossible."));
-    sendFriendRequest({ recipient: profile.username });
+  const confirm = async () => {
+    if (sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await sendFriendRequestDb(profile.id);
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Envoi impossible.");
+    } finally {
+      setSending(false);
+    }
   };
   return (
     <div
@@ -1386,7 +1365,7 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
         ) : (
           <>
             <div className="flex items-center gap-3">
-              <Avatar initials={profile.initials} size={44} />
+              <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} size={44} />
               <div className="min-w-0">
                 <h3 className="truncate font-display text-[16px] font-bold text-[color:var(--cm-text)]">
                   Ajouter en ami ?
@@ -1400,6 +1379,11 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
               Envoyer une demande d'ami à <span className="font-bold text-[color:var(--cm-text)]">{profile.username}</span> ?
               Il pourra l'accepter ou la refuser depuis ses notifications.
             </p>
+            {error ? (
+              <p role="alert" className="mt-3 text-[12px] font-semibold text-red-300">
+                {error}
+              </p>
+            ) : null}
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1410,10 +1394,11 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
               </button>
               <button
                 type="button"
-                onClick={confirm}
-                className="h-11 rounded-lg bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)]"
+                onClick={() => void confirm()}
+                disabled={sending}
+                className="h-11 rounded-lg bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)] disabled:cursor-wait disabled:opacity-60"
               >
-                Envoyer la demande
+                {sending ? "Envoi…" : "Envoyer la demande"}
               </button>
             </div>
           </>
@@ -1426,9 +1411,13 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
 function CreatorSponsorshipOptionsModal({
   profile,
   onClose,
+  onContact,
+  contacting,
 }: {
   profile: Profile;
   onClose: () => void;
+  onContact: (profile: Profile) => void;
+  contacting: boolean;
 }) {
   const options = profile.sponsorshipOptions ?? [];
 
@@ -1438,11 +1427,11 @@ function CreatorSponsorshipOptionsModal({
       <div className="relative max-h-[86vh] w-full max-w-[900px] overflow-hidden rounded-[24px] border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-[color:var(--cm-border)] px-6 py-5">
           <div className="flex items-start gap-3">
-            <Avatar initials={profile.initials} size={48} />
+            <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} size={48} />
             <div>
               <h2 className="font-display text-[24px] font-bold text-[color:var(--cm-text)]">Options de parrainage</h2>
               <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">
-                {profile.username} · {profile.audience} · {profile.platforms?.join(", ")}
+                {[profile.username, profile.audience, profile.platforms?.join(", ")].filter(Boolean).join(" · ")}
               </p>
             </div>
           </div>
@@ -1478,9 +1467,11 @@ function CreatorSponsorshipOptionsModal({
                   </div>
                   <button
                     type="button"
-                    className="mt-5 h-10 w-full rounded-xl bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] hover:bg-[color:var(--cm-accent-hover)]"
+                    onClick={() => onContact(profile)}
+                    disabled={contacting}
+                    className="mt-5 h-10 w-full rounded-xl bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] hover:bg-[color:var(--cm-accent-hover)] disabled:cursor-wait disabled:opacity-60"
                   >
-                    Sélectionner cette option
+                    {contacting ? "Ouverture…" : "Sélectionner cette option"}
                   </button>
                 </article>
               ))}

@@ -318,7 +318,12 @@ function IllustrationsPage() {
   const gallery = [...realArts];
 
   function toggleSave(id: string) {
-    setSaved((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSaved((savedIds) => {
+      const next = new Set(savedIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   // Esc to close modals
@@ -406,7 +411,7 @@ function IllustrationsPage() {
           onContact={() => {
             if (openArt.authorId) {
               void startConversationWith(openArt.authorId)
-                .then(() => navigate({ to: "/messages", search: { conversation: undefined } }))
+                .then((conversation) => navigate({ to: "/messages", search: { conversation } }))
                 .catch(() => setContact(openArt));
             } else setContact(openArt);
           }}

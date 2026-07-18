@@ -166,7 +166,7 @@ function Avatar({ label, online, size = 40 }: { label: string; online?: boolean;
 
 /* ------------------------------ main page -------------------------------- */
 
-function MessagesPage() {
+function MessagesPage({ initialConversationId }: { initialConversationId?: string }) {
   const rail: RailKey = "base";
   const [baseTab, setBaseTab] = useState<BaseTab>("amis");
   const [activeConv, setActiveConv] = useState<string | null>(null);
@@ -218,6 +218,12 @@ function MessagesPage() {
     refreshConversations();
   }, []);
 
+  useEffect(() => {
+    if (!initialConversationId) return;
+    setBaseTab("amis");
+    setActiveConv(initialConversationId);
+  }, [initialConversationId]);
+
   const activeFriend = friends.find((f) => f.id === activeConv) ?? null;
 
   const toUi = (m: { id: string; sender_id: string; content: string; image_url: string | null; created_at: string }): UiMessage => ({
@@ -265,7 +271,7 @@ function MessagesPage() {
       unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConv, baseTab, uid]);
+  }, [activeConv, baseTab, uid, activeFriend?.name]);
 
   const handleSend = (text: string) => {
     if (!activeConv || !text.trim()) return;
