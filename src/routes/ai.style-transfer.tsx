@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { MANGA_STYLES } from "@/lib/manga-styles";
+import { loadCustomMangaStyles, type CustomMangaStyle } from "@/lib/custom-manga-styles";
+import { CustomStyleModal } from "@/components/cma/CustomStyleModal";
 import type { StyleTransferResult } from "@/server-functions/style-transfer-image";
 import { authJsonHeaders } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
@@ -23,11 +25,8 @@ export const Route = createFileRoute("/ai/style-transfer")({
   component: StyleTransferPage,
 });
 
-const CUSTOM_STYLE = "custom";
-
 type StyleTransferSnapshot = {
   targetStyleId?: string;
-  customStyleImages?: string[];
   baseImage?: string | null;
   result?: StyleTransferResult | null;
 };
@@ -43,7 +42,8 @@ function fileToDataUrl(file: File): Promise<string> {
 
 function StyleTransferPage() {
   const [targetStyleId, setTargetStyleId] = useState<string>(MANGA_STYLES[0].id);
-  const [customStyleImages, setCustomStyleImages] = useState<string[]>([]);
+  const [customStyles, setCustomStyles] = useState<CustomMangaStyle[]>([]);
+  const [createStyleOpen, setCreateStyleOpen] = useState(false);
   const [baseImage, setBaseImage] = useState<string | null>(null);
   const [result, setResult] = useState<StyleTransferResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,38 +55,31 @@ function StyleTransferPage() {
     const snap = loadSession<StyleTransferSnapshot>("style-transfer");
     if (snap) {
       setTargetStyleId(snap.targetStyleId ?? MANGA_STYLES[0].id);
-      setCustomStyleImages(snap.customStyleImages ?? []);
       setBaseImage(snap.baseImage ?? null);
       if (snap.result) setResult(snap.result);
     }
     setLoaded(true);
+    void loadCustomMangaStyles().then(setCustomStyles);
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
     saveSession<StyleTransferSnapshot>("style-transfer", {
       targetStyleId,
-      customStyleImages,
       baseImage,
       result,
     });
-  }, [loaded, targetStyleId, customStyleImages, baseImage, result]);
+  }, [loaded, targetStyleId, baseImage, result]);
 
-  const isCustom = targetStyleId === CUSTOM_STYLE;
+  const activeCustomStyle = customStyles.find((style) => style.id === targetStyleId);
+  const isCustom = Boolean(activeCustomStyle);
   const activeStyle = MANGA_STYLES.find((style) => style.id === targetStyleId);
-  const canGenerate = Boolean(baseImage) && (!isCustom || customStyleImages.length > 0);
+  const canGenerate = Boolean(baseImage && (activeStyle || activeCustomStyle));
 
   const importBase = async (files: FileList | null) => {
     const file = Array.from(files ?? []).find((f) => f.type.startsWith("image/"));
     if (!file) return;
     setBaseImage(await fileToDataUrl(file));
-  };
-
-  const importCustomStyles = async (files: FileList | null) => {
-    const imageFiles = Array.from(files ?? []).filter((f) => f.type.startsWith("image/"));
-    if (!imageFiles.length) return;
-    const urls = await Promise.all(imageFiles.slice(0, 8).map((file) => fileToDataUrl(file)));
-    setCustomStyleImages((current) => [...current, ...urls].slice(0, 8));
   };
 
   const generate = async () => {
@@ -99,10 +92,10 @@ function StyleTransferPage() {
         headers: await authJsonHeaders(),
         body: JSON.stringify({
           baseImageDataUrl: baseImage,
-          styleId: isCustom ? CUSTOM_STYLE : targetStyleId,
-          styleName: isCustom ? "Style personnalisé" : (activeStyle?.name ?? ""),
+          styleId: targetStyleId,
+          styleName: activeCustomStyle?.name ?? activeStyle?.name ?? "",
           styleDescription: isCustom ? "" : (activeStyle?.description ?? ""),
-          customStyleImages: isCustom ? customStyleImages : [],
+          customStyleImages: activeCustomStyle?.images ?? [],
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -176,16 +169,31 @@ function StyleTransferPage() {
             );
           })}
 
-          {/* "Autre" — custom style from imported images */}
-          <CustomStyleCard
-            selected={isCustom}
-            images={customStyleImages}
-            onSelect={() => setTargetStyleId(CUSTOM_STYLE)}
-            onImport={importCustomStyles}
-            onRemove={(index) =>
-              setCustomStyleImages((current) => current.filter((_, i) => i !== index))
-            }
-          />
+          {customStyles.map((style) => (
+            <button
+              key={style.id}
+              onClick={() => setTargetStyleId(style.id)}
+              className={`flex w-[112px] shrink-0 flex-col gap-2 rounded-[14px] border p-2 transition ${
+                style.id === targetStyleId
+                  ? "border-accent-border bg-accent-soft/30"
+                  : "border-border bg-surface-3 hover:border-accent"
+              }`}
+            >
+              <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
+                <img src={style.images[0]} alt={style.name} className="h-full w-full object-cover" />
+                {style.id === targetStyleId && <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground"><Check className="h-3 w-3" /></span>}
+              </div>
+              <span className="truncate text-center text-[12px] font-bold text-text-primary">{style.name}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setCreateStyleOpen(true)}
+            className="flex w-[112px] shrink-0 flex-col gap-2 rounded-[14px] border border-dashed border-border-strong bg-surface-3 p-2 transition hover:border-accent"
+          >
+            <span className="grid aspect-square w-full place-items-center rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary"><Plus className="h-6 w-6" /></span>
+            <span className="truncate text-center text-[12px] font-bold text-text-primary">Créer un style</span>
+          </button>
         </div>
       </section>
 
@@ -290,91 +298,14 @@ function StyleTransferPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function CustomStyleCard({
-  selected,
-  images,
-  onSelect,
-  onImport,
-  onRemove,
-}: {
-  selected: boolean;
-  images: string[];
-  onSelect: () => void;
-  onImport: (files: FileList | null) => void;
-  onRemove: (index: number) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  return (
-    <div
-      className={`flex w-[112px] shrink-0 flex-col gap-2 rounded-[14px] border p-2 transition ${
-        selected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3"
-      }`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={(event) => {
-          onImport(event.currentTarget.files);
-          event.currentTarget.value = "";
-          onSelect();
+      <CustomStyleModal
+        open={createStyleOpen}
+        onClose={() => setCreateStyleOpen(false)}
+        onSaved={(style) => {
+          setCustomStyles((current) => [style, ...current]);
+          setTargetStyleId(style.id);
         }}
       />
-      <button
-        onClick={() => {
-          onSelect();
-          if (images.length === 0) inputRef.current?.click();
-        }}
-        className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary hover:border-accent hover:text-accent"
-      >
-        {images[0] ? (
-          <img src={images[0]} alt="Style" className="h-full w-full object-cover" />
-        ) : (
-          <Plus className="h-6 w-6" />
-        )}
-        {images.length > 1 && (
-          <span className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 text-[10px] font-bold text-white">
-            +{images.length - 1}
-          </span>
-        )}
-        {selected && (
-          <span className="absolute left-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground">
-            <Check className="h-3 w-3" />
-          </span>
-        )}
-      </button>
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-bold text-text-primary">Autre</span>
-        <button
-          onClick={() => inputRef.current?.click()}
-          aria-label="Ajouter des images"
-          className="rounded-md p-0.5 text-text-muted hover:text-accent"
-        >
-          <Upload className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {images.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {images.map((image, index) => (
-            <div key={index} className="relative h-6 w-6 overflow-hidden rounded border border-border">
-              <img src={image} alt="" className="h-full w-full object-cover" />
-              <button
-                onClick={() => onRemove(index)}
-                aria-label="Retirer"
-                className="absolute inset-0 grid place-items-center bg-black/50 text-white opacity-0 hover:opacity-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

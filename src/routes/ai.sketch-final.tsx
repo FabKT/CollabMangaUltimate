@@ -2,8 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
-import { createId } from "@/lib/manga-workspace";
-import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
+import { MANGA_STYLES } from "@/lib/manga-styles";
 import type { SketchFinalResult } from "@/server-functions/sketch-final-image";
 import { authJsonHeaders } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
@@ -12,8 +11,6 @@ import {
   Download,
   FileText,
   ImageIcon,
-  Images as ImagesIcon,
-  Palette,
   PenLine,
   Sparkles,
   Trash2,
@@ -27,21 +24,11 @@ export const Route = createFileRoute("/ai/sketch-final")({
   component: SketchFinalPage,
 });
 
-type SketchTab = "sketch" | "style" | "references" | "prompt";
-
-type ElementReference = {
-  id: string;
-  name: string;
-  imageDataUrl: string;
-  description?: string;
-};
+type SketchTab = "raw" | "prompt";
 
 type SketchFinalSnapshot = {
   tab?: SketchTab;
   sketchImage?: string | null;
-  styleId?: string;
-  customStyleImage?: string | null;
-  elementReferences?: ElementReference[];
   notes?: string;
   result?: SketchFinalResult | null;
 };
@@ -84,11 +71,8 @@ function getImageSizeForGeneration(src: string): Promise<"1024x1536" | "1536x102
 }
 
 function SketchFinalPage() {
-  const [tab, setTab] = useState<SketchTab>("sketch");
+  const [tab, setTab] = useState<SketchTab>("raw");
   const [sketchImage, setSketchImage] = useState<string | null>(null);
-  const [styleId, setStyleId] = useState<string>(DEFAULT_STYLE_ID);
-  const [customStyleImage, setCustomStyleImage] = useState<string | null>(null);
-  const [elementReferences, setElementReferences] = useState<ElementReference[]>([]);
   const [notes, setNotes] = useState("");
   const [result, setResult] = useState<SketchFinalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,11 +83,8 @@ function SketchFinalPage() {
   useEffect(() => {
     const snap = loadSession<SketchFinalSnapshot>("sketch-final");
     if (snap) {
-      setTab(snap.tab ?? "sketch");
+      setTab(snap.tab === "prompt" ? "prompt" : "raw");
       setSketchImage(snap.sketchImage ?? null);
-      setStyleId(snap.styleId ?? DEFAULT_STYLE_ID);
-      setCustomStyleImage(snap.customStyleImage ?? null);
-      setElementReferences(snap.elementReferences ?? []);
       setNotes(snap.notes ?? "");
       if (snap.result) setResult(snap.result);
     }
@@ -115,16 +96,13 @@ function SketchFinalPage() {
     saveSession<SketchFinalSnapshot>("sketch-final", {
       tab,
       sketchImage,
-      styleId,
-      customStyleImage,
-      elementReferences,
       notes,
       result,
     });
-  }, [loaded, tab, sketchImage, styleId, customStyleImage, elementReferences, notes, result]);
+  }, [loaded, tab, sketchImage, notes, result]);
 
-  const activeStyle = MANGA_STYLES.find((style) => style.id === styleId) ?? MANGA_STYLES[0];
-  const canGenerate = Boolean(sketchImage && (customStyleImage || activeStyle?.face));
+  const activeStyle = MANGA_STYLES.find((style) => style.id === DEFAULT_STYLE_ID) ?? MANGA_STYLES[0];
+  const canGenerate = Boolean(sketchImage);
 
   const importSketch = async (files: FileList | null) => {
     const file = Array.from(files ?? []).find((candidate) => candidate.type.startsWith("image/"));
@@ -133,40 +111,19 @@ function SketchFinalPage() {
     setResult(null);
   };
 
-  const importStyle = async (files: FileList | null) => {
-    const file = Array.from(files ?? []).find((candidate) => candidate.type.startsWith("image/"));
-    if (!file) return;
-    setCustomStyleImage(await fileToDataUrl(file));
-  };
-
-  const importElementReferences = async (files: FileList | null) => {
-    const imageFiles = Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
-    if (!imageFiles.length) return;
-    const imported = await Promise.all(
-      imageFiles.slice(0, 6).map(async (file) => ({
-        id: createId("sketch-ref"),
-        name: file.name.replace(/\.[^.]+$/, "") || "Reference",
-        imageDataUrl: await fileToDataUrl(file),
-        description: "",
-      })),
-    );
-    setElementReferences((current) => [...imported, ...current].slice(0, 6));
-  };
-
   const generate = async () => {
     if (!sketchImage) {
-      setTab("sketch");
-      setError("Importe d'abord le croquis.");
+      setTab("raw");
+      setError("Importe d'abord l'image raw.");
       return;
     }
 
     setError(null);
     setIsGenerating(true);
     try {
-      const styleImageDataUrl = customStyleImage ?? (await imageSourceToDataUrl(activeStyle?.face));
+      const styleImageDataUrl = await imageSourceToDataUrl(activeStyle?.face);
       if (!styleImageDataUrl) {
-        setTab("style");
-        throw new Error("Ajoute une image de style final.");
+        throw new Error("Le style de finition par défaut est indisponible.");
       }
 
       const size = await getImageSizeForGeneration(sketchImage);
@@ -177,9 +134,9 @@ function SketchFinalPage() {
           sketchImageDataUrl: sketchImage,
           styleImageDataUrl,
           styleId: activeStyle?.id ?? "custom",
-          styleName: customStyleImage ? "Style personnalise" : (activeStyle?.name ?? "Style final"),
-          styleDescription: customStyleImage ? "" : (activeStyle?.description ?? ""),
-          elementReferences,
+          styleName: activeStyle?.name ?? "Style final",
+          styleDescription: activeStyle?.description ?? "",
+          elementReferences: [],
           notes: notes.trim(),
           size,
         }),
@@ -209,7 +166,7 @@ function SketchFinalPage() {
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
         title="Raw to Final"
-        description="Transforme un croquis en image finale en verrouillant la composition, le style et les references d'elements."
+        description="Transforme une image raw en rendu final tout en conservant sa composition et son cadrage."
         actions={
           <button
             onClick={generate}
@@ -227,9 +184,7 @@ function SketchFinalPage() {
           <div className="flex items-center gap-1 border-b border-border p-3">
             {(
               [
-                { id: "sketch", label: "Croquis", icon: PenLine },
-                { id: "style", label: "Style", icon: Palette },
-                { id: "references", label: "Elements", icon: ImagesIcon },
+                { id: "raw", label: "Raw", icon: PenLine },
                 { id: "prompt", label: "Prompt", icon: FileText },
               ] as const
             ).map((entry) => (
@@ -249,16 +204,16 @@ function SketchFinalPage() {
           </div>
 
           <div className="scroll-dark min-h-[420px] flex-1 overflow-y-auto p-4">
-            {tab === "sketch" && (
+            {tab === "raw" && (
               <div className="flex flex-col gap-3">
                 <SectionIntro
-                  title="Image A - croquis"
-                  text="Le croquis controle la composition, la pose, l'expression, la camera, les bulles et tous les placements."
+                  title="Image raw"
+                  text="L'image raw contrôle la composition, la pose, l'expression, la caméra, les bulles et tous les placements."
                 />
                 <UploadPreview
                   image={sketchImage}
-                  title="Importer le croquis"
-                  emptyText="Glisse le croquis ici"
+                  title="Importer l'image raw"
+                  emptyText="Glisse l'image raw ici"
                   onImport={importSketch}
                   onRemove={() => {
                     setSketchImage(null);
@@ -266,37 +221,6 @@ function SketchFinalPage() {
                   }}
                 />
               </div>
-            )}
-
-            {tab === "style" && (
-              <StyleTab
-                activeStyle={activeStyle}
-                styleId={styleId}
-                customStyleImage={customStyleImage}
-                onSelectStyle={(nextStyle) => {
-                  setStyleId(nextStyle.id);
-                  setCustomStyleImage(null);
-                }}
-                onImportStyle={importStyle}
-                onRemoveCustomStyle={() => setCustomStyleImage(null)}
-              />
-            )}
-
-            {tab === "references" && (
-              <ElementReferencesTab
-                references={elementReferences}
-                onImport={importElementReferences}
-                onUpdate={(id, patch) =>
-                  setElementReferences((current) =>
-                    current.map((reference) =>
-                      reference.id === id ? { ...reference, ...patch } : reference,
-                    ),
-                  )
-                }
-                onRemove={(id) =>
-                  setElementReferences((current) => current.filter((reference) => reference.id !== id))
-                }
-              />
             )}
 
             {tab === "prompt" && (
@@ -314,8 +238,6 @@ function SketchFinalPage() {
                 />
                 <GenerationChecklist
                   hasSketch={Boolean(sketchImage)}
-                  hasStyle={Boolean(customStyleImage || activeStyle?.face)}
-                  referenceCount={elementReferences.length}
                 />
                 <button
                   onClick={generate}
@@ -499,156 +421,14 @@ function UploadPreview({
   );
 }
 
-function StyleTab({
-  activeStyle,
-  styleId,
-  customStyleImage,
-  onSelectStyle,
-  onImportStyle,
-  onRemoveCustomStyle,
-}: {
-  activeStyle?: MangaStyle;
-  styleId: string;
-  customStyleImage: string | null;
-  onSelectStyle: (style: MangaStyle) => void;
-  onImportStyle: (files: FileList | null) => void;
-  onRemoveCustomStyle: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <SectionIntro
-        title="Image B - style final"
-        text="Le style final controle l'encrage, les yeux, les cheveux, les valeurs, la texture et le niveau de finition."
-      />
-      <div className="grid grid-cols-2 gap-3">
-        {MANGA_STYLES.map((style) => {
-          const selected = style.id === styleId && !customStyleImage;
-          return (
-            <button
-              key={style.id}
-              onClick={() => onSelectStyle(style)}
-              className={`flex flex-col gap-2 rounded-[14px] border p-2 transition ${
-                selected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3 hover:border-accent"
-              }`}
-            >
-              <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
-                <img src={style.face} alt={style.name} className="h-full w-full object-cover" />
-                {selected && (
-                  <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground">
-                    <Check className="h-3 w-3" />
-                  </span>
-                )}
-              </div>
-              <span className="truncate text-center text-[12px] font-bold text-text-primary">{style.name}</span>
-            </button>
-          );
-        })}
-      </div>
-      <UploadPreview
-        image={customStyleImage}
-        title="Importer un style final"
-        emptyText={activeStyle ? `Style actuel: ${activeStyle.name}` : "Reference de style obligatoire"}
-        onImport={onImportStyle}
-        onRemove={onRemoveCustomStyle}
-      />
-    </div>
-  );
-}
-
-function ElementReferencesTab({
-  references,
-  onImport,
-  onUpdate,
-  onRemove,
-}: {
-  references: ElementReference[];
-  onImport: (files: FileList | null) => void;
-  onUpdate: (id: string, patch: Partial<ElementReference>) => void;
-  onRemove: (id: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  return (
-    <div className="flex flex-col gap-3">
-      <SectionIntro
-        title="Images C/D/E - elements du croquis"
-        text="Ajoute les personnages, objets, tenues ou decors qui existent deja dans le croquis. Ces images definissent l'identite, pas la pose."
-      />
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={(event) => {
-          onImport(event.currentTarget.files);
-          event.currentTarget.value = "";
-        }}
-      />
-      <button
-        onClick={() => inputRef.current?.click()}
-        className="flex min-h-[72px] w-full flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-2 px-3 text-text-primary hover:border-accent hover:text-accent"
-      >
-        <Upload className="h-5 w-5" />
-        <span className="text-[13px] font-bold">Importer des references d'elements</span>
-      </button>
-
-      {references.length === 0 ? (
-        <div className="rounded-[14px] border border-dashed border-border bg-surface-3/50 p-5 text-center">
-          <ImagesIcon className="mx-auto mb-2 h-5 w-5 text-text-muted" />
-          <p className="text-[13px] font-semibold text-text-secondary">Aucune reference ajoutee</p>
-        </div>
-      ) : (
-        references.map((reference, index) => (
-          <div key={reference.id} className="rounded-[14px] border border-border bg-surface-3 p-3">
-            <div className="flex gap-3">
-              <div className="h-[78px] w-[78px] shrink-0 overflow-hidden rounded-[10px] border border-border bg-surface-2">
-                <img src={reference.imageDataUrl} alt={reference.name} className="h-full w-full object-cover" />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-bold text-text-primary">
-                      Image {String.fromCharCode(67 + index)} - {reference.name}
-                    </p>
-                    <p className="text-[11px] text-text-muted">Identite de l'element uniquement</p>
-                  </div>
-                  <button
-                    onClick={() => onRemove(reference.id)}
-                    aria-label="Supprimer"
-                    className="rounded-md p-1 text-text-muted hover:text-danger"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                <textarea
-                  value={reference.description ?? ""}
-                  onChange={(event) => onUpdate(reference.id, { description: event.target.value })}
-                  rows={2}
-                  placeholder="Ex: visage du heros, uniforme, arme, decor au fond..."
-                  className="w-full resize-none rounded-[10px] border border-border bg-input px-3 py-2 text-[12px] leading-5 text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
-                />
-              </div>
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
 function GenerationChecklist({
   hasSketch,
-  hasStyle,
-  referenceCount,
 }: {
   hasSketch: boolean;
-  hasStyle: boolean;
-  referenceCount: number;
 }) {
   const items = [
-    { label: "Croquis importe", done: hasSketch },
-    { label: "Style final pret", done: hasStyle },
-    { label: `${referenceCount} reference${referenceCount > 1 ? "s" : ""} d'element`, done: true },
+    { label: "Image raw importée", done: hasSketch },
+    { label: "Cadrage de sortie conservé", done: hasSketch },
   ];
   return (
     <div className="rounded-[14px] border border-border bg-surface-3 p-3">

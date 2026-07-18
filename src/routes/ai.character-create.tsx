@@ -7,6 +7,8 @@ import type { CharacterImageResult } from "@/server-functions/character-image";
 import { authJsonHeaders } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
+import { loadCustomMangaStyles, type CustomMangaStyle } from "@/lib/custom-manga-styles";
+import { CustomStyleModal } from "@/components/cma/CustomStyleModal";
 import {
   Palette,
   FileText,
@@ -14,12 +16,12 @@ import {
   Upload,
   Trash2,
   Wand2,
-  Copy,
   Check,
   Download,
   X,
   Sparkles,
   ImageIcon,
+  Plus,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ai/character-create")({
@@ -42,7 +44,6 @@ type CharacterSessionSnapshot = {
   styleId?: string;
   identityReference?: CharacterReference | null;
   references?: CharacterReference[];
-  styleImages?: Record<string, string>;
   prompt?: string;
   result?: CharacterImageResult | null;
 };
@@ -76,7 +77,8 @@ async function imageSourceToDataUrl(src?: string) {
 function CharacterCreatePage() {
   const [tab, setTab] = useState<"style" | "references" | "prompt">("style");
   const [styleId, setStyleId] = useState<string>(DEFAULT_STYLE_ID);
-  const [styleImages, setStyleImages] = useState<Record<string, string>>({});
+  const [customStyles, setCustomStyles] = useState<CustomMangaStyle[]>([]);
+  const [createStyleOpen, setCreateStyleOpen] = useState(false);
   const [identityReference, setIdentityReference] = useState<CharacterReference | null>(null);
   const [references, setReferences] = useState<CharacterReference[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -84,7 +86,6 @@ function CharacterCreatePage() {
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [lightbox, setLightbox] = useState(false);
-  const [copiedStyle, setCopiedStyle] = useState<string | null>(null);
   const [confirmStyle, setConfirmStyle] = useState<MangaStyle | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -93,13 +94,13 @@ function CharacterCreatePage() {
     if (snap) {
       setTab(snap.tab ?? "style");
       setStyleId(snap.styleId ?? DEFAULT_STYLE_ID);
-      setStyleImages(snap.styleImages ?? {});
       setIdentityReference(snap.identityReference ?? null);
       setReferences(snap.references ?? []);
       setPrompt(snap.prompt ?? "");
       if (snap.result) setResult(snap.result);
     }
     setLoaded(true);
+    void loadCustomMangaStyles().then(setCustomStyles);
   }, []);
 
   useEffect(() => {
@@ -107,15 +108,15 @@ function CharacterCreatePage() {
     saveSession<CharacterSessionSnapshot>("character-create", {
       tab,
       styleId,
-      styleImages,
       identityReference,
       references,
       prompt,
       result,
     });
-  }, [loaded, tab, styleId, styleImages, identityReference, references, prompt, result]);
+  }, [loaded, tab, styleId, identityReference, references, prompt, result]);
 
-  const activeStyle = STYLES.find((style) => style.id === styleId) ?? STYLES[0];
+  const activeStyle = STYLES.find((style) => style.id === styleId);
+  const activeCustomStyle = customStyles.find((style) => style.id === styleId);
 
   const importIdentityReference = async (files: FileList | null) => {
     const file = Array.from(files ?? []).find((f) => f.type.startsWith("image/"));
@@ -142,23 +143,6 @@ function CharacterCreatePage() {
     setReferences((current) => [...imported, ...current]);
   };
 
-  const importStyleImage = async (files: FileList | null) => {
-    const file = Array.from(files ?? []).find((f) => f.type.startsWith("image/"));
-    if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    setStyleImages((current) => ({ ...current, [styleId]: dataUrl }));
-  };
-
-  const copyStylePrompt = async (style: MangaStyle) => {
-    try {
-      await navigator.clipboard.writeText(style.samplePrompt);
-      setCopiedStyle(style.id);
-      window.setTimeout(() => setCopiedStyle(null), 1500);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
-
   const generate = async () => {
     if (!identityReference?.imageDataUrl) {
       setTab("references");
@@ -168,11 +152,10 @@ function CharacterCreatePage() {
     setError(null);
     setIsGenerating(true);
     try {
+      const selectedStyle = activeStyle ?? STYLES[0];
       const [defaultStyleImageDataUrl, structureImageDataUrl] = await Promise.all([
-        styleImages[activeStyle.id]
-          ? Promise.resolve(styleImages[activeStyle.id])
-          : imageSourceToDataUrl(activeStyle.face),
-        imageSourceToDataUrl(activeStyle.card),
+        activeCustomStyle ? Promise.resolve(activeCustomStyle.images[0]) : imageSourceToDataUrl(selectedStyle.face),
+        imageSourceToDataUrl(selectedStyle.card),
       ]);
       const response = await fetch("/api/character/generate", {
         method: "POST",
@@ -181,10 +164,11 @@ function CharacterCreatePage() {
           prompt: prompt.trim(),
           identityImageDataUrl: identityReference.imageDataUrl,
           identityReferenceName: identityReference.name,
-          styleId: activeStyle.id,
-          styleName: activeStyle.name,
-          styleDescription: activeStyle.description,
+          styleId,
+          styleName: activeCustomStyle?.name ?? selectedStyle.name,
+          styleDescription: activeCustomStyle ? "Style personnalisé défini par la bibliothèque d'images." : selectedStyle.description,
           styleImageDataUrl: defaultStyleImageDataUrl,
+          styleReferenceImages: activeCustomStyle?.images ?? [],
           structureImageDataUrl,
           references,
         }),
@@ -262,7 +246,7 @@ function CharacterCreatePage() {
                       >
                         <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
                           <img
-                            src={styleImages[style.id] ?? style.face}
+                            src={style.face}
                             alt={style.name}
                             className="h-full w-full object-cover"
                           />
@@ -278,26 +262,31 @@ function CharacterCreatePage() {
                       </button>
                     );
                   })}
-                </div>
-
-                <div className="rounded-[14px] border border-border bg-surface-3 p-3">
-                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                    {activeStyle.name} — image de référence (optionnel)
-                  </div>
-                  <StyleImageImporter
-                    onImport={importStyleImage}
-                    hasImage={Boolean(styleImages[styleId])}
-                  />
+                  {customStyles.map((style) => {
+                    const selected = style.id === styleId;
+                    return (
+                      <button
+                        key={style.id}
+                        onClick={() => setStyleId(style.id)}
+                        className={`flex flex-col gap-2 rounded-[14px] border p-2 transition ${
+                          selected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3 hover:border-accent"
+                        }`}
+                      >
+                        <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
+                          <img src={style.images[0]} alt={style.name} className="h-full w-full object-cover" />
+                          {selected && <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground"><Check className="h-3 w-3" /></span>}
+                        </div>
+                        <span className="truncate text-center text-[12px] font-bold text-text-primary">{style.name}</span>
+                      </button>
+                    );
+                  })}
                   <button
-                    onClick={() => void copyStylePrompt(activeStyle)}
-                    className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-border bg-surface-2 px-2 py-1.5 text-[11px] font-bold text-text-secondary hover:border-accent hover:text-accent"
+                    type="button"
+                    onClick={() => setCreateStyleOpen(true)}
+                    className="flex flex-col gap-2 rounded-[14px] border border-dashed border-border-strong bg-surface-3 p-2 transition hover:border-accent"
                   >
-                    {copiedStyle === activeStyle.id ? (
-                      <Check className="h-3.5 w-3.5 text-accent" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5" />
-                    )}
-                    {copiedStyle === activeStyle.id ? "Prompt copié" : "Copier le prompt de ce style"}
+                    <span className="grid aspect-square w-full place-items-center rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary"><Plus className="h-6 w-6" /></span>
+                    <span className="truncate text-center text-[12px] font-bold text-text-primary">Créer un style</span>
                   </button>
                 </div>
               </div>
@@ -489,37 +478,14 @@ function CharacterCreatePage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function StyleImageImporter({
-  onImport,
-  hasImage,
-}: {
-  onImport: (files: FileList | null) => void;
-  hasImage: boolean;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  return (
-    <div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(event) => {
-          onImport(event.currentTarget.files);
-          event.currentTarget.value = "";
+      <CustomStyleModal
+        open={createStyleOpen}
+        onClose={() => setCreateStyleOpen(false)}
+        onSaved={(style) => {
+          setCustomStyles((current) => [style, ...current]);
+          setStyleId(style.id);
         }}
       />
-      <button
-        onClick={() => inputRef.current?.click()}
-        className="flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-[12px] font-bold text-text-secondary hover:border-accent hover:text-accent"
-      >
-        <Upload className="h-4 w-4" />
-        {hasImage ? "Remplacer l'image de style" : "Importer l'image de style"}
-      </button>
     </div>
   );
 }

@@ -34,6 +34,7 @@ const characterInputSchema = z.object({
   styleName: z.string().default("Style actuel"),
   styleDescription: z.string().default(""),
   styleImageDataUrl: z.string().optional(),
+  styleReferenceImages: z.array(z.string()).default([]),
   structureImageDataUrl: z.string().optional(),
   references: z.array(referenceSchema).default([]),
 });
@@ -169,6 +170,7 @@ export async function requestPulseNoteCharacterImage(
       styleName: input.styleName,
       styleDescription: input.styleDescription,
       styleImageDataUrl: input.styleImageDataUrl,
+      styleReferenceImages: input.styleReferenceImages,
       structureImageDataUrl: input.structureImageDataUrl,
       references: input.references,
     }),
