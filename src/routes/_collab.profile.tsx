@@ -26,15 +26,28 @@ import {
 } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
 import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
-import { addSponsorOption, listSponsorOptions, type SponsorOption } from "@/lib/sponsorship-options";
+import { addSponsorOption, listSponsorOptions, updateSponsorOption, type SponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
+import {
+  DEFAULT_PROFILE_PREFERENCES,
+  loadProfilePreferences,
+  saveProfilePreferences,
+  type ProfilePreferences,
+} from "@/lib/profile-preferences";
+import {
+  DEFAULT_PROFILE_IDENTITY,
+  type ProfileType,
+  type PublicProfileIdentity,
+} from "@/lib/profile-identity";
 
 /** Projection minimale d'un projet Studio (stocké en IndexedDB). */
 type StudioProjectLite = {
   id: string;
   title: string;
+  synopsis?: string;
+  coverUrl?: string;
   status: string;
   genres: string[];
   chapters: unknown[];
@@ -44,11 +57,9 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
-  Bell,
   BookOpen,
   Check,
   ChevronDown,
-  Copy,
   Edit3,
   Eye,
   Globe2,
@@ -83,118 +94,9 @@ export const Route = createFileRoute("/_collab/profile")({
   component: OwnProfilePage,
 });
 
-type ProfileType = "creator" | "content";
 type ViewMode = "own" | "public";
 type AddKind = "project" | "sponsorship" | "announcement" | "illustration" | "proposition";
 type ProfileWorkflow = "invite" | "patronage" | "follow" | "friend";
-export type PublicProfileIdentity = {
-  displayName: string;
-  username: string;
-  initials: string;
-  tagline: string;
-  profileType: ProfileType;
-  mainRole?: string;
-  secondaryRole?: string;
-  languages?: string[];
-  avatarUrl?: string;
-  bannerUrl?: string;
-};
-
-const DEFAULT_PROFILE_IDENTITY: PublicProfileIdentity = {
-  displayName: "Mon profil",
-  username: "",
-  initials: "…",
-  tagline: "",
-  profileType: "creator",
-};
-
-const PUBLIC_PROFILE_FIXTURES: Record<string, PublicProfileIdentity> = {
-  u1: {
-    displayName: "InkWave Studio",
-    username: "@inkwave_studio",
-    initials: "IW",
-    tagline: "Dessinateur seinen, encrage intense et compositions urbaines dramatiques.",
-    profileType: "creator",
-    mainRole: "Dessinateur",
-  },
-  u2: {
-    displayName: "Nova Scriptor",
-    username: "@nova_scriptor",
-    initials: "NS",
-    tagline: "Scénariste shonen, worldbuilding et systèmes de pouvoirs sur le long terme.",
-    profileType: "creator",
-    mainRole: "Scénariste",
-  },
-  u3: {
-    displayName: "PanelPulse",
-    username: "@panelpulse",
-    initials: "PP",
-    tagline: "Créateur de contenu manga, reviews hebdomadaires et mise en avant de projets indépendants.",
-    profileType: "content",
-    mainRole: "Créateur de contenu",
-  },
-  u4: {
-    displayName: "Sakura Lines",
-    username: "@sakura_lines",
-    initials: "SL",
-    tagline: "Décors manga, rues nocturnes, intérieurs et ambiance slice of life.",
-    profileType: "creator",
-    mainRole: "Dessinateur",
-  },
-  u5: {
-    displayName: "Lorekeeper",
-    username: "@lorekeeper",
-    initials: "LK",
-    tagline: "Scénariste orienté lore, factions, chronologies et arcs longs.",
-    profileType: "creator",
-    mainRole: "Scénariste",
-  },
-  u6: {
-    displayName: "Bento Reader",
-    username: "@bento_reader",
-    initials: "BR",
-    tagline: "Lecteur bêta, retours structurés chapitre par chapitre et notes de rythme.",
-    profileType: "creator",
-    mainRole: "Lecteur",
-  },
-  u7: {
-    displayName: "Kaiju Hex",
-    username: "@kaiju_hex",
-    initials: "KH",
-    tagline: "Illustrateur de créatures, mecha et couvertures à silhouette forte.",
-    profileType: "creator",
-    mainRole: "Dessinateur",
-  },
-  u8: {
-    displayName: "Storycraft HQ",
-    username: "@storycraft_hq",
-    initials: "SC",
-    tagline: "Studio éditorial manga, anthologies seinen et recrutement d'équipes créatives.",
-    profileType: "creator",
-    mainRole: "Scénariste",
-  },
-  u9: {
-    displayName: "Midori Talks",
-    username: "@midori_talks",
-    initials: "MT",
-    tagline: "Créatrice de contenu, essais vidéo sur le shojo classique et le josei moderne.",
-    profileType: "content",
-    mainRole: "Créateur de contenu",
-  },
-};
-
-export function getPublicProfileIdentity(profileId: string): PublicProfileIdentity {
-  return PUBLIC_PROFILE_FIXTURES[profileId] ?? {
-    ...DEFAULT_PROFILE_IDENTITY,
-    displayName: profileId
-      .split(/[-_]/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ") || DEFAULT_PROFILE_IDENTITY.displayName,
-    username: profileId ? `@${profileId}` : DEFAULT_PROFILE_IDENTITY.username,
-  };
-}
-
 const PROFILE_ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"] as const;
 const PROFILE_LANGUAGES = [
   "Français",
@@ -211,6 +113,36 @@ const PROFILE_LANGUAGES = [
   "हिन्दी",
 ] as const;
 const PROFILE_VISIBILITY_OPTIONS = ["Public", "Privé", "Sur invitation"] as const;
+
+async function persistProfileIdentity(displayName: string, username: string): Promise<void> {
+  if (!supabase) throw new Error("Supabase n'est pas configuré.");
+  const cleanUsername = username.trim().replace(/^@/, "");
+  if (!displayName.trim() || !cleanUsername) throw new Error("Le nom et le nom d'utilisateur sont obligatoires.");
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData.session?.user;
+  if (!user) throw new Error("Connecte-toi pour modifier ton profil.");
+  const { error: authError } = await supabase.auth.updateUser({
+    data: { display_name: displayName.trim(), username: cleanUsername },
+  });
+  if (authError) throw authError;
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ display_name: displayName.trim(), username: cleanUsername })
+    .eq("id", user.id);
+  if (profileError) throw profileError;
+}
+
+async function compressCoverImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1400;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/webp", 0.84);
+}
 
 function OwnProfilePage() {
   return <ProfilePage />;
@@ -247,6 +179,7 @@ function ProfilePage({
   const [identityRefreshKey, setIdentityRefreshKey] = useState(0);
   // Id Supabase du profil affiché (le mien en own ; celui visité en public).
   const [shownUserId, setShownUserId] = useState<string | null>(null);
+  const [preferences, setPreferences] = useState<ProfilePreferences>(DEFAULT_PROFILE_PREFERENCES);
 
   const identityFromProfile = (p: {
     username: string;
@@ -322,9 +255,12 @@ function ProfilePage({
     return () => {
       cancelled = true;
     };
-  }, [publicLocked, identityRefreshKey, profileId]);
+  }, [publicLocked, identityRefreshKey, profileId, identity.username]);
 
-  const effectiveIdentity = liveIdentity ?? identity;
+  const baseIdentity = liveIdentity ?? identity;
+  const effectiveIdentity = publicLocked
+    ? baseIdentity
+    : { ...baseIdentity, tagline: preferences.bio, languages: preferences.languages };
   const effectiveMainRole =
     effectiveIdentity.mainRole ??
     (profileType === "content" ? "Créateur de contenu" : "Dessinateur");
@@ -372,8 +308,32 @@ function ProfilePage({
   const [editSponsorship, setEditSponsorship] = useState<string | null>(null);
   const [workflowOpen, setWorkflowOpen] = useState<ProfileWorkflow | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [available, setAvailable] = useState(true);
   const [contacting, setContacting] = useState(false);
+
+  useEffect(() => {
+    if (!publicLocked) setPreferences(loadProfilePreferences(shownUserId));
+  }, [publicLocked, shownUserId]);
+
+  const updatePreferences = (next: ProfilePreferences) => {
+    setPreferences(next);
+    if (!publicLocked) saveProfilePreferences(next, shownUserId);
+  };
+
+  const showFeedback = (message: string) => {
+    setFeedback(message);
+    window.setTimeout(() => setFeedback(null), 3200);
+  };
+
+  const copyProfileLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      showFeedback("Lien du profil copié.");
+    } catch {
+      showFeedback("Impossible de copier le lien.");
+    }
+  };
+
+  const available = publicLocked ? true : preferences.available;
 
   const openConversation = async () => {
     if (contacting) return;
@@ -431,7 +391,8 @@ function ProfilePage({
           onEdit={() => setEditOpen(true)}
           onAdd={setAddOpen}
           available={available}
-          onAvailabilityChange={setAvailable}
+          onAvailabilityChange={(value) => updatePreferences({ ...preferences, available: value })}
+          onCopyLink={() => void copyProfileLink()}
           onInvite={() => setWorkflowOpen("invite")}
           onPatronage={() => setWorkflowOpen("patronage")}
           onFollow={() => setWorkflowOpen("follow")}
@@ -467,9 +428,13 @@ function ProfilePage({
                   mainRole={effectiveMainRole}
                   secondaryRole={effectiveSecondaryRole}
                   available={available}
+                  visibility={preferences.visibility}
+                  sponsorshipStatus={preferences.sponsorshipStatus}
                   options={myOptions}
                   onAdd={setAddOpen}
-                  onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
+          projects={myProjects}
+          onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
+          onEditSponsorship={setEditSponsorship}
                 />
               </Tabs.Content>
               <Tabs.Content value="projects">
@@ -479,6 +444,7 @@ function ProfilePage({
                   projects={myProjects}
                   onAdd={() => setAddOpen("project")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Project", source: "own" })}
+                  onOpenProject={() => void navigate({ to: "/studio" })}
                 />
               </Tabs.Content>
               <Tabs.Content value="illustrations">
@@ -511,6 +477,7 @@ function ProfilePage({
                   options={myOptions}
                   onAdd={() => setAddOpen("sponsorship")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Sponsorship option", source: "own" })}
+                  onManage={setEditSponsorship}
                 />
               </Tabs.Content>
               {mode === "own" && (
@@ -522,7 +489,13 @@ function ProfilePage({
                     <FavoritesTab favorites={favorites} onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "favorite" })} />
                   </Tabs.Content>
                   <Tabs.Content value="account">
-                    <AccountTab profileType={profileType} onIdentityChange={() => setIdentityRefreshKey((k) => k + 1)} />
+                    <AccountTab
+                      identity={effectiveIdentity}
+                      preferences={preferences}
+                      onPreferencesChange={updatePreferences}
+                      onIdentityChange={() => setIdentityRefreshKey((k) => k + 1)}
+                      onFeedback={showFeedback}
+                    />
                   </Tabs.Content>
                 </>
               )}
@@ -535,6 +508,9 @@ function ProfilePage({
         open={editOpen}
         onClose={() => setEditOpen(false)}
         profileType={profileType}
+        identity={effectiveIdentity}
+        preferences={preferences}
+        onPreferencesChange={updatePreferences}
         onIdentityChange={() => setIdentityRefreshKey((k) => k + 1)}
         onProfileTypeChange={setProfileType}
       />
@@ -862,6 +838,7 @@ function ProfileHeader({
   onAdd,
   available,
   onAvailabilityChange,
+  onCopyLink,
   onInvite,
   onPatronage,
   onFollow,
@@ -878,6 +855,7 @@ function ProfileHeader({
   onAdd: (kind: AddKind) => void;
   available: boolean;
   onAvailabilityChange: (available: boolean) => void;
+  onCopyLink: () => void;
   onInvite: () => void;
   onPatronage: () => void;
   onFollow: () => void;
@@ -979,7 +957,7 @@ function ProfileHeader({
                 Edit Profile
               </PrimaryButton>
               <CreateDropdown profileType={profileType} onSelect={onAdd} />
-              <GhostButton icon={<Link2 size={16} />}>Copy Link</GhostButton>
+              <GhostButton icon={<Link2 size={16} />} onClick={onCopyLink}>Copy Link</GhostButton>
             </>
           ) : profileType === "content" ? (
             <>
@@ -1006,7 +984,6 @@ function CreateDropdown({ profileType, onSelect }: { profileType: ProfileType; o
   const items = [
     { label: "Create Project", kind: "project" as const },
     profileType === "content" ? { label: "Add service", kind: "sponsorship" as const } : null,
-    { label: "Create Sponsorship Announcement", kind: "announcement" as const },
     { label: "Upload Illustration", kind: "illustration" as const },
     { label: "Create Collaboration Announcement", kind: "announcement" as const },
     { label: "Create Idea", kind: "proposition" as const },
@@ -1102,9 +1079,13 @@ function OverviewTab({
   mainRole,
   secondaryRole,
   available,
+  visibility,
+  sponsorshipStatus,
   onAdd,
   onDetails,
   options,
+  projects,
+  onEditSponsorship,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
@@ -1112,9 +1093,13 @@ function OverviewTab({
   mainRole: string;
   secondaryRole?: string;
   available: boolean;
+  visibility: string;
+  sponsorshipStatus: string;
   onAdd: (kind: AddKind) => void;
   onDetails: (title: string, kind: string) => void;
   options?: SponsorOption[];
+  projects?: StudioProjectLite[];
+  onEditSponsorship: (title: string) => void;
 }) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -1126,13 +1111,15 @@ function OverviewTab({
           mainRole={mainRole}
           secondaryRole={secondaryRole}
           available={available}
+          visibility={visibility}
+          sponsorshipStatus={sponsorshipStatus}
         />
       </div>
       <div className="lg:col-span-2 space-y-6">
         {profileType === "creator" ? (
-          <ProjectShowcase mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} />
+          <ProjectShowcase projects={projects} mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} />
         ) : (
-          <SponsorshipShowcase mode={mode} options={options} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} />
+          <SponsorshipShowcase mode={mode} options={options} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} onManage={onEditSponsorship} />
         )}
       </div>
     </div>
@@ -1146,6 +1133,8 @@ function BioPanel({
   mainRole,
   secondaryRole,
   available,
+  visibility,
+  sponsorshipStatus,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
@@ -1153,6 +1142,8 @@ function BioPanel({
   mainRole: string;
   secondaryRole?: string;
   available: boolean;
+  visibility: string;
+  sponsorshipStatus: string;
 }) {
   const publicBio = identity.tagline.trim() || "Cet utilisateur n'a pas encore renseigné sa bio.";
   const languages = identity.languages ?? (mode === "own" ? ["English", "French", "Japanese"] : []);
@@ -1160,9 +1151,7 @@ function BioPanel({
     <Panel>
       <SectionTitle title="About" />
       <p className="text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
-        {mode === "public"
-          ? publicBio
-          : "Présente ton parcours, ton univers et ce que tu recherches actuellement."}
+        {publicBio}
       </p>
 
       <div className="mt-6 space-y-4">
@@ -1179,26 +1168,12 @@ function BioPanel({
           <Chip tone={available ? "active" : "neutral"}>{available ? "Open to collaborations" : "Unavailable"}</Chip>
         </InfoRow>
         {profileType === "content" && mode === "own" ? (
-          <>
-            <InfoRow label="Platforms">
-              <Chip>YouTube</Chip>
-              <Chip>TikTok</Chip>
-              <Chip>Instagram</Chip>
-            </InfoRow>
-            <InfoRow label="Content formats">
-              <Chip>Review</Chip>
-              <Chip>Analysis</Chip>
-              <Chip>Short</Chip>
-            </InfoRow>
-            <InfoRow label="Sponsorships">
-              <Chip tone="active">Accepting</Chip>
-            </InfoRow>
-          </>
+          <InfoRow label="Sponsorships"><Chip tone="active">{sponsorshipStatus}</Chip></InfoRow>
         ) : null}
 
         {mode === "own" && (
           <InfoRow label="Profile visibility">
-            <Chip tone="active">Public</Chip>
+            <Chip tone="active">{visibility}</Chip>
           </InfoRow>
         )}
         {mode === "public" && (
@@ -1222,9 +1197,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 
 /* ---------------- Project showcase ---------------- */
 
-function ProjectShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
-  // Production : aucun projet d'exemple — la vitrine se remplit avec les vrais projets.
-  const projects: { title: string; role: string; status: string; chapters: string }[] = [];
+function ProjectShowcase({ projects = [], mode, onAdd, onDetails }: { projects?: StudioProjectLite[]; mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
 
   return (
     <Panel>
@@ -1238,8 +1211,21 @@ function ProjectShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: ()
         }
       />
       <div className="space-y-4">
-        {projects.map((p, i) => (
-          <ProjectCard key={i} project={p} mode={mode} onDetails={() => onDetails(p.title)} />
+        {projects.length === 0 ? (
+          <EmptyState title="No projects yet" text="Les projets créés dans le Studio apparaîtront ici." />
+        ) : projects.slice(0, 3).map((p) => (
+          <ProjectCard
+            key={p.id}
+            project={{
+              title: p.title,
+              description: p.synopsis,
+              coverUrl: p.coverUrl,
+              role: "Propriétaire",
+              status: p.status,
+              chapters: `${p.chapters.length} chapitre${p.chapters.length > 1 ? "s" : ""}`,
+            }}
+            onDetails={() => onDetails(p.title)}
+          />
         ))}
       </div>
     </Panel>
@@ -1248,12 +1234,12 @@ function ProjectShowcase({ mode, onAdd, onDetails }: { mode: ViewMode; onAdd: ()
 
 function ProjectCard({
   project,
-  mode,
   onDetails,
+  onOpen = onDetails,
 }: {
-  project: { title: string; role: string; status: string; chapters: string };
-  mode: ViewMode;
+  project: { title: string; description?: string; coverUrl?: string; role: string; status: string; chapters: string };
   onDetails: () => void;
+  onOpen?: () => void;
 }) {
   return (
     <Card padding={16}>
@@ -1265,7 +1251,7 @@ function ProjectCard({
             border: "1px solid rgba(133,154,206,0.18)",
           }}
         >
-          <ImageIcon size={22} color="#5E6A90" />
+          {project.coverUrl ? <img src={project.coverUrl} alt={project.title} className="h-full w-full object-cover" /> : <ImageIcon size={22} color="#5E6A90" />}
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -1278,7 +1264,7 @@ function ProjectCard({
             <Chip tone={project.status === "Recruiting" ? "warning" : "info"}>{project.status}</Chip>
           </div>
           <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
-            Short project description placeholder — two lines max, giving readers a taste of the tone and premise before opening full details.
+            {project.description || "Synopsis à compléter."}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <Chip>Role · {project.role}</Chip>
@@ -1286,7 +1272,7 @@ function ProjectCard({
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-start gap-2 sm:flex-col sm:items-stretch sm:justify-center">
-          <PrimaryButton icon={<BookOpen size={16} />}>View Project</PrimaryButton>
+          <PrimaryButton icon={<BookOpen size={16} />} onClick={onOpen}>View Project</PrimaryButton>
           <SecondaryButton onClick={onDetails}>View Details</SecondaryButton>
         </div>
       </div>
@@ -1296,15 +1282,8 @@ function ProjectCard({
 
 /* ---------------- Sponsorship showcase ---------------- */
 
-function SponsorshipShowcase({ mode, options, onAdd, onDetails }: { mode: ViewMode; options?: SponsorOption[]; onAdd: () => void; onDetails: (title: string) => void }) {
-  // Mêmes services réels que l'onglet Sponsorship (data créée par le créateur).
-  const cards = (options ?? []).map((o) => ({
-    title: o.format,
-    price: `€${o.price}`,
-    type: o.format,
-    video: o.videoType,
-    duration: o.duration,
-  }));
+function SponsorshipShowcase({ mode, options, onAdd, onDetails, onManage }: { mode: ViewMode; options?: SponsorOption[]; onAdd: () => void; onDetails: (title: string) => void; onManage: (title: string) => void }) {
+  const cards = options ?? [];
   return (
     <Panel>
       <SectionTitle
@@ -1319,7 +1298,7 @@ function SponsorshipShowcase({ mode, options, onAdd, onDetails }: { mode: ViewMo
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {cards.map((o, i) => (
-            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.title)} />
+            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.format)} onManage={() => onManage(o.format)} />
           ))}
         </div>
       )}
@@ -1331,23 +1310,25 @@ function SponsorshipCard({
   opt,
   mode,
   onDetails,
+  onManage,
 }: {
-  opt: { title: string; price: string; type: string; video: string; duration: string };
+  opt: SponsorOption;
   mode: ViewMode;
   onDetails: () => void;
+  onManage: () => void;
 }) {
   return (
     <Card padding={20}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-[16px] font-extrabold leading-[22px]" style={{ color: "#F7FAFF" }}>
-            {opt.title}
+            {opt.format}
           </h3>
           <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
-            Short service description placeholder — two lines maximum before View Details.
+            {opt.description || "Service de parrainage."}
           </p>
         </div>
-        <IconButton label="Save"><Check size={16} /></IconButton>
+        <IconButton label="Save" onClick={() => addFavorite("Sponsorship option", opt.format)}><Check size={16} /></IconButton>
       </div>
 
       <div className="mt-4">
@@ -1356,27 +1337,25 @@ function SponsorshipCard({
           className="cm-sora mt-1 text-[24px] font-extrabold leading-none"
           style={{ color: "#39FF88" }}
         >
-          {opt.price}
+          €{opt.price}
         </div>
       </div>
 
       <div className="mt-4">
         <MetaLabel>Platforms</MetaLabel>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <Chip>YouTube</Chip>
-          <Chip>TikTok</Chip>
-          <Chip>Instagram</Chip>
+          {opt.platforms.map((platform) => <Chip key={platform}>{platform}</Chip>)}
         </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
           <MetaLabel>Type</MetaLabel>
-          <div className="mt-1 text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{opt.type}</div>
+          <div className="mt-1 text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{opt.format}</div>
         </div>
         <div>
           <MetaLabel>Video</MetaLabel>
-          <div className="mt-1 text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{opt.video}</div>
+          <div className="mt-1 text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{opt.videoType}</div>
         </div>
         <div>
           <MetaLabel>Duration</MetaLabel>
@@ -1391,7 +1370,7 @@ function SponsorshipCard({
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <SecondaryButton onClick={onDetails}>View Details</SecondaryButton>
         {mode === "own" ? (
-          <PrimaryButton icon={<Edit3 size={16} />}>Manage</PrimaryButton>
+          <PrimaryButton icon={<Edit3 size={16} />} onClick={onManage}>Manage</PrimaryButton>
         ) : (
           <PrimaryButton icon={<Send size={16} />}>Propose Sponsorship</PrimaryButton>
         )}
@@ -1408,20 +1387,31 @@ function ProjectsTab({
   projects,
   onAdd,
   onDetails,
+  onOpenProject,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
   projects?: StudioProjectLite[];
   onAdd: () => void;
   onDetails: (title: string) => void;
+  onOpenProject: () => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Tous");
   // Projets réels créés dans le Studio (IndexedDB).
   const projectCards = (projects ?? []).map((p) => ({
     title: p.title,
     role: "Propriétaire",
     status: p.status,
+    description: p.synopsis,
+    coverUrl: p.coverUrl,
     chapters: `${p.chapters.length} chapitre${p.chapters.length > 1 ? "s" : ""}`,
   }));
+  const visibleProjects = projectCards.filter((project) => {
+    const matchesQuery = project.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+    const matchesStatus = statusFilter === "Tous" || project.status === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
 
   return (
     <Panel>
@@ -1434,18 +1424,29 @@ function ProjectsTab({
         }
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <input className="cm-input" style={{ height: 40, width: 180 }} placeholder="Search projects" />
-            <SecondaryButton>Filters</SecondaryButton>
+            <input className="cm-input" style={{ height: 40, width: 180 }} placeholder="Search projects" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild><SecondaryButton>Filters</SecondaryButton></DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content align="end" sideOffset={8} className="z-50 min-w-[180px] rounded-[14px] p-1.5" style={{ background: "#0B1430", border: "1px solid rgba(133,154,206,0.28)" }}>
+                  {["Tous", ...Array.from(new Set(projectCards.map((project) => project.status)))].map((status) => (
+                    <DropdownMenu.Item key={status} onSelect={() => setStatusFilter(status)} className="cursor-pointer rounded-[10px] px-3 py-2 text-[13px] font-semibold outline-none data-[highlighted]:bg-white/5" style={{ color: status === statusFilter ? "#39FF88" : "#B8C4E5" }}>
+                      {status}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
             {mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Project</SecondaryButton>}
           </div>
         }
       />
-      {projectCards.length === 0 ? (
-        <EmptyState title="No projects yet" text="Les projets créés dans le Studio apparaîtront ici." />
+      {visibleProjects.length === 0 ? (
+        <EmptyState title={projectCards.length ? "Aucun résultat" : "No projects yet"} text={projectCards.length ? "Modifie la recherche ou le filtre actif." : "Les projets créés dans le Studio apparaîtront ici."} />
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {projectCards.map((p, i) => (
-            <ProjectCard key={i} project={p} mode={mode} onDetails={() => onDetails(p.title)} />
+          {visibleProjects.map((p, i) => (
+            <ProjectCard key={i} project={p} onDetails={() => onDetails(p.title)} onOpen={onOpenProject} />
           ))}
         </div>
       )}
@@ -1529,9 +1530,9 @@ function IllustrationCard({
           View Details
         </SecondaryButton>
         {mode === "own" ? (
-          <IconButton label="Edit"><Edit3 size={16} /></IconButton>
+          <IconButton label="Details" onClick={onDetails}><Eye size={16} /></IconButton>
         ) : (
-          <IconButton label="Save"><Check size={16} /></IconButton>
+          <IconButton label="Save" onClick={() => addFavorite("Illustration", title)}><Check size={16} /></IconButton>
         )}
       </div>
     </Card>
@@ -1771,14 +1772,8 @@ function AnnouncementsTab({ mode, announcements, onDetails, onAdd }: { mode: Vie
   );
 }
 
-function SponsorshipTab({ mode, options, onDetails, onAdd }: { mode: ViewMode; options?: SponsorOption[]; onDetails: (title: string) => void; onAdd: () => void }) {
-  const cards = (options ?? []).map((o) => ({
-    title: o.format,
-    price: `€${o.price}`,
-    type: o.format,
-    video: o.videoType,
-    duration: o.duration,
-  }));
+function SponsorshipTab({ mode, options, onDetails, onAdd, onManage }: { mode: ViewMode; options?: SponsorOption[]; onDetails: (title: string) => void; onAdd: () => void; onManage: (title: string) => void }) {
+  const cards = options ?? [];
   return (
     <Panel>
       <SectionTitle
@@ -1791,7 +1786,7 @@ function SponsorshipTab({ mode, options, onDetails, onAdd }: { mode: ViewMode; o
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {cards.map((o, i) => (
-            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.title)} />
+            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.format)} onManage={() => onManage(o.format)} />
           ))}
         </div>
       )}
@@ -1799,69 +1794,128 @@ function SponsorshipTab({ mode, options, onDetails, onAdd }: { mode: ViewMode; o
   );
 }
 
-function AccountTab({ profileType, onIdentityChange }: { profileType: ProfileType; onIdentityChange?: () => void }) {
-  const [accountAvailable, setAccountAvailable] = useState(true);
+function AccountTab({
+  identity,
+  preferences,
+  onPreferencesChange,
+  onIdentityChange,
+  onFeedback,
+}: {
+  identity: PublicProfileIdentity;
+  preferences: ProfilePreferences;
+  onPreferencesChange: (preferences: ProfilePreferences) => void;
+  onIdentityChange?: () => void;
+  onFeedback: (message: string) => void;
+}) {
+  const navigate = useNavigate();
+  const [displayName, setDisplayName] = useState(identity.displayName);
+  const [username, setUsername] = useState(identity.username);
+  const [saving, setSaving] = useState(false);
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    setDisplayName(identity.displayName);
+    setUsername(identity.username);
+  }, [identity.displayName, identity.username]);
+
+  useEffect(() => {
+    void supabase?.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? ""));
+  }, []);
+
+  const saveIdentity = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await persistProfileIdentity(displayName, username);
+      onIdentityChange?.();
+      onFeedback("Informations du profil enregistrées.");
+    } catch (error) {
+      onFeedback(error instanceof Error ? error.message : "Enregistrement impossible.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendPasswordReset = async () => {
+    if (!supabase) return onFeedback("Supabase n'est pas configuré.");
+    const { data } = await supabase.auth.getSession();
+    const email = data.session?.user.email;
+    if (!email) return onFeedback("Aucune adresse e-mail n'est associée à ce compte.");
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/profile` });
+    onFeedback(error ? error.message : "E-mail de réinitialisation envoyé.");
+  };
+
+  const saveMainRole = async (role: string) => {
+    try {
+      await updateMyRole(role);
+      onIdentityChange?.();
+      onFeedback("Rôle principal enregistré.");
+    } catch (error) {
+      onFeedback(error instanceof Error ? error.message : "Modification du rôle impossible.");
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Panel>
         <SectionTitle title="Identity" subtitle="Public display information." />
         <div className="space-y-3">
-          <Field label="Display name"><input className="cm-input" defaultValue="Creator display name" /></Field>
-          <Field label="Username"><input className="cm-input" defaultValue="@username" /></Field>
+          <Field label="Display name"><input className="cm-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
+          <Field label="Username"><input className="cm-input" value={username} onChange={(event) => setUsername(event.target.value)} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Avatar"><MediaUploadButton kind="avatar" onDone={onIdentityChange} /></Field>
             <Field label="Banner"><MediaUploadButton kind="banner" onDone={onIdentityChange} /></Field>
           </div>
+          <PrimaryButton full onClick={() => void saveIdentity()}>{saving ? "Enregistrement…" : "Enregistrer l'identité"}</PrimaryButton>
         </div>
       </Panel>
 
       <Panel>
         <SectionTitle title="Profile information" subtitle="Roles, languages and preferences." />
         <div className="space-y-3">
-          <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." /></Field>
+          <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." value={preferences.bio} onChange={(event) => onPreferencesChange({ ...preferences, bio: event.target.value })} /></Field>
           <Field label="Main role">
-            <ProfileSelect defaultValue={profileType === "content" ? "Créateur de contenu" : "Dessinateur"} options={PROFILE_ROLES} />
+            <ProfileSelect defaultValue={identity.mainRole ?? "Dessinateur"} options={PROFILE_ROLES} onChange={(role) => void saveMainRole(role)} />
           </Field>
           <Field label="Languages">
-            <LanguageMultiSelect defaultValues={["English", "Français"]} />
+            <LanguageMultiSelect values={preferences.languages} onChange={(languages) => onPreferencesChange({ ...preferences, languages })} />
           </Field>
-          <AvailabilityEditToggle available={accountAvailable} onChange={setAccountAvailable} />
+          <AvailabilityEditToggle available={preferences.available} onChange={(available) => onPreferencesChange({ ...preferences, available })} />
         </div>
       </Panel>
 
       <Panel>
         <SectionTitle title="Content settings" subtitle="What appears on your public profile." />
         <div className="space-y-3">
-          <ToggleRow label="Show projects" defaultChecked />
-          <ToggleRow label="Show illustrations" defaultChecked />
-          <ToggleRow label="Show ideas" defaultChecked />
-          <ToggleRow label="Show sponsorship options" defaultChecked={profileType === "content"} />
-          <ToggleRow label="Allow project invitations" defaultChecked />
-          <ToggleRow label="Allow direct messages" defaultChecked />
+          <ToggleRow label="Show projects" checked={preferences.showProjects} onChange={(showProjects) => onPreferencesChange({ ...preferences, showProjects })} />
+          <ToggleRow label="Show illustrations" checked={preferences.showIllustrations} onChange={(showIllustrations) => onPreferencesChange({ ...preferences, showIllustrations })} />
+          <ToggleRow label="Show ideas" checked={preferences.showIdeas} onChange={(showIdeas) => onPreferencesChange({ ...preferences, showIdeas })} />
+          <ToggleRow label="Show sponsorship options" checked={preferences.showSponsorships} onChange={(showSponsorships) => onPreferencesChange({ ...preferences, showSponsorships })} />
+          <ToggleRow label="Allow project invitations" checked={preferences.allowInvites} onChange={(allowInvites) => onPreferencesChange({ ...preferences, allowInvites })} />
+          <ToggleRow label="Allow direct messages" checked={preferences.allowMessages} onChange={(allowMessages) => onPreferencesChange({ ...preferences, allowMessages })} />
         </div>
       </Panel>
 
       <Panel>
         <SectionTitle title="CollabManga AI plan" subtitle="Usage and billing." />
         <div className="grid grid-cols-2 gap-3">
-          <Stat label="Current plan" value="Creator" />
-          <Stat label="Credits left" value="1 240" />
-          <Stat label="Used this month" value="360" />
-          <Stat label="Renewal" value="Sep 24" />
+          <Stat label="Current plan" value="See details" />
+          <Stat label="Credits" value="Live balance" />
+          <Stat label="Usage" value="Current period" />
+          <Stat label="Renewal" value="Billing page" />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <PrimaryButton>Manage plan</PrimaryButton>
-          <SecondaryButton>Billing history</SecondaryButton>
+          <PrimaryButton onClick={() => void navigate({ to: "/ai/plan" })}>Manage plan</PrimaryButton>
+          <SecondaryButton onClick={() => void navigate({ to: "/ai/history" })}>Usage history</SecondaryButton>
         </div>
       </Panel>
 
       <Panel className="lg:col-span-2">
         <SectionTitle title="Security" subtitle="Account access and notifications." />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Field label="Email"><input className="cm-input" defaultValue="you@collabmanga.app" /></Field>
-          <Field label="Password"><SecondaryButton full>Change password</SecondaryButton></Field>
-          <Field label="Notifications"><SecondaryButton full>Manage notifications</SecondaryButton></Field>
+          <Field label="Email"><input className="cm-input" value={email || "Adresse du compte connecté"} readOnly /></Field>
+          <Field label="Password"><SecondaryButton full onClick={() => void sendPasswordReset()}>Change password</SecondaryButton></Field>
+          <Field label="Notifications"><SecondaryButton full onClick={() => void navigate({ to: "/notifications" })}>Manage notifications</SecondaryButton></Field>
         </div>
       </Panel>
     </div>
@@ -1895,12 +1949,17 @@ function ProfileSelect({
   );
 }
 
-function LanguageMultiSelect({ defaultValues = [] }: { defaultValues?: string[] }) {
-  const [selected, setSelected] = useState<string[]>(defaultValues);
+function LanguageMultiSelect({ defaultValues = [], values, onChange }: { defaultValues?: string[]; values?: string[]; onChange?: (languages: string[]) => void }) {
+  const [selected, setSelected] = useState<string[]>(values ?? defaultValues);
+  useEffect(() => {
+    if (values) setSelected(values);
+  }, [values]);
   const toggle = (language: string) =>
-    setSelected((prev) =>
-      prev.includes(language) ? prev.filter((l) => l !== language) : [...prev, language],
-    );
+    setSelected((prev) => {
+      const next = prev.includes(language) ? prev.filter((l) => l !== language) : [...prev, language];
+      onChange?.(next);
+      return next;
+    });
   return (
     <>
       <div className="flex flex-wrap gap-2">
@@ -1975,8 +2034,14 @@ function AvailabilityEditToggle({
   );
 }
 
-function ToggleRow({ label, defaultChecked }: { label: string; defaultChecked?: boolean }) {
-  const [on, setOn] = useState(!!defaultChecked);
+function ToggleRow({ label, defaultChecked, checked, onChange }: { label: string; defaultChecked?: boolean; checked?: boolean; onChange?: (checked: boolean) => void }) {
+  const [localOn, setLocalOn] = useState(!!defaultChecked);
+  const on = checked ?? localOn;
+  const toggle = () => {
+    const next = !on;
+    if (checked === undefined) setLocalOn(next);
+    onChange?.(next);
+  };
   return (
     <div
       className="flex items-center justify-between rounded-[14px] px-4 py-3"
@@ -1984,7 +2049,8 @@ function ToggleRow({ label, defaultChecked }: { label: string; defaultChecked?: 
     >
       <span className="text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{label}</span>
       <button
-        onClick={() => setOn(!on)}
+        type="button"
+        onClick={toggle}
         aria-pressed={on}
         className="relative h-6 w-11 rounded-full transition-colors"
         style={{
@@ -2108,6 +2174,9 @@ function EditProfileModal({
   open,
   onClose,
   profileType,
+  identity,
+  preferences,
+  onPreferencesChange,
   onIdentityChange,
   onProfileTypeChange,
 }: {
@@ -2115,28 +2184,44 @@ function EditProfileModal({
   onClose: () => void;
   onIdentityChange?: () => void;
   profileType: ProfileType;
+  identity: PublicProfileIdentity;
+  preferences: ProfilePreferences;
+  onPreferencesChange: (preferences: ProfilePreferences) => void;
   onProfileTypeChange?: (type: ProfileType) => void;
 }) {
-  const [available, setAvailable] = useState(true);
+  const [displayName, setDisplayName] = useState(identity.displayName);
+  const [username, setUsername] = useState(identity.username);
+  const [draftPreferences, setDraftPreferences] = useState(preferences);
   const [mainRole, setMainRole] = useState(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
   const [secondaryRole, setSecondaryRole] = useState("Scénariste");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     if (!open) return;
+    setDisplayName(identity.displayName);
+    setUsername(identity.username);
+    setDraftPreferences(preferences);
+    setSaveError("");
     setMainRole(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
     void getMyRoles().then((r) => {
       if (r.role) setMainRole(r.role);
       if (r.secondaryRole) setSecondaryRole(r.secondaryRole);
     });
-  }, [open, profileType]);
+  }, [open, profileType, identity.displayName, identity.username, preferences]);
 
   const save = async () => {
     setSaving(true);
+    setSaveError("");
     try {
+      await persistProfileIdentity(displayName, username);
       await updateMyRole(mainRole, secondaryRole);
-    } catch {
-      /* pas connecté — le choix reste local pour cette session */
+      onPreferencesChange(draftPreferences);
+      onIdentityChange?.();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Enregistrement impossible.");
+      setSaving(false);
+      return;
     }
     onProfileTypeChange?.(mainRole === "Créateur de contenu" ? "content" : "creator");
     setSaving(false);
@@ -2159,20 +2244,20 @@ function EditProfileModal({
       <div className="space-y-8">
         <FormGroup title="Identity">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Display name"><input className="cm-input" defaultValue="Creator display name" /></Field>
-            <Field label="Username"><input className="cm-input" defaultValue="@username" /></Field>
+            <Field label="Display name"><input className="cm-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
+            <Field label="Username"><input className="cm-input" value={username} onChange={(event) => setUsername(event.target.value)} /></Field>
             <Field label="Avatar"><MediaUploadButton kind="avatar" onDone={onIdentityChange} /></Field>
             <Field label="Banner"><MediaUploadButton kind="banner" onDone={onIdentityChange} /></Field>
           </div>
         </FormGroup>
 
         <FormGroup title="About">
-          <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." /></Field>
+          <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." value={draftPreferences.bio} onChange={(event) => setDraftPreferences((current) => ({ ...current, bio: event.target.value }))} /></Field>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="Spoken languages">
-              <LanguageMultiSelect defaultValues={["English", "Français", "日本語"]} />
+              <LanguageMultiSelect values={draftPreferences.languages} onChange={(languages) => setDraftPreferences((current) => ({ ...current, languages }))} />
             </Field>
-            <AvailabilityEditToggle available={available} onChange={setAvailable} />
+            <AvailabilityEditToggle available={draftPreferences.available} onChange={(available) => setDraftPreferences((current) => ({ ...current, available }))} />
             <Field label="Main role">
               <ProfileSelect key={`main-${mainRole}`} defaultValue={mainRole} options={PROFILE_ROLES} onChange={setMainRole} />
             </Field>
@@ -2185,11 +2270,11 @@ function EditProfileModal({
         <FormGroup title="Preferences">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="Profile visibility">
-              <ProfileSelect defaultValue="Public" options={PROFILE_VISIBILITY_OPTIONS} />
+              <ProfileSelect key={draftPreferences.visibility} defaultValue={draftPreferences.visibility} options={PROFILE_VISIBILITY_OPTIONS} onChange={(visibility) => setDraftPreferences((current) => ({ ...current, visibility }))} />
             </Field>
             {profileType === "content" && (
               <Field label="Sponsorship settings">
-                <ProfileSelect defaultValue="Accepting sponsorships" options={["Accepting sponsorships", "Paused", "Hidden"]} />
+                <ProfileSelect key={draftPreferences.sponsorshipStatus} defaultValue={draftPreferences.sponsorshipStatus} options={["Accepting sponsorships", "Paused", "Hidden"]} onChange={(sponsorshipStatus) => setDraftPreferences((current) => ({ ...current, sponsorshipStatus }))} />
               </Field>
             )}
           </div>
@@ -2197,14 +2282,18 @@ function EditProfileModal({
 
         <FormGroup title="Genres favoris">
           <div className="space-y-4">
-            <ChoiceRow multi label="Genres" options={["Shonen", "Seinen", "Shojo", "Josei"]} />
+            <ChoiceRow key={`genres-${draftPreferences.favoriteGenres.join("-")}`} multi label="Genres" options={["Shonen", "Seinen", "Shojo", "Josei"]} defaultValues={draftPreferences.favoriteGenres} onChange={(favoriteGenres) => setDraftPreferences((current) => ({ ...current, favoriteGenres }))} />
             <ChoiceRow
+              key={`subgenres-${draftPreferences.favoriteSubgenres.join("-")}`}
               multi
               label="Sous-genres"
+              defaultValues={draftPreferences.favoriteSubgenres}
               options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
+              onChange={(favoriteSubgenres) => setDraftPreferences((current) => ({ ...current, favoriteSubgenres }))}
             />
           </div>
         </FormGroup>
+        {saveError && <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>{saveError}</div>}
       </div>
     </ModalShell>
   );
@@ -2280,15 +2369,17 @@ function ChoiceRow({
   options,
   multi = false,
   defaultValue,
+  defaultValues,
   onChange,
 }: {
   label: string;
   options: string[];
   multi?: boolean;
   defaultValue?: string;
+  defaultValues?: string[];
   onChange?: (selected: string[]) => void;
 }) {
-  const [sel, setSel] = useState<string[]>(defaultValue ? [defaultValue] : []);
+  const [sel, setSel] = useState<string[]>(defaultValues ?? (defaultValue ? [defaultValue] : []));
   const toggle = (o: string) =>
     setSel((prev) => {
       const next = multi
@@ -2324,17 +2415,6 @@ function ChoiceRow({
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function Dropzone() {
-  return (
-    <div
-      className="grid cursor-pointer place-items-center rounded-[16px] px-6 py-10 text-center text-[13px] font-semibold"
-      style={{ background: "#08112B", border: "1px dashed rgba(133,154,206,0.28)", color: "#7F8CB3" }}
-    >
-      Drop files here to upload (or click)
     </div>
   );
 }
@@ -2480,15 +2560,16 @@ function AddSponsorshipModal({
   onCreated?: () => void;
 }) {
   const isEdit = editTitle !== null;
+  const existing = isEdit ? listSponsorOptions().find((option) => option.mode === "creator" && option.format === editTitle) : undefined;
   return (
     <ServiceFormModal
       open={open}
       onClose={onClose}
       title={isEdit ? "Modifier le service" : "Add service"}
       submitLabel={isEdit ? "Enregistrer" : "Confirmer"}
-      initial={isEdit ? { description: editTitle ?? "" } : undefined}
+      initial={existing}
       onSubmit={(values) => {
-        addSponsorOption({
+        const next = {
           mode: "creator",
           format: values.format,
           platforms: values.platforms,
@@ -2502,7 +2583,9 @@ function AddSponsorshipModal({
           chaptersMin: values.chaptersMin,
           chaptersMax: values.chaptersMax,
           language: values.language,
-        });
+        } as const;
+        if (existing) updateSponsorOption(existing.id, next);
+        else addSponsorOption(next);
         addFavorite("Sponsorship option", values.format);
         onCreated?.();
         onClose();
@@ -2571,7 +2654,7 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
       }
     >
       <div className="space-y-6">
-        <ChoiceRow label="Langage" options={["FR", "ENG"]} defaultValue="FR" onChange={(s) => setLanguage(s[0] ?? "FR")} />
+        <ChoiceRow label="Langage" options={["FR", "ENG", "ES", "IT", "JP"]} defaultValue="FR" onChange={(s) => setLanguage(s[0] ?? "FR")} />
         <Field label="Titre">
           <input className="cm-input" placeholder="Titre" value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
@@ -2581,7 +2664,7 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
         <Field label="Description">
           <textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
-        <ChoiceRow label="Statut recherché" options={["Scénariste", "Dessinateur"]} defaultValue="Scénariste" onChange={(s) => setStatusSought(s[0] ?? "")} />
+        <ChoiceRow label="Statut recherché" options={[...PROFILE_ROLES]} defaultValue="Scénariste" onChange={(s) => setStatusSought(s[0] ?? "")} />
         <ToggleRow label="Rémunération" />
         <ChoiceRow label="Engagement" options={["Long terme", "Ponctuel"]} defaultValue="Long terme" />
         <div>
@@ -2768,6 +2851,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
   const [subgenres, setSubgenres] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [coverFiles, setCoverFiles] = useState<File[]>([]);
 
   const submit = async () => {
     if (!name.trim()) { setError("Donne un nom au projet."); return; }
@@ -2776,10 +2860,12 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
     try {
       // Le projet est créé dans le même store que le Studio (IndexedDB).
       const existing = await loadStudioProjects<Record<string, unknown>>();
+      const coverUrl = coverFiles[0] ? await compressCoverImage(coverFiles[0]) : undefined;
       const project = {
         id: `prj-${Date.now()}`,
         title: name.trim(),
         synopsis: synopsis.trim() || "Synopsis à compléter.",
+        coverUrl,
         status: "Draft",
         chaptersCount: 0,
         validatedPages: 0,
@@ -2794,7 +2880,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
       };
       await saveStudioProjects([project, ...existing]);
       addFavorite("Project", name.trim());
-      setName(""); setSynopsis("");
+      setName(""); setSynopsis(""); setCoverFiles([]);
       onCreated?.();
       onClose();
     } catch (err) {
@@ -2818,7 +2904,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
       }
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ClassicImageUploader multiple={false} label="Importer une couverture" />
+        <ClassicImageUploader multiple={false} label="Importer une couverture" onFiles={setCoverFiles} />
         <div className="space-y-4">
           <Field label="Nom du projet"><input className="cm-input" placeholder="Nom du projet" value={name} onChange={(e) => setName(e.target.value)} /></Field>
           <Field label="Synopsis"><textarea className="cm-textarea" placeholder="Synopsis du projet" value={synopsis} onChange={(e) => setSynopsis(e.target.value)} /></Field>
@@ -3052,9 +3138,7 @@ function DetailsModal({
   const isSponsorship = kind === "Sponsorship option";
   // Ses propres publications (mode "own") → pas de contact/postuler ; on garde
   // le contact pour les favoris et lorsqu'on visite un profil public.
-  const showContact = source === "favorite" || mode === "public";
   const canEdit = isSponsorship && source === "own" && mode === "own";
-  const applyLabel = kind === "Project" ? "Apply" : "Contact";
 
   return (
     <ModalShell
@@ -3067,9 +3151,6 @@ function DetailsModal({
           <SecondaryButton onClick={onClose}>Close</SecondaryButton>
           {canEdit && (
             <PrimaryButton onClick={() => onEdit(title)} icon={<Edit3 size={16} />}>Modifier</PrimaryButton>
-          )}
-          {showContact && (
-            <PrimaryButton onClick={onClose} icon={<Send size={16} />}>{applyLabel}</PrimaryButton>
           )}
         </>
       }
