@@ -6,11 +6,12 @@ import {
   ImagePlus,
   Wand2,
   PenLine,
+  ArrowLeftRight,
+  Sparkles,
   UserSquare2,
   Images,
   History,
   CreditCard,
-  Settings,
   Zap,
   ChevronsUpDown,
   Users,
@@ -23,6 +24,7 @@ import { amIAdmin } from "@/server-functions/admin-billing";
 import { getMyBilling } from "@/server-functions/stripe-billing";
 import { onCreditsChanged } from "@/lib/credits-events";
 import { PLANS } from "@/lib/billing-plans";
+import { LanguageSelect, useI18n, type TranslationKey } from "@/lib/i18n";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -35,6 +37,9 @@ const groups: Group[] = [
       { label: "Création de personnage", to: "/ai/character-create", icon: UserPlus },
       { label: "Transfert de style", to: "/ai/style-transfer", icon: Wand2 },
       { label: "Raw to Final", to: "/ai/sketch-final", icon: PenLine },
+      { label: "Swap", to: "/ai/swap", icon: ArrowLeftRight },
+      { label: "Studio libre", to: "/ai/free-studio", icon: Sparkles },
+      { label: "Modification d'image", to: "/ai/image-edit", icon: ImagePlus },
     ],
   },
   {
@@ -46,14 +51,23 @@ const groups: Group[] = [
   },
   {
     title: "Compte",
-    items: [
-      { label: "Plan & Images", to: "/ai/plan", icon: CreditCard },
-      { label: "Paramètres", to: "/ai/settings", icon: Settings },
-    ],
+    items: [{ label: "Plan & Images", to: "/ai/plan", icon: CreditCard }],
   },
 ];
 
+const aiGroupKeys: TranslationKey[] = ["nav.creation", "nav.library", "nav.account"];
+const aiItemKeys: Record<string, TranslationKey> = {
+  "/ai/character-create": "nav.characterCreate",
+  "/ai/style-transfer": "nav.styleTransfer",
+  "/ai/free-studio": "nav.freeStudio",
+  "/ai/image-edit": "nav.imageEdit",
+  "/ai/characters": "nav.characterLibrary",
+  "/ai/history": "nav.history",
+  "/ai/plan": "nav.plan",
+};
+
 export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
+  const { t } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => (to === "/ai" ? pathname === "/ai" : pathname.startsWith(to));
   // Lien admin affiché uniquement pour les administrateurs (vérifié côté serveur).
@@ -76,14 +90,22 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const renderedGroups: Group[] = isAdmin
     ? groups.map((g) =>
         g.title === "Compte"
-          ? { ...g, items: [...g.items, { label: "Admin — Facturation", to: "/ai/admin", icon: ShieldCheck }] }
+          ? {
+              ...g,
+              items: [
+                ...g.items,
+                { label: "Admin — Facturation", to: "/ai/admin", icon: ShieldCheck },
+              ],
+            }
           : g,
       )
     : groups;
 
   // Quota réel de l'abonnement (crédits restants), rafraîchi à la navigation,
   // au retour de focus et après chaque génération.
-  const [quota, setQuota] = useState<{ plan: string; remaining: number; total: number } | null>(null);
+  const [quota, setQuota] = useState<{ plan: string; remaining: number; total: number } | null>(
+    null,
+  );
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -95,7 +117,11 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         const res = await getMyBilling({ data: { accessToken: token } });
         if (cancelled) return;
         if (res.configured && res.subscription?.plan && res.period) {
-          setQuota({ plan: res.subscription.plan, remaining: res.period.remaining, total: res.period.quota });
+          setQuota({
+            plan: res.subscription.plan,
+            remaining: res.period.remaining,
+            total: res.period.quota,
+          });
         } else {
           setQuota(null);
         }
@@ -178,7 +204,10 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         </span>
         <span className="min-w-0 flex-1 text-left">
           <span className="block text-[13px] font-bold leading-tight truncate">CollabCreative</span>
-          <span className="block text-[11px] leading-tight truncate" style={{ color: "var(--text-muted)" }}>
+          <span
+            className="block text-[11px] leading-tight truncate"
+            style={{ color: "var(--text-muted)" }}
+          >
             Espace de travail
           </span>
         </span>
@@ -198,7 +227,12 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
       >
         <span
           className="grid place-items-center shrink-0"
-          style={{ width: 24, height: 24, borderRadius: 8, background: "linear-gradient(135deg,#4ea8ff,#39ff88)" }}
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 8,
+            background: "linear-gradient(135deg,#4ea8ff,#39ff88)",
+          }}
         >
           <Users size={13} color="#04111e" strokeWidth={2.6} />
         </span>
@@ -222,7 +256,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
                   color: "var(--text-muted)",
                 }}
               >
-                {g.title}
+                {t(aiGroupKeys[i])}
               </div>
             )}
             <ul className="flex flex-col gap-0.5">
@@ -255,8 +289,11 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
                       }}
                     >
                       <Icon size={17} strokeWidth={2} className="shrink-0" />
-                      <span className="flex-1 truncate" style={{ font: "600 13px/18px var(--font-sans)" }}>
-                        {it.label}
+                      <span
+                        className="flex-1 truncate"
+                        style={{ font: "600 13px/18px var(--font-sans)" }}
+                      >
+                        {aiItemKeys[it.to] ? t(aiItemKeys[it.to]) : it.label}
                       </span>
                       {it.badge && (
                         <span
@@ -282,6 +319,8 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         ))}
       </nav>
 
+      <LanguageSelect className="cma-input mt-3 !h-9 !w-full" />
+
       {/* Quota réel de l'abonnement (crédits restants) */}
       <div
         className="mt-2"
@@ -293,31 +332,57 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         }}
       >
         <div className="flex items-center justify-between mb-1">
-          <span style={{ font: "700 12px/16px var(--font-sans)" }}>{quota ? PLANS[quota.plan as keyof typeof PLANS]?.label ?? quota.plan : "Aucun plan"}</span>
+          <span style={{ font: "700 12px/16px var(--font-sans)" }}>
+            {quota ? (PLANS[quota.plan as keyof typeof PLANS]?.label ?? quota.plan) : "Aucun plan"}
+          </span>
           {quota && (
-            <span className="cma-chip cma-chip-active" style={{ height: 18, padding: "0 6px", fontSize: 10 }}>
+            <span
+              className="cma-chip cma-chip-active"
+              style={{ height: 18, padding: "0 6px", fontSize: 10 }}
+            >
               Active
             </span>
           )}
         </div>
         <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
           {quota ? (
-            <>Crédits <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{quota.remaining}</span> / {quota.total}</>
+            <>
+              Crédits{" "}
+              <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+                {quota.remaining}
+              </span>{" "}
+              / {quota.total}
+            </>
           ) : (
             "Aucun abonnement actif"
           )}
         </div>
         <div
           className="my-2"
-          style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}
+          style={{
+            height: 5,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.06)",
+            overflow: "hidden",
+          }}
         >
-          <div style={{ width: `${quota && quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0}%`, height: "100%", background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
+          <div
+            style={{
+              width: `${quota && quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0}%`,
+              height: "100%",
+              background: "var(--neon)",
+              boxShadow: "0 0 10px rgba(57,255,136,0.5)",
+            }}
+          />
         </div>
-        <Link to="/ai/plan" className="cma-btn-primary w-full justify-center" style={{ height: 32, fontSize: 12 }}>
+        <Link
+          to="/ai/plan"
+          className="cma-btn-primary w-full justify-center"
+          style={{ height: 32, fontSize: 12 }}
+        >
           {quota ? "Gérer le plan" : "Choisir un plan"}
         </Link>
       </div>
-
     </aside>
   );
 }

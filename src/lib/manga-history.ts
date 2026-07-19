@@ -1,4 +1,5 @@
 import { createId } from "./manga-workspace";
+import type { ImageEditDraft } from "./image-edit-workspace";
 
 /**
  * Generation history store.
@@ -19,6 +20,9 @@ export type MangaHistoryEntry = {
   size: string;
   quality: string;
   createdAt: string;
+  source?: string;
+  title?: string;
+  editContext?: ImageEditDraft;
 };
 
 export type NewMangaHistoryEntry = Omit<MangaHistoryEntry, "id" | "createdAt"> & {
@@ -89,6 +93,49 @@ export async function addHistoryEntry(entry: NewMangaHistoryEntry): Promise<Mang
   await txDone(tx);
   db.close();
   return record;
+}
+
+export async function recordGeneratedImage({
+  source,
+  title,
+  prompt,
+  result,
+  editContext,
+}: {
+  source: string;
+  title: string;
+  prompt?: string;
+  result: {
+    imageUrl?: string;
+    imageDataUrl?: string;
+    finalPrompt?: string;
+    taskType?: string;
+    model?: string;
+    size?: string;
+    quality?: string;
+    createdAt?: string;
+  };
+  editContext?: ImageEditDraft;
+}): Promise<MangaHistoryEntry | null> {
+  const imageUrl = result.imageUrl || result.imageDataUrl;
+  if (!imageUrl) return null;
+
+  const existing = (await loadHistory()).find((entry) => entry.imageUrl === imageUrl);
+  if (existing) return existing;
+
+  return addHistoryEntry({
+    imageUrl,
+    prompt: prompt?.trim() || title,
+    finalPrompt: result.finalPrompt || prompt?.trim() || title,
+    taskType: result.taskType || source,
+    model: result.model || "gpt-image-2",
+    size: result.size || "unknown",
+    quality: result.quality || "high",
+    createdAt: result.createdAt,
+    source,
+    title,
+    editContext,
+  });
 }
 
 export async function removeHistoryEntry(id: string): Promise<void> {

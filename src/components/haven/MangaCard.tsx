@@ -14,13 +14,14 @@ function Rating({ value }: { value: number }) {
 export function MangaCard({
   manga,
   variant = "default",
+  publicMode = false,
 }: {
   manga: CatalogManga;
   variant?: "default" | "editorial";
+  publicMode?: boolean;
 }) {
   const editorial = variant === "editorial";
-  return (
-    <Link to="/manga/$id" params={{ id: manga.id }} className="block h-full">
+  const card = (
       <article className="card-manga group flex h-full flex-col">
         <div className="relative aspect-[3/4] overflow-hidden">
           <img
@@ -70,6 +71,15 @@ export function MangaCard({
           </div>
         </div>
       </article>
+  );
+
+  return publicMode ? (
+    <Link to="/catalog/$id" params={{ id: manga.id }} className="block h-full">
+      {card}
+    </Link>
+  ) : (
+    <Link to="/manga/$id" params={{ id: manga.id }} className="block h-full">
+      {card}
     </Link>
   );
 }

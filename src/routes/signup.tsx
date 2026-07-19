@@ -1,17 +1,26 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import {
+  AC,
+  AuthDivider,
+  AuthError,
+  AuthField,
+  AuthShell,
+  AuthSuccess,
+  GoogleAuthButton,
+} from "@/components/auth/AuthShell";
 import { frenchAuthError } from "@/lib/auth";
-import { AuthShell, AuthField, AuthError, AuthSuccess, AuthDivider, GoogleAuthButton, AC } from "@/components/auth/AuthShell";
+import { useI18n } from "@/lib/i18n";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/signup")({
-  head: () => ({ meta: [{ title: "Inscription — CollabManga" }] }),
+  head: () => ({ meta: [{ title: "Sign up - CollabManga" }] }),
   component: SignupPage,
 });
 
 function SignupPage() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  const { locale, t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -19,75 +28,102 @@ function SignupPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
     setSuccess(null);
-
     if (!supabase) {
-      setError("Le service d'authentification n'est pas configuré.");
-      return;
-    }
-    const name = username.trim();
-    if (name.length < 3) {
-      setError("Le nom d'utilisateur doit contenir au moins 3 caractères.");
-      return;
-    }
-    if (!/^[a-zA-Z0-9_.-]+$/.test(name)) {
-      setError("Le nom d'utilisateur ne peut contenir que des lettres, chiffres, tirets, points et underscores.");
+      setError("Authentication is not configured.");
       return;
     }
     if (password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères.");
+      setError(
+        locale === "fr"
+          ? "Le mot de passe doit contenir au moins 6 caractères."
+          : "The password must contain at least 6 characters.",
+      );
       return;
     }
     if (password !== confirm) {
-      setError("Les deux mots de passe ne correspondent pas.");
+      setError(
+        locale === "fr"
+          ? "Les deux mots de passe ne correspondent pas."
+          : "The passwords do not match.",
+      );
       return;
     }
 
     setLoading(true);
-    // Le trigger DB handle_new_user lit user_metadata.username / display_name
-    // pour créer la ligne `profiles` automatiquement.
-    const { data, error: err } = await supabase.auth.signUp({
+    const temporaryUsername = `pending_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { username: name, display_name: name } },
+      options: {
+        emailRedirectTo: `${window.location.origin}/onboarding`,
+        data: {
+          username: temporaryUsername,
+          display_name: temporaryUsername,
+          site_locale: locale,
+          onboarding_completed: false,
+        },
+      },
     });
     setLoading(false);
 
-    if (err) {
-      setError(frenchAuthError(err.message));
+    if (authError) {
+      setError(frenchAuthError(authError.message));
       return;
     }
     if (data.session) {
-      // Confirmation e-mail désactivée : session immédiate.
-      navigate({ to: "/" });
+      navigate({ to: "/onboarding" });
       return;
     }
-    // Confirmation e-mail requise.
-    setSuccess("Compte créé ! Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.");
+    setSuccess(
+      locale === "fr"
+        ? "Compte créé. Confirme ton adresse e-mail, puis termine la configuration de ton profil."
+        : "Account created. Confirm your email address, then finish setting up your profile.",
+    );
   };
 
   return (
-    <AuthShell title="Inscription" subtitle="Crée ton compte pour lancer tes projets manga et collaborer.">
+    <AuthShell title={t("auth.signup")} subtitle={t("auth.signupSubtitle")}>
       <AuthError message={error} />
       <AuthSuccess message={success} />
       <GoogleAuthButton onError={setError} />
       <AuthDivider />
       <form onSubmit={submit}>
-        <AuthField label="Nom d'utilisateur" type="text" value={username} onChange={setUsername} placeholder="ex. inkwave_studio" autoComplete="username" />
-        <AuthField label="Adresse e-mail" type="email" value={email} onChange={setEmail} placeholder="ton@email.com" autoComplete="email" />
-        <AuthField label="Mot de passe" type="password" value={password} onChange={setPassword} placeholder="6 caractères minimum" autoComplete="new-password" />
-        <AuthField label="Confirmer le mot de passe" type="password" value={confirm} onChange={setConfirm} placeholder="••••••••" autoComplete="new-password" />
+        <AuthField
+          label={t("auth.email")}
+          type="email"
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
+        <AuthField
+          label={t("auth.password")}
+          type="password"
+          value={password}
+          onChange={setPassword}
+          placeholder="6 characters minimum"
+          autoComplete="new-password"
+        />
+        <AuthField
+          label={t("auth.confirmPassword")}
+          type="password"
+          value={confirm}
+          onChange={setConfirm}
+          placeholder="••••••••"
+          autoComplete="new-password"
+        />
         <button type="submit" className="auth-submit" disabled={loading} style={{ marginTop: 6 }}>
-          {loading ? "Création du compte…" : "Créer mon compte"}
+          {loading ? t("auth.creating") : t("auth.create")}
         </button>
       </form>
       <p style={{ margin: "22px 0 0", textAlign: "center", fontSize: 14, color: AC.text2 }}>
-        Déjà un compte ?{" "}
+        {t("auth.hasAccount")}{" "}
         <Link to="/login" className="auth-link">
-          Se connecter
+          {t("auth.login")}
         </Link>
       </p>
     </AuthShell>

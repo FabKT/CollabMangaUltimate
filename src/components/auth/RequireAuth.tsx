@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { useSession } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
 /**
  * Garde d'authentification globale.
@@ -12,13 +12,31 @@ import { useSession } from "@/lib/auth";
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading } = useSession();
-  const navigate = useNavigate();
-
   useEffect(() => {
     if (!loading && !session) {
-      void navigate({ to: "/login" });
+      const destination = `${window.location.pathname}${window.location.search}`;
+      window.location.assign(`/login?redirect=${encodeURIComponent(destination)}`);
     }
-  }, [loading, session, navigate]);
+  }, [loading, session]);
+
+  useEffect(() => {
+    if (loading || !session || !supabase || window.location.pathname === "/onboarding") return;
+    let cancelled = false;
+    void supabase
+      .from("profiles")
+      .select("onboarding_completed")
+      .eq("id", session.user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!cancelled && !error && data && data.onboarding_completed !== true) {
+          const destination = `${window.location.pathname}${window.location.search}`;
+          window.location.assign(`/onboarding?redirect=${encodeURIComponent(destination)}`);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, session]);
 
   if (loading || !session) {
     return (

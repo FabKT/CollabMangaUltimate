@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listAnnouncements } from "@/lib/db";
+import { loadStudioProjects } from "@/lib/studio-projects";
+import { projectAnnouncementFromRecruit, type StudioRecruitLike } from "@/lib/recruit-map";
 import { supabase } from "@/lib/supabase";
 import { addInterested, listInterested } from "@/lib/announcement-interest";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
@@ -493,10 +495,35 @@ function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [dbUsers, setDbUsers] = useState<UserAnnouncement[]>([]);
   const [dbProjects, setDbProjects] = useState<ProjectAnnouncement[]>([]);
+  const [studioProjects, setStudioProjects] = useState<ProjectAnnouncement[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 600);
     return () => clearTimeout(t);
+  }, []);
+
+  // Une annonce ouverte créée dans le Studio est une recherche de
+  // collaborateur, même avant que sa copie Supabase soit disponible.
+  useEffect(() => {
+    type StudioProjectRecruitment = {
+      title: string;
+      genres?: string[];
+      subgenres?: string[];
+      coverDataUrl?: string;
+      recruits?: StudioRecruitLike[];
+    };
+    void loadStudioProjects<StudioProjectRecruitment>().then((projects) => {
+      setStudioProjects(projects.flatMap((project) =>
+        (project.recruits ?? [])
+          .filter((recruit) => recruit.status === "Ouverte")
+          .map((recruit) => projectAnnouncementFromRecruit(recruit, {
+            projectName: project.title,
+            genre: project.genres?.[0],
+            subgenres: project.subgenres,
+            cover: project.coverDataUrl,
+          })),
+      ));
+    }).catch(() => setStudioProjects([]));
   }, []);
 
   // Annonces réelles (Supabase), affichées avant les exemples
@@ -565,12 +592,20 @@ function AnnouncementsPage() {
   }, []);
 
   // Production : uniquement les annonces réelles (Supabase), plus aucun exemple.
+  const projectAnnouncements = useMemo(() => {
+    const keys = new Set(dbProjects.map((item) => `${item.projectName}\u0000${item.title}`.toLocaleLowerCase()));
+    return [
+      ...dbProjects,
+      ...studioProjects.filter((item) => !keys.has(`${item.projectName}\u0000${item.title}`.toLocaleLowerCase())),
+    ];
+  }, [dbProjects, studioProjects]);
+
   const data: Announcement[] =
     filters.target === "project"
       ? [...dbUsers]
       : filters.target === "collaborator"
-        ? [...dbProjects]
-        : [...dbProjects, ...dbUsers];
+        ? [...projectAnnouncements]
+        : [...projectAnnouncements, ...dbUsers];
 
   const filtered = useMemo(() => {
     return data.filter((a) => {
@@ -2128,4 +2163,3 @@ function ToggleSwitchField({
     </button>
   );
 }
-

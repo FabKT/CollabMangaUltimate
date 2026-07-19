@@ -23,6 +23,7 @@ import {
   updateCollaboratorRole,
 } from "@/lib/user-workflows";
 import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
+import { addAnnouncement } from "@/lib/db";
 
 export const Route = createFileRoute("/_collab/studio")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -695,6 +696,19 @@ function ProjectWorkspace({
           onClose={() => setModal(null)}
           onAdd={(recruit) => {
             updateProject((p) => ({ ...p, recruits: [recruit, ...(p.recruits ?? [])], updated: "À l'instant" }));
+            void addAnnouncement({
+              mode: "project",
+              title: recruit.title,
+              hook: recruit.hook,
+              description: recruit.description,
+              language: recruit.language,
+              status_sought: recruit.role,
+              genres: project.genres,
+              subgenres: project.subgenres ?? [],
+              project_title: project.title,
+            }).catch(() => {
+              onWorkflow("Annonce enregistrée dans le projet et disponible localement, mais sa publication en ligne a échoué.");
+            });
             createAnnouncementWorkflow({
               title: recruit.title,
               category: "Recrutement",

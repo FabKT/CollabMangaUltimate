@@ -66,7 +66,13 @@ type StudioCatalogProject = {
   catalogVisible?: boolean;
 };
 
-function CatalogPage() {
+export function CatalogPage({
+  publicMode = false,
+  embedded = false,
+}: {
+  publicMode?: boolean;
+  embedded?: boolean;
+} = {}) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortOption>("Avis décroissants");
   const [languages, setLanguages] = useState<string[]>([]);
@@ -155,7 +161,7 @@ function CatalogPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+    <div className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 ${embedded ? "py-0" : "py-12 sm:py-16"}`}>
       <header className="mb-10">
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">Browse</p>
         <h1 className="font-display text-4xl font-bold text-foreground sm:text-5xl">Catalogue</h1>
@@ -329,7 +335,7 @@ function CatalogPage() {
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((m) => (
-            <MangaCard key={m.id} manga={m} />
+            <MangaCard key={m.id} manga={m} publicMode={publicMode} />
           ))}
         </div>
       )}

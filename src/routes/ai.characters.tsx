@@ -10,6 +10,9 @@ import {
   type MangaCharacterProfile,
 } from "@/lib/manga-workspace";
 import { Check, ImageIcon, Plus, Save, Trash2, Upload, UserSquare2 } from "lucide-react";
+import { recordGeneratedImage } from "@/lib/manga-history";
+import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
+import type { CharacterImageResult } from "@/server-functions/character-image";
 
 export const Route = createFileRoute("/ai/characters")({
   head: () => ({ meta: [{ title: "Character Studio - CollabManga AI" }] }),
@@ -105,6 +108,26 @@ function CharacterStudio() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const targetId = window.localStorage.getItem("collabmanga.ai-job.characters-card.target");
+    if (!targetId || !hasPendingGeneration("characters-card")) return;
+    setCardLoading(true);
+    void resumeDurableGeneration<CharacterImageResult>("characters-card")
+      .then((payload) => {
+        if (!payload) return;
+        const cardUrl = payload.imageDataUrl || payload.imageUrl;
+        if (!cardUrl) return;
+        setCharacters((current) => current.map((character) =>
+          character.id === targetId
+            ? { ...character, cardImageDataUrl: cardUrl, cardImageGeneratedAt: new Date().toISOString(), cardEnabled: true }
+            : character,
+        ));
+        window.localStorage.removeItem("collabmanga.ai-job.characters-card.target");
+      })
+      .catch((error) => setCardError(error instanceof Error ? error.message : "Échec de la récupération de la carte."))
+      .finally(() => setCardLoading(false));
   }, []);
 
   useEffect(() => {
@@ -227,10 +250,11 @@ function CharacterStudio() {
       ]
         .filter(Boolean)
         .join(" | ");
-      const response = await fetch("/api/character/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      window.localStorage.setItem("collabmanga.ai-job.characters-card.target", activeCharacter.id);
+      const payload = await runDurableGeneration<CharacterImageResult>(
+        "characters-card",
+        "/api/character/generate",
+        {
           prompt: profileNotes,
           identityImageDataUrl: referenceImages[0].imageDataUrl,
           identityReferenceName: activeCharacter.name,
@@ -245,19 +269,22 @@ function CharacterStudio() {
             mimeType: image.mimeType,
             description: image.notes,
           })),
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || `Échec de la génération de carte (${response.status}).`);
-      }
+        },
+      );
       const cardUrl = payload.imageDataUrl || payload.imageUrl;
       if (!cardUrl) throw new Error("Le backend n'a renvoyé aucune carte.");
+      void recordGeneratedImage({
+        source: "Bibliotheque de personnages",
+        title: activeCharacter.name,
+        prompt: profileNotes,
+        result: { ...payload, imageUrl: cardUrl },
+      });
       updateActiveCharacter({
         cardImageDataUrl: cardUrl,
         cardImageGeneratedAt: new Date().toISOString(),
         cardEnabled: true,
       });
+      window.localStorage.removeItem("collabmanga.ai-job.characters-card.target");
     } catch (error) {
       setCardError(error instanceof Error ? error.message : "Échec de la génération de carte.");
     } finally {

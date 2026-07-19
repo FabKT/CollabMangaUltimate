@@ -392,28 +392,43 @@ export function PlancheCanvas({
   const interactionRef = useRef<Interaction>(null);
 
   const [tool, setTool] = useState<Tool>("pen");
-  const [format, setFormat] = useState<SheetFormat>(
-    () => loadSession<SheetFormat>("canvas.format") ?? "single",
-  );
+  const [format, setFormat] = useState<SheetFormat>("single");
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [color, setColor] = useState(SWATCHES[0]);
   const [strokeWidth, setStrokeWidth] = useState(WIDTHS[1]);
-  const [elements, setElements] = useState<Element[]>(
-    () => loadSession<Element[]>("canvas.elements") ?? [],
-  );
+  const [elements, setElements] = useState<Element[]>([]);
   const [past, setPast] = useState<Element[][]>([]);
   const [future, setFuture] = useState<Element[][]>([]);
   const [draft, setDraft] = useState<Element | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
 
   useEffect(() => {
-    saveSession("canvas.elements", elements);
-  }, [elements]);
+    let cancelled = false;
+    void Promise.all([
+      loadSession<SheetFormat>("canvas.format"),
+      loadSession<Element[]>("canvas.elements"),
+    ]).then(([savedFormat, savedElements]) => {
+      if (cancelled) return;
+      setFormat(savedFormat === "double" ? "double" : "single");
+      setElements(Array.isArray(savedElements) ? savedElements : []);
+      setWorkspaceLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
-    saveSession("canvas.format", format);
-  }, [format]);
+    if (!workspaceLoaded) return;
+    void saveSession("canvas.elements", elements);
+  }, [elements, workspaceLoaded]);
+  useEffect(() => {
+    if (!workspaceLoaded) return;
+    void saveSession("canvas.format", format);
+  }, [format, workspaceLoaded]);
 
   const commit = useCallback((next: Element[], previous: Element[]) => {
     setPast((p) => [...p, previous]);

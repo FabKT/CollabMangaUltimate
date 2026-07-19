@@ -10,11 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AiRouteImport } from './routes/ai'
 import { Route as CollabRouteImport } from './routes/_collab'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
+import { Route as CatalogIdRouteImport } from './routes/catalog.$id'
+import { Route as ApiGenerationJobsRouteImport } from './routes/api.generation-jobs'
 import { Route as AiSwapRouteImport } from './routes/ai.swap'
 import { Route as AiStyleTransferRouteImport } from './routes/ai.style-transfer'
 import { Route as AiSketchFinalRouteImport } from './routes/ai.sketch-final'
@@ -22,7 +25,9 @@ import { Route as AiSceneRouteImport } from './routes/ai.scene'
 import { Route as AiPromptsRouteImport } from './routes/ai.prompts'
 import { Route as AiPlanRouteImport } from './routes/ai.plan'
 import { Route as AiMangaPageRouteImport } from './routes/ai.manga-page'
+import { Route as AiImageEditRouteImport } from './routes/ai.image-edit'
 import { Route as AiHistoryRouteImport } from './routes/ai.history'
+import { Route as AiFreeStudioRouteImport } from './routes/ai.free-studio'
 import { Route as AiDecorCreateRouteImport } from './routes/ai.decor-create'
 import { Route as AiDecorRouteImport } from './routes/ai.decor'
 import { Route as AiCharactersRouteImport } from './routes/ai.characters'
@@ -43,6 +48,7 @@ import { Route as CollabDiscoverRouteImport } from './routes/_collab.discover'
 import { Route as CollabConnectRouteImport } from './routes/_collab.connect'
 import { Route as CollabChatRouteImport } from './routes/_collab.chat'
 import { Route as CollabAnnouncementsRouteImport } from './routes/_collab.announcements'
+import { Route as CatalogIdIndexRouteImport } from './routes/catalog.$id.index'
 import { Route as CollabMangaIndexRouteImport } from './routes/_collab.manga.index'
 import { Route as ApiSwapGenerateRouteImport } from './routes/api.swap.generate'
 import { Route as ApiStyleTransferGenerateRouteImport } from './routes/api.style-transfer.generate'
@@ -50,16 +56,23 @@ import { Route as ApiSketchFinalGenerateRouteImport } from './routes/api.sketch-
 import { Route as ApiPlancheTransferGenerateRouteImport } from './routes/api.planche-transfer.generate'
 import { Route as ApiMangaStatusRouteImport } from './routes/api.manga.status'
 import { Route as ApiMangaGeneratePageRouteImport } from './routes/api.manga.generate-page'
+import { Route as ApiFreeStudioGenerateRouteImport } from './routes/api.free-studio.generate'
 import { Route as ApiDecorGenerateRouteImport } from './routes/api.decor.generate'
 import { Route as ApiCharacterGenerateRouteImport } from './routes/api.character.generate'
 import { Route as CollabSponsorshipHubIdRouteImport } from './routes/_collab.sponsorship-hub_.$id'
 import { Route as CollabProfileProfileIdRouteImport } from './routes/_collab.profile.$profileId'
 import { Route as CollabMangaIdIndexRouteImport } from './routes/_collab.manga.$id.index'
+import { Route as CatalogIdChapterChapterIdRouteImport } from './routes/catalog.$id.chapter.$chapterId'
 import { Route as CollabMangaIdChapterChapterIdRouteImport } from './routes/_collab.manga.$id.chapter.$chapterId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -85,6 +98,16 @@ const AiIndexRoute = AiIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AiRoute,
+} as any)
+const CatalogIdRoute = CatalogIdRouteImport.update({
+  id: '/catalog/$id',
+  path: '/catalog/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGenerationJobsRoute = ApiGenerationJobsRouteImport.update({
+  id: '/api/generation-jobs',
+  path: '/api/generation-jobs',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AiSwapRoute = AiSwapRouteImport.update({
   id: '/swap',
@@ -121,9 +144,19 @@ const AiMangaPageRoute = AiMangaPageRouteImport.update({
   path: '/manga-page',
   getParentRoute: () => AiRoute,
 } as any)
+const AiImageEditRoute = AiImageEditRouteImport.update({
+  id: '/image-edit',
+  path: '/image-edit',
+  getParentRoute: () => AiRoute,
+} as any)
 const AiHistoryRoute = AiHistoryRouteImport.update({
   id: '/history',
   path: '/history',
+  getParentRoute: () => AiRoute,
+} as any)
+const AiFreeStudioRoute = AiFreeStudioRouteImport.update({
+  id: '/free-studio',
+  path: '/free-studio',
   getParentRoute: () => AiRoute,
 } as any)
 const AiDecorCreateRoute = AiDecorCreateRouteImport.update({
@@ -226,6 +259,11 @@ const CollabAnnouncementsRoute = CollabAnnouncementsRouteImport.update({
   path: '/announcements',
   getParentRoute: () => CollabRoute,
 } as any)
+const CatalogIdIndexRoute = CatalogIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CatalogIdRoute,
+} as any)
 const CollabMangaIndexRoute = CollabMangaIndexRouteImport.update({
   id: '/manga/',
   path: '/manga/',
@@ -263,6 +301,11 @@ const ApiMangaGeneratePageRoute = ApiMangaGeneratePageRouteImport.update({
   path: '/api/manga/generate-page',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFreeStudioGenerateRoute = ApiFreeStudioGenerateRouteImport.update({
+  id: '/api/free-studio/generate',
+  path: '/api/free-studio/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDecorGenerateRoute = ApiDecorGenerateRouteImport.update({
   id: '/api/decor/generate',
   path: '/api/decor/generate',
@@ -288,6 +331,12 @@ const CollabMangaIdIndexRoute = CollabMangaIdIndexRouteImport.update({
   path: '/manga/$id/',
   getParentRoute: () => CollabRoute,
 } as any)
+const CatalogIdChapterChapterIdRoute =
+  CatalogIdChapterChapterIdRouteImport.update({
+    id: '/chapter/$chapterId',
+    path: '/chapter/$chapterId',
+    getParentRoute: () => CatalogIdRoute,
+  } as any)
 const CollabMangaIdChapterChapterIdRoute =
   CollabMangaIdChapterChapterIdRouteImport.update({
     id: '/manga/$id/chapter/$chapterId',
@@ -299,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai': typeof AiRouteWithChildren
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/signup': typeof SignupRoute
   '/announcements': typeof CollabAnnouncementsRoute
   '/chat': typeof CollabChatRoute
@@ -320,7 +370,9 @@ export interface FileRoutesByFullPath {
   '/ai/characters': typeof AiCharactersRoute
   '/ai/decor': typeof AiDecorRoute
   '/ai/decor-create': typeof AiDecorCreateRoute
+  '/ai/free-studio': typeof AiFreeStudioRoute
   '/ai/history': typeof AiHistoryRoute
+  '/ai/image-edit': typeof AiImageEditRoute
   '/ai/manga-page': typeof AiMangaPageRoute
   '/ai/plan': typeof AiPlanRoute
   '/ai/prompts': typeof AiPromptsRoute
@@ -328,11 +380,14 @@ export interface FileRoutesByFullPath {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/swap': typeof AiSwapRoute
+  '/api/generation-jobs': typeof ApiGenerationJobsRoute
+  '/catalog/$id': typeof CatalogIdRouteWithChildren
   '/ai/': typeof AiIndexRoute
   '/profile/$profileId': typeof CollabProfileProfileIdRoute
   '/sponsorship-hub/$id': typeof CollabSponsorshipHubIdRoute
   '/api/character/generate': typeof ApiCharacterGenerateRoute
   '/api/decor/generate': typeof ApiDecorGenerateRoute
+  '/api/free-studio/generate': typeof ApiFreeStudioGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
   '/api/manga/status': typeof ApiMangaStatusRoute
   '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
@@ -340,12 +395,15 @@ export interface FileRoutesByFullPath {
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
   '/api/swap/generate': typeof ApiSwapGenerateRoute
   '/manga/': typeof CollabMangaIndexRoute
+  '/catalog/$id/': typeof CatalogIdIndexRoute
+  '/catalog/$id/chapter/$chapterId': typeof CatalogIdChapterChapterIdRoute
   '/manga/$id/': typeof CollabMangaIdIndexRoute
   '/manga/$id/chapter/$chapterId': typeof CollabMangaIdChapterChapterIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/signup': typeof SignupRoute
   '/announcements': typeof CollabAnnouncementsRoute
   '/chat': typeof CollabChatRoute
@@ -367,7 +425,9 @@ export interface FileRoutesByTo {
   '/ai/characters': typeof AiCharactersRoute
   '/ai/decor': typeof AiDecorRoute
   '/ai/decor-create': typeof AiDecorCreateRoute
+  '/ai/free-studio': typeof AiFreeStudioRoute
   '/ai/history': typeof AiHistoryRoute
+  '/ai/image-edit': typeof AiImageEditRoute
   '/ai/manga-page': typeof AiMangaPageRoute
   '/ai/plan': typeof AiPlanRoute
   '/ai/prompts': typeof AiPromptsRoute
@@ -375,11 +435,13 @@ export interface FileRoutesByTo {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/swap': typeof AiSwapRoute
+  '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/ai': typeof AiIndexRoute
   '/profile/$profileId': typeof CollabProfileProfileIdRoute
   '/sponsorship-hub/$id': typeof CollabSponsorshipHubIdRoute
   '/api/character/generate': typeof ApiCharacterGenerateRoute
   '/api/decor/generate': typeof ApiDecorGenerateRoute
+  '/api/free-studio/generate': typeof ApiFreeStudioGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
   '/api/manga/status': typeof ApiMangaStatusRoute
   '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
@@ -387,6 +449,8 @@ export interface FileRoutesByTo {
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
   '/api/swap/generate': typeof ApiSwapGenerateRoute
   '/manga': typeof CollabMangaIndexRoute
+  '/catalog/$id': typeof CatalogIdIndexRoute
+  '/catalog/$id/chapter/$chapterId': typeof CatalogIdChapterChapterIdRoute
   '/manga/$id': typeof CollabMangaIdIndexRoute
   '/manga/$id/chapter/$chapterId': typeof CollabMangaIdChapterChapterIdRoute
 }
@@ -396,6 +460,7 @@ export interface FileRoutesById {
   '/_collab': typeof CollabRouteWithChildren
   '/ai': typeof AiRouteWithChildren
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/signup': typeof SignupRoute
   '/_collab/announcements': typeof CollabAnnouncementsRoute
   '/_collab/chat': typeof CollabChatRoute
@@ -417,7 +482,9 @@ export interface FileRoutesById {
   '/ai/characters': typeof AiCharactersRoute
   '/ai/decor': typeof AiDecorRoute
   '/ai/decor-create': typeof AiDecorCreateRoute
+  '/ai/free-studio': typeof AiFreeStudioRoute
   '/ai/history': typeof AiHistoryRoute
+  '/ai/image-edit': typeof AiImageEditRoute
   '/ai/manga-page': typeof AiMangaPageRoute
   '/ai/plan': typeof AiPlanRoute
   '/ai/prompts': typeof AiPromptsRoute
@@ -425,11 +492,14 @@ export interface FileRoutesById {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/swap': typeof AiSwapRoute
+  '/api/generation-jobs': typeof ApiGenerationJobsRoute
+  '/catalog/$id': typeof CatalogIdRouteWithChildren
   '/ai/': typeof AiIndexRoute
   '/_collab/profile/$profileId': typeof CollabProfileProfileIdRoute
   '/_collab/sponsorship-hub_/$id': typeof CollabSponsorshipHubIdRoute
   '/api/character/generate': typeof ApiCharacterGenerateRoute
   '/api/decor/generate': typeof ApiDecorGenerateRoute
+  '/api/free-studio/generate': typeof ApiFreeStudioGenerateRoute
   '/api/manga/generate-page': typeof ApiMangaGeneratePageRoute
   '/api/manga/status': typeof ApiMangaStatusRoute
   '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
@@ -437,6 +507,8 @@ export interface FileRoutesById {
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
   '/api/swap/generate': typeof ApiSwapGenerateRoute
   '/_collab/manga/': typeof CollabMangaIndexRoute
+  '/catalog/$id/': typeof CatalogIdIndexRoute
+  '/catalog/$id/chapter/$chapterId': typeof CatalogIdChapterChapterIdRoute
   '/_collab/manga/$id/': typeof CollabMangaIdIndexRoute
   '/_collab/manga/$id/chapter/$chapterId': typeof CollabMangaIdChapterChapterIdRoute
 }
@@ -446,6 +518,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ai'
     | '/login'
+    | '/onboarding'
     | '/signup'
     | '/announcements'
     | '/chat'
@@ -467,7 +540,9 @@ export interface FileRouteTypes {
     | '/ai/characters'
     | '/ai/decor'
     | '/ai/decor-create'
+    | '/ai/free-studio'
     | '/ai/history'
+    | '/ai/image-edit'
     | '/ai/manga-page'
     | '/ai/plan'
     | '/ai/prompts'
@@ -475,11 +550,14 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/swap'
+    | '/api/generation-jobs'
+    | '/catalog/$id'
     | '/ai/'
     | '/profile/$profileId'
     | '/sponsorship-hub/$id'
     | '/api/character/generate'
     | '/api/decor/generate'
+    | '/api/free-studio/generate'
     | '/api/manga/generate-page'
     | '/api/manga/status'
     | '/api/planche-transfer/generate'
@@ -487,12 +565,15 @@ export interface FileRouteTypes {
     | '/api/style-transfer/generate'
     | '/api/swap/generate'
     | '/manga/'
+    | '/catalog/$id/'
+    | '/catalog/$id/chapter/$chapterId'
     | '/manga/$id/'
     | '/manga/$id/chapter/$chapterId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
+    | '/onboarding'
     | '/signup'
     | '/announcements'
     | '/chat'
@@ -514,7 +595,9 @@ export interface FileRouteTypes {
     | '/ai/characters'
     | '/ai/decor'
     | '/ai/decor-create'
+    | '/ai/free-studio'
     | '/ai/history'
+    | '/ai/image-edit'
     | '/ai/manga-page'
     | '/ai/plan'
     | '/ai/prompts'
@@ -522,11 +605,13 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/swap'
+    | '/api/generation-jobs'
     | '/ai'
     | '/profile/$profileId'
     | '/sponsorship-hub/$id'
     | '/api/character/generate'
     | '/api/decor/generate'
+    | '/api/free-studio/generate'
     | '/api/manga/generate-page'
     | '/api/manga/status'
     | '/api/planche-transfer/generate'
@@ -534,6 +619,8 @@ export interface FileRouteTypes {
     | '/api/style-transfer/generate'
     | '/api/swap/generate'
     | '/manga'
+    | '/catalog/$id'
+    | '/catalog/$id/chapter/$chapterId'
     | '/manga/$id'
     | '/manga/$id/chapter/$chapterId'
   id:
@@ -542,6 +629,7 @@ export interface FileRouteTypes {
     | '/_collab'
     | '/ai'
     | '/login'
+    | '/onboarding'
     | '/signup'
     | '/_collab/announcements'
     | '/_collab/chat'
@@ -563,7 +651,9 @@ export interface FileRouteTypes {
     | '/ai/characters'
     | '/ai/decor'
     | '/ai/decor-create'
+    | '/ai/free-studio'
     | '/ai/history'
+    | '/ai/image-edit'
     | '/ai/manga-page'
     | '/ai/plan'
     | '/ai/prompts'
@@ -571,11 +661,14 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/swap'
+    | '/api/generation-jobs'
+    | '/catalog/$id'
     | '/ai/'
     | '/_collab/profile/$profileId'
     | '/_collab/sponsorship-hub_/$id'
     | '/api/character/generate'
     | '/api/decor/generate'
+    | '/api/free-studio/generate'
     | '/api/manga/generate-page'
     | '/api/manga/status'
     | '/api/planche-transfer/generate'
@@ -583,6 +676,8 @@ export interface FileRouteTypes {
     | '/api/style-transfer/generate'
     | '/api/swap/generate'
     | '/_collab/manga/'
+    | '/catalog/$id/'
+    | '/catalog/$id/chapter/$chapterId'
     | '/_collab/manga/$id/'
     | '/_collab/manga/$id/chapter/$chapterId'
   fileRoutesById: FileRoutesById
@@ -592,9 +687,13 @@ export interface RootRouteChildren {
   CollabRoute: typeof CollabRouteWithChildren
   AiRoute: typeof AiRouteWithChildren
   LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
   SignupRoute: typeof SignupRoute
+  ApiGenerationJobsRoute: typeof ApiGenerationJobsRoute
+  CatalogIdRoute: typeof CatalogIdRouteWithChildren
   ApiCharacterGenerateRoute: typeof ApiCharacterGenerateRoute
   ApiDecorGenerateRoute: typeof ApiDecorGenerateRoute
+  ApiFreeStudioGenerateRoute: typeof ApiFreeStudioGenerateRoute
   ApiMangaGeneratePageRoute: typeof ApiMangaGeneratePageRoute
   ApiMangaStatusRoute: typeof ApiMangaStatusRoute
   ApiPlancheTransferGenerateRoute: typeof ApiPlancheTransferGenerateRoute
@@ -610,6 +709,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -646,6 +752,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/ai/'
       preLoaderRoute: typeof AiIndexRouteImport
       parentRoute: typeof AiRoute
+    }
+    '/catalog/$id': {
+      id: '/catalog/$id'
+      path: '/catalog/$id'
+      fullPath: '/catalog/$id'
+      preLoaderRoute: typeof CatalogIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/generation-jobs': {
+      id: '/api/generation-jobs'
+      path: '/api/generation-jobs'
+      fullPath: '/api/generation-jobs'
+      preLoaderRoute: typeof ApiGenerationJobsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/ai/swap': {
       id: '/ai/swap'
@@ -696,11 +816,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiMangaPageRouteImport
       parentRoute: typeof AiRoute
     }
+    '/ai/image-edit': {
+      id: '/ai/image-edit'
+      path: '/image-edit'
+      fullPath: '/ai/image-edit'
+      preLoaderRoute: typeof AiImageEditRouteImport
+      parentRoute: typeof AiRoute
+    }
     '/ai/history': {
       id: '/ai/history'
       path: '/history'
       fullPath: '/ai/history'
       preLoaderRoute: typeof AiHistoryRouteImport
+      parentRoute: typeof AiRoute
+    }
+    '/ai/free-studio': {
+      id: '/ai/free-studio'
+      path: '/free-studio'
+      fullPath: '/ai/free-studio'
+      preLoaderRoute: typeof AiFreeStudioRouteImport
       parentRoute: typeof AiRoute
     }
     '/ai/decor-create': {
@@ -843,6 +977,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CollabAnnouncementsRouteImport
       parentRoute: typeof CollabRoute
     }
+    '/catalog/$id/': {
+      id: '/catalog/$id/'
+      path: '/'
+      fullPath: '/catalog/$id/'
+      preLoaderRoute: typeof CatalogIdIndexRouteImport
+      parentRoute: typeof CatalogIdRoute
+    }
     '/_collab/manga/': {
       id: '/_collab/manga/'
       path: '/manga'
@@ -892,6 +1033,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMangaGeneratePageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/free-studio/generate': {
+      id: '/api/free-studio/generate'
+      path: '/api/free-studio/generate'
+      fullPath: '/api/free-studio/generate'
+      preLoaderRoute: typeof ApiFreeStudioGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/decor/generate': {
       id: '/api/decor/generate'
       path: '/api/decor/generate'
@@ -926,6 +1074,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/manga/$id/'
       preLoaderRoute: typeof CollabMangaIdIndexRouteImport
       parentRoute: typeof CollabRoute
+    }
+    '/catalog/$id/chapter/$chapterId': {
+      id: '/catalog/$id/chapter/$chapterId'
+      path: '/chapter/$chapterId'
+      fullPath: '/catalog/$id/chapter/$chapterId'
+      preLoaderRoute: typeof CatalogIdChapterChapterIdRouteImport
+      parentRoute: typeof CatalogIdRoute
     }
     '/_collab/manga/$id/chapter/$chapterId': {
       id: '/_collab/manga/$id/chapter/$chapterId'
@@ -1000,7 +1155,9 @@ interface AiRouteChildren {
   AiCharactersRoute: typeof AiCharactersRoute
   AiDecorRoute: typeof AiDecorRoute
   AiDecorCreateRoute: typeof AiDecorCreateRoute
+  AiFreeStudioRoute: typeof AiFreeStudioRoute
   AiHistoryRoute: typeof AiHistoryRoute
+  AiImageEditRoute: typeof AiImageEditRoute
   AiMangaPageRoute: typeof AiMangaPageRoute
   AiPlanRoute: typeof AiPlanRoute
   AiPromptsRoute: typeof AiPromptsRoute
@@ -1019,7 +1176,9 @@ const AiRouteChildren: AiRouteChildren = {
   AiCharactersRoute: AiCharactersRoute,
   AiDecorRoute: AiDecorRoute,
   AiDecorCreateRoute: AiDecorCreateRoute,
+  AiFreeStudioRoute: AiFreeStudioRoute,
   AiHistoryRoute: AiHistoryRoute,
+  AiImageEditRoute: AiImageEditRoute,
   AiMangaPageRoute: AiMangaPageRoute,
   AiPlanRoute: AiPlanRoute,
   AiPromptsRoute: AiPromptsRoute,
@@ -1032,14 +1191,32 @@ const AiRouteChildren: AiRouteChildren = {
 
 const AiRouteWithChildren = AiRoute._addFileChildren(AiRouteChildren)
 
+interface CatalogIdRouteChildren {
+  CatalogIdIndexRoute: typeof CatalogIdIndexRoute
+  CatalogIdChapterChapterIdRoute: typeof CatalogIdChapterChapterIdRoute
+}
+
+const CatalogIdRouteChildren: CatalogIdRouteChildren = {
+  CatalogIdIndexRoute: CatalogIdIndexRoute,
+  CatalogIdChapterChapterIdRoute: CatalogIdChapterChapterIdRoute,
+}
+
+const CatalogIdRouteWithChildren = CatalogIdRoute._addFileChildren(
+  CatalogIdRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CollabRoute: CollabRouteWithChildren,
   AiRoute: AiRouteWithChildren,
   LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
   SignupRoute: SignupRoute,
+  ApiGenerationJobsRoute: ApiGenerationJobsRoute,
+  CatalogIdRoute: CatalogIdRouteWithChildren,
   ApiCharacterGenerateRoute: ApiCharacterGenerateRoute,
   ApiDecorGenerateRoute: ApiDecorGenerateRoute,
+  ApiFreeStudioGenerateRoute: ApiFreeStudioGenerateRoute,
   ApiMangaGeneratePageRoute: ApiMangaGeneratePageRoute,
   ApiMangaStatusRoute: ApiMangaStatusRoute,
   ApiPlancheTransferGenerateRoute: ApiPlancheTransferGenerateRoute,

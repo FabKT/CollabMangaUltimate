@@ -38,3 +38,6 @@ dist-ssr
 
 # Fichiers parasites (dev servers / outils locaux)
 .codex-*
+
+# Local Netlify folder
+.netlify

@@ -33,43 +33,47 @@ type StudioChapterView = {
   chapters: { id: string; number: number; title: string }[];
 };
 
+/** Charge la vue d'un chapitre publié depuis les projets Studio (réutilisé par
+ *  la route connectée et la route publique /discover). */
+export async function loadStudioChapterView(
+  id: string,
+  chapterId: string,
+): Promise<StudioChapterView | null> {
+  const { loadStudioProjects } = await import("@/lib/studio-projects");
+  const rows = await loadStudioProjects<{
+    id: string;
+    title: string;
+    catalogVisible?: boolean;
+    chapters: { id: string; number: number; title: string; status: string; pages: { candidates: { id: string; image?: string }[]; validatedCandidateId: string | null }[] }[];
+  }>();
+  const project = rows.find((p) => p.id === id && p.catalogVisible);
+  const chapter = project?.chapters.find((c) => c.id === chapterId && c.status === "Published");
+  if (!project || !chapter) return null;
+  const images = chapter.pages
+    .map((p) => p.candidates.find((cd) => cd.id === p.validatedCandidateId)?.image)
+    .filter((img): img is string => Boolean(img));
+  const published = project.chapters.filter((c) => c.status === "Published");
+  const idx = published.findIndex((c) => c.id === chapter.id);
+  return {
+    projectTitle: project.title,
+    projectId: project.id,
+    chapterId: chapter.id,
+    chapterTitle: chapter.title,
+    chapterNumber: chapter.number,
+    images,
+    prevChapterId: idx > 0 ? published[idx - 1].id : null,
+    nextChapterId: idx >= 0 && idx < published.length - 1 ? published[idx + 1].id : null,
+    lastChapterId: published.length > 0 ? published[published.length - 1].id : null,
+    chapters: published.map((c) => ({ id: c.id, number: c.number, title: c.title })),
+  };
+}
+
 function ChapterSwitch() {
   const { id, chapterId } = Route.useLoaderData() as { id: string; chapterId: string };
   const [studio, setStudio] = useState<StudioChapterView | null | "loading">("loading");
 
   useEffect(() => {
-    void import("@/lib/studio-projects").then(({ loadStudioProjects }) =>
-      loadStudioProjects<{
-        id: string;
-        title: string;
-        catalogVisible?: boolean;
-        chapters: { id: string; number: number; title: string; status: string; pages: { candidates: { id: string; image?: string }[]; validatedCandidateId: string | null }[] }[];
-      }>().then((rows) => {
-        const project = rows.find((p) => p.id === id && p.catalogVisible);
-        const chapter = project?.chapters.find((c) => c.id === chapterId && c.status === "Published");
-        if (!project || !chapter) {
-          setStudio(null);
-          return;
-        }
-        const images = chapter.pages
-          .map((p) => p.candidates.find((cd) => cd.id === p.validatedCandidateId)?.image)
-          .filter((img): img is string => Boolean(img));
-        const published = project.chapters.filter((c) => c.status === "Published");
-        const idx = published.findIndex((c) => c.id === chapter.id);
-        setStudio({
-          projectTitle: project.title,
-          projectId: project.id,
-          chapterId: chapter.id,
-          chapterTitle: chapter.title,
-          chapterNumber: chapter.number,
-          images,
-          prevChapterId: idx > 0 ? published[idx - 1].id : null,
-          nextChapterId: idx >= 0 && idx < published.length - 1 ? published[idx + 1].id : null,
-          lastChapterId: published.length > 0 ? published[published.length - 1].id : null,
-          chapters: published.map((c) => ({ id: c.id, number: c.number, title: c.title })),
-        });
-      }),
-    ).catch(() => setStudio(null));
+    void loadStudioChapterView(id, chapterId).then(setStudio).catch(() => setStudio(null));
   }, [id, chapterId]);
 
   if (studio === "loading") {

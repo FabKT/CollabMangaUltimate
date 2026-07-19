@@ -4,8 +4,9 @@ import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { MANGA_STYLES } from "@/lib/manga-styles";
 import type { SketchFinalResult } from "@/server-functions/sketch-final-image";
-import { authJsonHeaders } from "@/lib/auth-header";
+import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
+import { recordGeneratedImage } from "@/lib/manga-history";
 import {
   Check,
   Download,
@@ -81,19 +82,29 @@ function SketchFinalPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const snap = loadSession<SketchFinalSnapshot>("sketch-final");
-    if (snap) {
-      setTab(snap.tab === "prompt" ? "prompt" : "raw");
-      setSketchImage(snap.sketchImage ?? null);
-      setNotes(snap.notes ?? "");
-      if (snap.result) setResult(snap.result);
-    }
-    setLoaded(true);
+    void loadSession<SketchFinalSnapshot>("sketch-final").then((snap) => {
+      if (snap) {
+        setTab(snap.tab === "prompt" ? "prompt" : "raw");
+        setSketchImage(snap.sketchImage ?? null);
+        setNotes(snap.notes ?? "");
+        if (snap.result) setResult(snap.result);
+      }
+      setLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hasPendingGeneration("sketch-final")) return;
+    setIsGenerating(true);
+    void resumeDurableGeneration<SketchFinalResult>("sketch-final").then((generated) => {
+      if (generated) setResult(generated);
+    }).catch((err) => setError(err instanceof Error ? err.message : "Sketch finishing failed."))
+      .finally(() => setIsGenerating(false));
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
-    saveSession<SketchFinalSnapshot>("sketch-final", {
+    void saveSession<SketchFinalSnapshot>("sketch-final", {
       tab,
       sketchImage,
       notes,
@@ -127,10 +138,10 @@ function SketchFinalPage() {
       }
 
       const size = await getImageSizeForGeneration(sketchImage);
-      const response = await fetch("/api/sketch-final/generate", {
-        method: "POST",
-        headers: await authJsonHeaders(),
-        body: JSON.stringify({
+      const generated = await runDurableGeneration<SketchFinalResult>(
+        "sketch-final",
+        "/api/sketch-final/generate",
+        {
           sketchImageDataUrl: sketchImage,
           styleImageDataUrl,
           styleId: activeStyle?.id ?? "custom",
@@ -139,13 +150,27 @@ function SketchFinalPage() {
           elementReferences: [],
           notes: notes.trim(),
           size,
-        }),
+        },
+      );
+      setResult(generated);
+      void recordGeneratedImage({
+        source: "Raw to Final",
+        title: "Image finalisee",
+        prompt: notes,
+        result: generated,
+        editContext: {
+          originalImageUrl: generated.imageUrl,
+          currentImageUrl: generated.imageUrl,
+          prompt: "",
+          selectedCharacterIds: [],
+          references: [
+            { id: "raw-source", name: "Raw", imageDataUrl: sketchImage, role: "Storyboard" as const },
+            { id: `${activeStyle?.id ?? "default"}-style`, name: activeStyle?.name ?? "Style", imageDataUrl: styleImageDataUrl, role: "Style" as const },
+          ],
+          aspectRatio: size === "1536x1024" ? "3:2" : "2:3",
+          source: "Raw to Final",
+        },
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || `Sketch finishing failed (${response.status}).`);
-      }
-      setResult(payload as SketchFinalResult);
       notifyCreditsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sketch finishing failed.");

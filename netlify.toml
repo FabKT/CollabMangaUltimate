@@ -1,0 +1,27 @@
+[build]
+  command = "npm run build"
+  publish = "dist/client"
+
+[build.environment]
+  NODE_VERSION = "22.15.0"
+  NODE_ENV = "production"
+  NETLIFY = "true"
+
+[context.production.environment]
+  STRIPE_MODE = "live"
+
+[context.deploy-preview.environment]
+  STRIPE_MODE = "test"
+
+[context.branch-deploy.environment]
+  STRIPE_MODE = "test"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

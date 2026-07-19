@@ -49,8 +49,10 @@ type StudioProjectLite = {
   title: string;
   synopsis?: string;
   coverUrl?: string;
+  coverDataUrl?: string;
   status: string;
   genres: string[];
+  subgenres?: string[];
   chapters: unknown[];
 };
 import { cn } from "@/lib/utils";
@@ -434,9 +436,10 @@ function ProfilePage({
                   sponsorshipStatus={preferences.sponsorshipStatus}
                   options={myOptions}
                   onAdd={setAddOpen}
-          projects={myProjects}
-          onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
-          onEditSponsorship={setEditSponsorship}
+                  projects={myProjects}
+                  onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
+                  onOpenProject={(id) => void navigate({ to: "/studio", search: { project: id, chapter: undefined } })}
+                  onEditSponsorship={setEditSponsorship}
                 />
               </Tabs.Content>
               <Tabs.Content value="projects">
@@ -446,7 +449,7 @@ function ProfilePage({
                   projects={myProjects}
                   onAdd={() => setAddOpen("project")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Project", source: "own" })}
-                  onOpenProject={() => void navigate({ to: "/studio" })}
+                  onOpenProject={(id) => void navigate({ to: "/studio", search: { project: id, chapter: undefined } })}
                 />
               </Tabs.Content>
               <Tabs.Content value="illustrations">
@@ -527,6 +530,7 @@ function ProfilePage({
         idea={myIdeas.find((i) => i.title === detailsOpen?.title)}
         announcement={myAnnouncements.find((a) => a.title === detailsOpen?.title)}
         option={myOptions.find((o) => o.format === detailsOpen?.title)}
+        project={myProjects.find((p) => p.title === detailsOpen?.title)}
         onEdit={(t) => {
           setDetailsOpen(null);
           setEditSponsorship(t);
@@ -1087,6 +1091,7 @@ function OverviewTab({
   onDetails,
   options,
   projects,
+  onOpenProject,
   onEditSponsorship,
 }: {
   profileType: ProfileType;
@@ -1101,6 +1106,7 @@ function OverviewTab({
   onDetails: (title: string, kind: string) => void;
   options?: SponsorOption[];
   projects?: StudioProjectLite[];
+  onOpenProject: (id: string) => void;
   onEditSponsorship: (title: string) => void;
 }) {
   return (
@@ -1119,7 +1125,7 @@ function OverviewTab({
       </div>
       <div className="lg:col-span-2 space-y-6">
         {profileType === "creator" ? (
-          <ProjectShowcase projects={projects} mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} />
+          <ProjectShowcase projects={projects} mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} onOpenProject={onOpenProject} />
         ) : (
           <SponsorshipShowcase mode={mode} options={options} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} onManage={onEditSponsorship} />
         )}
@@ -1199,7 +1205,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 
 /* ---------------- Project showcase ---------------- */
 
-function ProjectShowcase({ projects = [], mode, onAdd, onDetails }: { projects?: StudioProjectLite[]; mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void }) {
+function ProjectShowcase({ projects = [], mode, onAdd, onDetails, onOpenProject }: { projects?: StudioProjectLite[]; mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void; onOpenProject: (id: string) => void }) {
 
   return (
     <Panel>
@@ -1221,12 +1227,13 @@ function ProjectShowcase({ projects = [], mode, onAdd, onDetails }: { projects?:
             project={{
               title: p.title,
               description: p.synopsis,
-              coverUrl: p.coverUrl,
+              coverUrl: p.coverDataUrl ?? p.coverUrl,
               role: "Propriétaire",
               status: p.status,
               chapters: `${p.chapters.length} chapitre${p.chapters.length > 1 ? "s" : ""}`,
             }}
             onDetails={() => onDetails(p.title)}
+            onOpen={() => onOpenProject(p.id)}
           />
         ))}
       </div>
@@ -1396,17 +1403,18 @@ function ProjectsTab({
   projects?: StudioProjectLite[];
   onAdd: () => void;
   onDetails: (title: string) => void;
-  onOpenProject: () => void;
+  onOpenProject: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Tous");
   // Projets réels créés dans le Studio (IndexedDB).
   const projectCards = (projects ?? []).map((p) => ({
+    id: p.id,
     title: p.title,
     role: "Propriétaire",
     status: p.status,
     description: p.synopsis,
-    coverUrl: p.coverUrl,
+    coverUrl: p.coverDataUrl ?? p.coverUrl,
     chapters: `${p.chapters.length} chapitre${p.chapters.length > 1 ? "s" : ""}`,
   }));
   const visibleProjects = projectCards.filter((project) => {
@@ -1448,7 +1456,7 @@ function ProjectsTab({
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {visibleProjects.map((p, i) => (
-            <ProjectCard key={i} project={p} onDetails={() => onDetails(p.title)} onOpen={onOpenProject} />
+            <ProjectCard key={p.id || i} project={p} onDetails={() => onDetails(p.title)} onOpen={() => onOpenProject(p.id)} />
           ))}
         </div>
       )}
@@ -3129,6 +3137,7 @@ function DetailsModal({
   idea,
   announcement,
   option,
+  project,
   onEdit,
 }: {
   open: boolean;
@@ -3141,6 +3150,7 @@ function DetailsModal({
   idea?: DbIdea;
   announcement?: DbAnnouncement;
   option?: SponsorOption;
+  project?: StudioProjectLite;
   onEdit: (title: string) => void;
 }) {
   const isSponsorship = kind === "Sponsorship option";
@@ -3173,8 +3183,8 @@ function DetailsModal({
               border: "1px solid rgba(133,154,206,0.18)",
             }}
           >
-            {illustration?.image_url || idea?.image_url ? (
-              <img src={illustration?.image_url || idea?.image_url || ""} alt={title} className="h-full w-full object-cover" />
+            {illustration?.image_url || idea?.image_url || project?.coverDataUrl || project?.coverUrl ? (
+              <img src={illustration?.image_url || idea?.image_url || project?.coverDataUrl || project?.coverUrl || ""} alt={title} className="h-full w-full object-cover" />
             ) : (
               <ImageIcon size={30} color="#5E6A90" />
             )}
@@ -3195,6 +3205,7 @@ function DetailsModal({
               idea?.description ||
               announcement?.hook ||
               option?.description ||
+              project?.synopsis ||
               (isSponsorship
                 ? "Détail complet du service de parrainage."
                 : "Vue complète de cette publication.")}
@@ -3216,6 +3227,16 @@ function DetailsModal({
             <div className="mt-5 flex flex-wrap gap-1.5">
               {announcement.genres.map((g) => <Chip key={g}>{g}</Chip>)}
               {announcement.subgenres.slice(0, 4).map((g) => <Chip key={g} tone="info">{g}</Chip>)}
+            </div>
+          )}
+          {project && (
+            <div className="mt-5">
+              <MetaLabel>Genre et sous-genres</MetaLabel>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {project.genres.map((genre) => <Chip key={genre}>{genre}</Chip>)}
+                {(project.subgenres ?? []).map((subgenre) => <Chip key={subgenre} tone="info">{subgenre}</Chip>)}
+                {project.genres.length === 0 && (project.subgenres ?? []).length === 0 && <Chip>Aucun genre renseigné</Chip>}
+              </div>
             </div>
           )}
         </div>

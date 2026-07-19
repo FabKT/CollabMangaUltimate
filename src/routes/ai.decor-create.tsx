@@ -4,10 +4,11 @@ import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { DecorImageResult } from "@/server-functions/decor-image";
-import { authJsonHeaders } from "@/lib/auth-header";
+import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import { addCreatedDecor } from "@/lib/decor-store";
+import { recordGeneratedImage } from "@/lib/manga-history";
 import {
   Palette,
   FileText,
@@ -69,21 +70,31 @@ function DecorCreatePage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const snap = loadSession<DecorSessionSnapshot>("decor-create");
-    if (snap) {
-      setTab(snap.tab ?? "style");
-      setStyleId(snap.styleId ?? STYLES[0].id);
-      setStyleImages(snap.styleImages ?? {});
-      setReferences(snap.references ?? []);
-      setPrompt(snap.prompt ?? "");
-      if (snap.result) setResult(snap.result);
-    }
-    setLoaded(true);
+    void loadSession<DecorSessionSnapshot>("decor-create").then((snap) => {
+      if (snap) {
+        setTab(snap.tab ?? "style");
+        setStyleId(snap.styleId ?? STYLES[0].id);
+        setStyleImages(snap.styleImages ?? {});
+        setReferences(snap.references ?? []);
+        setPrompt(snap.prompt ?? "");
+        if (snap.result) setResult(snap.result);
+      }
+      setLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hasPendingGeneration("decor-create")) return;
+    setIsGenerating(true);
+    void resumeDurableGeneration<DecorImageResult>("decor-create").then((generated) => {
+      if (generated) setResult(generated);
+    }).catch((err) => setError(err instanceof Error ? err.message : "Decor generation failed."))
+      .finally(() => setIsGenerating(false));
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
-    saveSession<DecorSessionSnapshot>("decor-create", {
+    void saveSession<DecorSessionSnapshot>("decor-create", {
       tab,
       styleId,
       styleImages,
@@ -131,24 +142,39 @@ function DecorCreatePage() {
     setError(null);
     setIsGenerating(true);
     try {
-      const response = await fetch("/api/decor/generate", {
-        method: "POST",
-        headers: await authJsonHeaders(),
-        body: JSON.stringify({
+      const decorResult = await runDurableGeneration<DecorImageResult>(
+        "decor-create",
+        "/api/decor/generate",
+        {
           prompt,
           styleId: activeStyle.id,
           styleName: activeStyle.name,
           styleDescription: activeStyle.description,
           styleImageDataUrl: styleImages[activeStyle.id],
           references,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || `Decor generation failed (${response.status}).`);
-      }
-      const decorResult = payload as DecorImageResult;
+        },
+      );
       setResult(decorResult);
+      void recordGeneratedImage({
+        source: "Creation de decor",
+        title: prompt.trim().slice(0, 60) || "Decor",
+        prompt,
+        result: decorResult,
+        editContext: {
+          originalImageUrl: decorResult.imageUrl,
+          currentImageUrl: decorResult.imageUrl,
+          prompt: "",
+          selectedCharacterIds: [],
+          references: [
+            ...references
+              .filter((reference) => reference.imageDataUrl)
+              .map((reference) => ({ ...reference, imageDataUrl: reference.imageDataUrl!, role: "Inspiration" as const })),
+            ...(styleImages[activeStyle.id] ? [{ id: `${activeStyle.id}-style`, name: activeStyle.name, imageDataUrl: styleImages[activeStyle.id], role: "Style" as const }] : []),
+          ],
+          aspectRatio: decorResult.size === "1536x1024" ? "3:2" : "2:3",
+          source: "Creation de decor",
+        },
+      });
       notifyCreditsChanged();
       void addCreatedDecor({
         name: prompt.trim().slice(0, 60) || "Décor",

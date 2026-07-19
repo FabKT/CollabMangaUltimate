@@ -17,6 +17,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { LanguageSelect, useI18n, type TranslationKey } from "@/lib/i18n";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -57,7 +58,31 @@ const groups: Group[] = [
   },
 ];
 
+const groupKeys: TranslationKey[] = [
+  "nav.community",
+  "nav.creation",
+  "nav.reading",
+  "nav.communication",
+  "nav.account",
+];
+
+const itemKeys: Record<string, TranslationKey> = {
+  "/hub": "nav.home",
+  "/discover": "nav.discover",
+  "/announcements": "nav.announcements",
+  "/sponsorship": "nav.sponsoring",
+  "/sponsorship-hub": "nav.sponsorshipHub",
+  "/showcase": "nav.illustrations",
+  "/studio": "nav.projects",
+  "/ideas": "nav.ideas",
+  "/manga": "nav.catalog",
+  "/messages": "nav.messages",
+  "/notifications": "nav.notifications",
+  "/profile": "nav.profile",
+};
+
 export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean }) {
+  const { t } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   return (
@@ -116,10 +141,16 @@ export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean
           <Sparkles size={14} color="#04111e" strokeWidth={2.6} />
         </span>
         <span className="min-w-0 flex-1 text-left">
-          <span className="block text-[13px] font-bold leading-tight truncate" style={{ color: "var(--neon)" }}>
+          <span
+            className="block text-[13px] font-bold leading-tight truncate"
+            style={{ color: "var(--neon)" }}
+          >
             CollabManga AI
           </span>
-          <span className="block text-[11px] leading-tight truncate" style={{ color: "var(--text-muted)" }}>
+          <span
+            className="block text-[11px] leading-tight truncate"
+            style={{ color: "var(--text-muted)" }}
+          >
             Studio de création IA
           </span>
         </span>
@@ -140,7 +171,7 @@ export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean
                   color: "var(--text-muted)",
                 }}
               >
-                {g.title}
+                {t(groupKeys[i])}
               </div>
             )}
             <ul className="flex flex-col gap-0.5">
@@ -173,8 +204,11 @@ export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean
                       }}
                     >
                       <Icon size={17} strokeWidth={2} className="shrink-0" />
-                      <span className="flex-1 truncate" style={{ font: "600 13px/18px var(--font-sans)" }}>
-                        {it.label}
+                      <span
+                        className="flex-1 truncate"
+                        style={{ font: "600 13px/18px var(--font-sans)" }}
+                      >
+                        {itemKeys[it.to] ? t(itemKeys[it.to]) : it.label}
                       </span>
                       {it.badge && (
                         <span
@@ -200,6 +234,7 @@ export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean
         ))}
       </nav>
 
+      <LanguageSelect className="cma-input mt-3 !h-9 !w-full" />
     </aside>
   );
 }

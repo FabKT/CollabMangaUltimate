@@ -17,8 +17,9 @@ import {
 import { PageHeader } from "@/components/cma/Layout";
 import { createId, loadCharacterProfiles, type MangaCharacterProfile } from "@/lib/manga-workspace";
 import { loadSession, saveSession } from "@/lib/manga-session";
-import { authJsonHeaders } from "@/lib/auth-header";
+import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
+import { recordGeneratedImage } from "@/lib/manga-history";
 import type { SwapImageResult } from "@/server-functions/swap-image";
 
 export const Route = createFileRoute("/ai/swap")({
@@ -138,10 +139,10 @@ function SwapPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadCharacterProfiles()]).then(([savedCharacters]) => {
+    void Promise.all([loadCharacterProfiles(), loadSession<SwapSnapshot>("swap")]).then(
+      ([savedCharacters, snapshot]) => {
       if (cancelled) return;
       setCharacters(savedCharacters);
-      const snapshot = loadSession<SwapSnapshot>("swap");
       if (snapshot) {
         setTab(snapshot.tab ?? "page");
         setPageImage(snapshot.pageImage ?? null);
@@ -155,16 +156,33 @@ function SwapPage() {
         setResult(snapshot.result ?? null);
       }
       setLoaded(true);
-    });
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
+    if (!hasPendingGeneration("swap")) return;
+    setIsGenerating(true);
+    void resumeDurableGeneration<SwapImageResult>("swap").then((generated) => {
+      if (generated) setResult(generated);
+    }).catch((err) => setError(err instanceof Error ? err.message : "Character swap failed."))
+      .finally(() => setIsGenerating(false));
+  }, []);
+
+  useEffect(() => {
     if (!loaded) return;
-    saveSession<SwapSnapshot>("swap", { tab, pageImage, pageAspect, pairs, prompt, result });
-  }, [loaded, tab, pageImage, pairs, prompt, result]);
+    void saveSession<SwapSnapshot>("swap", {
+      tab,
+      pageImage,
+      pageAspect,
+      pairs,
+      prompt,
+      result,
+    });
+  }, [loaded, tab, pageImage, pageAspect, pairs, prompt, result]);
 
   const characterMap = useMemo(
     () => new Map(characters.map((character) => [character.id, character])),
@@ -269,20 +287,32 @@ function SwapPage() {
           },
         };
       });
-      const response = await fetch("/api/swap/generate", {
-        method: "POST",
-        headers: await authJsonHeaders(),
-        body: JSON.stringify({
+      const generated = await runDurableGeneration<SwapImageResult>(
+        "swap",
+        "/api/swap/generate",
+        {
           pageImageDataUrl: pageImage,
           pairs: payloadPairs,
           prompt,
           aspectRatio,
-        }),
+        },
+      );
+      setResult(generated);
+      void recordGeneratedImage({
+        source: "Swap",
+        title: "Echange de personnages",
+        prompt,
+        result: generated,
+        editContext: {
+          originalImageUrl: generated.imageUrl,
+          currentImageUrl: generated.imageUrl,
+          prompt: "",
+          selectedCharacterIds: Array.from(new Set(validPairs.flatMap((pair) => [pair.originalId, pair.replacementId]).filter(Boolean))),
+          references: [{ id: "swap-source", name: "Planche source", imageDataUrl: pageImage, role: "Target" as const }],
+          aspectRatio,
+          source: "Swap",
+        },
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok)
-        throw new Error(payload.error || `Character swap failed (${response.status}).`);
-      setResult(payload as SwapImageResult);
       notifyCreditsChanged();
     } catch (generationError) {
       setError(

@@ -30,12 +30,36 @@ export function getStripe(): Stripe {
   if (stripeClient) return stripeClient;
   const key = env("STRIPE_SECRET_KEY");
   if (!key) throw new Error("STRIPE_SECRET_KEY manquant côté serveur.");
-  stripeClient = new Stripe(key, { apiVersion: "2025-06-30.basil" as Stripe.LatestApiVersion });
+  const mode = stripeMode();
+  if (mode === "live" && !key.startsWith("sk_live_")) {
+    throw new Error("STRIPE_MODE=live requires a live Stripe secret key.");
+  }
+  if (mode === "test" && !key.startsWith("sk_test_")) {
+    throw new Error("STRIPE_MODE=test requires a test Stripe secret key.");
+  }
+  stripeClient = new Stripe(key, { apiVersion: "2026-06-24.dahlia" });
   return stripeClient;
 }
 
 export function isStripeConfigured(): boolean {
-  return Boolean(env("STRIPE_SECRET_KEY"));
+  return [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_STARTER",
+    "STRIPE_PRICE_CREATOR",
+    "STRIPE_PRICE_STUDIO",
+    "SUPABASE_SERVICE_ROLE_KEY",
+  ].every((name) => Boolean(env(name)));
+}
+
+export function stripeMode(): "test" | "live" {
+  const explicit = env("STRIPE_MODE");
+  if (explicit === "test" || explicit === "live") return explicit;
+  return env("NODE_ENV") === "production" ? "live" : "test";
+}
+
+export function requiresBillingConfiguration(): boolean {
+  return stripeMode() === "live" || env("NODE_ENV") === "production";
 }
 
 let serviceClient: SupabaseClient | null = null;
@@ -44,14 +68,20 @@ export function getServiceSupabase(): SupabaseClient {
   if (serviceClient) return serviceClient;
   const url = env("VITE_SUPABASE_URL") || env("SUPABASE_URL");
   const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !key) throw new Error("SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_URL manquants côté serveur.");
-  serviceClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  if (!url || !key)
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_URL manquants côté serveur.");
+  serviceClient = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   return serviceClient;
 }
 
 export function priceIdForPlan(plan: PlanId): string {
   const id = env(PLANS[plan].priceEnv);
-  if (!id) throw new Error(`${PLANS[plan].priceEnv} manquant : crée le Price ${plan} dans Stripe et renseigne la variable.`);
+  if (!id)
+    throw new Error(
+      `${PLANS[plan].priceEnv} manquant : crée le Price ${plan} dans Stripe et renseigne la variable.`,
+    );
   return id;
 }
 
@@ -85,15 +115,19 @@ export async function handleStripeWebhook(request: Request): Promise<Response> {
   try {
     event = await stripe.webhooks.constructEventAsync(rawBody, signature, secret);
   } catch (err) {
-    return new Response(`Signature invalide : ${err instanceof Error ? err.message : "erreur"}`, { status: 400 });
+    return new Response(`Signature invalide : ${err instanceof Error ? err.message : "erreur"}`, {
+      status: 400,
+    });
   }
 
   const sb = getServiceSupabase();
 
   // Idempotence : un événement Stripe n'est traité qu'une seule fois (§27/§28).
-  const { error: insertError } = await sb
-    .from("stripe_events")
-    .insert({ id: event.id, type: event.type, payload: event as unknown as Record<string, unknown> });
+  const { error: insertError } = await sb.from("stripe_events").insert({
+    id: event.id,
+    type: event.type,
+    payload: event as unknown as Record<string, unknown>,
+  });
   if (insertError) {
     // Doublon (clé primaire) → déjà traité, on acquitte sans rejouer.
     if (insertError.code === "23505") return new Response("Déjà traité", { status: 200 });
@@ -107,11 +141,18 @@ export async function handleStripeWebhook(request: Request): Promise<Response> {
     console.error("[stripe-webhook]", event.type, err);
     // On supprime la trace d'idempotence pour permettre un rejeu par Stripe.
     await sb.from("stripe_events").delete().eq("id", event.id);
-    return new Response(`Erreur de traitement : ${err instanceof Error ? err.message : "inconnue"}`, { status: 500 });
+    return new Response(
+      `Erreur de traitement : ${err instanceof Error ? err.message : "inconnue"}`,
+      { status: 500 },
+    );
   }
 }
 
-async function dispatchEvent(stripe: Stripe, sb: SupabaseClient, event: Stripe.Event): Promise<void> {
+async function dispatchEvent(
+  stripe: Stripe,
+  sb: SupabaseClient,
+  event: Stripe.Event,
+): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed":
       await onCheckoutCompleted(stripe, sb, event.data.object as Stripe.Checkout.Session);
@@ -139,11 +180,16 @@ async function dispatchEvent(stripe: Stripe, sb: SupabaseClient, event: Stripe.E
 }
 
 /** Lie le client Stripe à l'utilisateur et enregistre l'abonnement (sans attribuer de quota). */
-async function onCheckoutCompleted(stripe: Stripe, sb: SupabaseClient, session: Stripe.Checkout.Session): Promise<void> {
+async function onCheckoutCompleted(
+  stripe: Stripe,
+  sb: SupabaseClient,
+  session: Stripe.Checkout.Session,
+): Promise<void> {
   const userId = session.metadata?.user_id || session.client_reference_id;
   if (!userId) return;
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
-  const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
 
   await sb.from("subscriptions").upsert(
     {
@@ -161,11 +207,17 @@ async function onCheckoutCompleted(stripe: Stripe, sb: SupabaseClient, session: 
 /** Extrait l'id d'abonnement d'une facture, quelle que soit la version d'API Stripe.
  *  (Depuis 2026-04-22, `invoice.subscription` est retiré → `parent.subscription_details`.) */
 function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | undefined {
-  const pick = (v: unknown): string | undefined => (typeof v === "string" ? v : (v as { id?: string } | undefined)?.id);
+  const pick = (v: unknown): string | undefined =>
+    typeof v === "string" ? v : (v as { id?: string } | undefined)?.id;
   const inv = invoice as unknown as {
     subscription?: unknown;
     parent?: { subscription_details?: { subscription?: unknown } };
-    lines?: { data?: Array<{ subscription?: unknown; parent?: { subscription_item_details?: { subscription?: unknown } } }> };
+    lines?: {
+      data?: Array<{
+        subscription?: unknown;
+        parent?: { subscription_item_details?: { subscription?: unknown } };
+      }>;
+    };
   };
   const line = inv.lines?.data?.[0];
   return (
@@ -177,7 +229,11 @@ function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | undefined 
 }
 
 /** Paiement confirmé (initial, renouvellement ou montée en gamme) → ouvre une période payée. */
-async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe.Invoice): Promise<void> {
+async function onInvoicePaid(
+  stripe: Stripe,
+  sb: SupabaseClient,
+  invoice: Stripe.Invoice,
+): Promise<void> {
   const subscriptionId = subscriptionIdFromInvoice(invoice);
   if (!subscriptionId) return;
 
@@ -187,16 +243,22 @@ async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe
   const plan = planForPriceId(priceId);
   if (!plan) throw new Error(`Price inconnu ${priceId} : mapping plan absent.`);
 
-  const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+  const customerId =
+    typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
   const userId = subscription.metadata?.user_id || (await userIdForCustomer(sb, customerId));
   if (!userId) throw new Error("Impossible d'associer la facture à un utilisateur.");
 
   // Plan courant AVANT mise à jour → sert à déterminer le motif de clôture.
-  const { data: before } = await sb.from("subscriptions").select("id, plan").eq("user_id", userId).maybeSingle();
+  const { data: before } = await sb
+    .from("subscriptions")
+    .select("id, plan")
+    .eq("user_id", userId)
+    .maybeSingle();
   const previousPlan = before?.plan as PlanId | undefined;
   let closeReason: "renewal" | "upgrade" | "downgrade" = "renewal";
   if (previousPlan && previousPlan !== plan.id) {
-    closeReason = PLANS[plan.id].amountCents > PLANS[previousPlan].amountCents ? "upgrade" : "downgrade";
+    closeReason =
+      PLANS[plan.id].amountCents > PLANS[previousPlan].amountCents ? "upgrade" : "downgrade";
   }
 
   // Enregistre / met à jour la ligne d'abonnement (purge un éventuel downgrade programmé désormais appliqué).
@@ -213,11 +275,17 @@ async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe
     },
     { onConflict: "user_id" },
   );
-  const { data: subRow } = await sb.from("subscriptions").select("id").eq("user_id", userId).single();
+  const { data: subRow } = await sb
+    .from("subscriptions")
+    .select("id")
+    .eq("user_id", userId)
+    .single();
 
   const line = invoice.lines?.data?.[0];
   const periodEndUnix = line?.period?.end ?? subEndUnix(subscription);
-  const periodEnd = new Date((periodEndUnix ?? Math.floor(Date.now() / 1000) + 30 * 86400) * 1000).toISOString();
+  const periodEnd = new Date(
+    (periodEndUnix ?? Math.floor(Date.now() / 1000) + 30 * 86400) * 1000,
+  ).toISOString();
 
   const { data: newPeriodId } = await sb.rpc("open_paid_period", {
     p_user_id: userId,
@@ -234,17 +302,26 @@ async function onInvoicePaid(stripe: Stripe, sb: SupabaseClient, invoice: Stripe
   // Frais Stripe réels de cette facture → injectés dans la période (marge exacte).
   const feeCents = await stripeFeeForInvoice(stripe, invoice);
   if (newPeriodId && feeCents > 0) {
-    await sb.from("subscription_periods").update({ stripe_fees_cents: feeCents }).eq("id", newPeriodId);
+    await sb
+      .from("subscription_periods")
+      .update({ stripe_fees_cents: feeCents })
+      .eq("id", newPeriodId);
   }
 }
 
 /** Frais Stripe réels d'une facture (via la balance transaction de la charge). */
 async function stripeFeeForInvoice(stripe: Stripe, invoice: Stripe.Invoice): Promise<number> {
   try {
-    const anyInv = invoice as unknown as { charge?: string | { id?: string }; payment_intent?: string | { id?: string } };
+    const anyInv = invoice as unknown as {
+      charge?: string | { id?: string };
+      payment_intent?: string | { id?: string };
+    };
     let chargeId = typeof anyInv.charge === "string" ? anyInv.charge : anyInv.charge?.id;
     if (!chargeId) {
-      const piId = typeof anyInv.payment_intent === "string" ? anyInv.payment_intent : anyInv.payment_intent?.id;
+      const piId =
+        typeof anyInv.payment_intent === "string"
+          ? anyInv.payment_intent
+          : anyInv.payment_intent?.id;
       if (piId) {
         const pi = await stripe.paymentIntents.retrieve(piId);
         chargeId = (pi as unknown as { latest_charge?: string }).latest_charge;
@@ -263,22 +340,39 @@ async function onInvoiceFailed(sb: SupabaseClient, invoice: Stripe.Invoice): Pro
   const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
   if (!customerId) return;
   // Aucun quota, aucune période : on marque seulement l'abonnement en impayé (§7/§8).
-  await sb.from("subscriptions").update({ status: "past_due", updated_at: new Date().toISOString() }).eq("stripe_customer_id", customerId);
+  await sb
+    .from("subscriptions")
+    .update({ status: "past_due", updated_at: new Date().toISOString() })
+    .eq("stripe_customer_id", customerId);
 }
 
-async function onSubscriptionUpdated(sb: SupabaseClient, subscription: Stripe.Subscription): Promise<void> {
+async function onSubscriptionUpdated(
+  sb: SupabaseClient,
+  subscription: Stripe.Subscription,
+): Promise<void> {
   await sb
     .from("subscriptions")
     .update({
       cancel_at_period_end: subscription.cancel_at_period_end ?? false,
-      status: subscription.status === "active" || subscription.status === "trialing" ? "active" : subscription.status === "past_due" ? "past_due" : "canceled",
+      status:
+        subscription.status === "active" || subscription.status === "trialing"
+          ? "active"
+          : subscription.status === "past_due"
+            ? "past_due"
+            : "canceled",
       updated_at: new Date().toISOString(),
     })
     .eq("stripe_subscription_id", subscription.id);
 }
 
-async function onSubscriptionDeleted(sb: SupabaseClient, subscription: Stripe.Subscription): Promise<void> {
-  await sb.from("subscriptions").update({ status: "canceled", updated_at: new Date().toISOString() }).eq("stripe_subscription_id", subscription.id);
+async function onSubscriptionDeleted(
+  sb: SupabaseClient,
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  await sb
+    .from("subscriptions")
+    .update({ status: "canceled", updated_at: new Date().toISOString() })
+    .eq("stripe_subscription_id", subscription.id);
 }
 
 async function onDispute(sb: SupabaseClient, dispute: Stripe.Dispute): Promise<void> {
@@ -297,7 +391,11 @@ async function onDispute(sb: SupabaseClient, dispute: Stripe.Dispute): Promise<v
 }
 
 async function userIdForCustomer(sb: SupabaseClient, customerId: string): Promise<string | null> {
-  const { data } = await sb.from("subscriptions").select("user_id").eq("stripe_customer_id", customerId).single();
+  const { data } = await sb
+    .from("subscriptions")
+    .select("user_id")
+    .eq("stripe_customer_id", customerId)
+    .single();
   return data?.user_id ?? null;
 }
 

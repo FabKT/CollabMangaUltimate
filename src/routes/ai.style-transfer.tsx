@@ -6,8 +6,9 @@ import { MANGA_STYLES } from "@/lib/manga-styles";
 import { loadCustomMangaStyles, type CustomMangaStyle } from "@/lib/custom-manga-styles";
 import { CustomStyleModal } from "@/components/cma/CustomStyleModal";
 import type { StyleTransferResult } from "@/server-functions/style-transfer-image";
-import { authJsonHeaders } from "@/lib/auth-header";
+import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
+import { recordGeneratedImage } from "@/lib/manga-history";
 import {
   Wand2,
   Upload,
@@ -106,26 +107,42 @@ function StyleTransferPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const snap = loadSession<StyleTransferSnapshot>("style-transfer");
-    if (snap) {
-      setMode(snap.mode === "planche" ? "planche" : "personnage");
-      setTargetStyleId(snap.targetStyleId ?? MANGA_STYLES[0].id);
-      setBaseImages({
-        planche: snap.baseImages?.planche ?? null,
-        personnage: snap.baseImages?.personnage ?? null,
-      });
-      setResults({
-        planche: snap.results?.planche ?? null,
-        personnage: snap.results?.personnage ?? null,
-      });
-    }
-    setLoaded(true);
+    void loadSession<StyleTransferSnapshot>("style-transfer").then((snap) => {
+      if (snap) {
+        setMode(snap.mode === "planche" ? "planche" : "personnage");
+        setTargetStyleId(snap.targetStyleId ?? MANGA_STYLES[0].id);
+        setBaseImages({
+          planche: snap.baseImages?.planche ?? null,
+          personnage: snap.baseImages?.personnage ?? null,
+        });
+        setResults({
+          planche: snap.results?.planche ?? null,
+          personnage: snap.results?.personnage ?? null,
+        });
+      }
+      setLoaded(true);
+    });
     void loadCustomMangaStyles().then(setCustomStyles);
   }, []);
 
   useEffect(() => {
+    if (!hasPendingGeneration("style-transfer")) return;
+    const pendingMode = window.localStorage.getItem("collabmanga.ai-job.style-transfer.mode") === "planche"
+      ? "planche"
+      : "personnage";
+    setIsGenerating(true);
+    void resumeDurableGeneration<StyleTransferResult>("style-transfer").then((generated) => {
+      if (generated) {
+        setResults((current) => ({ ...current, [pendingMode]: generated }));
+        window.localStorage.removeItem("collabmanga.ai-job.style-transfer.mode");
+      }
+    }).catch((err) => setError(err instanceof Error ? err.message : "Style transfer failed."))
+      .finally(() => setIsGenerating(false));
+  }, []);
+
+  useEffect(() => {
     if (!loaded) return;
-    saveSession<StyleTransferSnapshot>("style-transfer", {
+    void saveSession<StyleTransferSnapshot>("style-transfer", {
       mode,
       targetStyleId,
       baseImages,
@@ -158,22 +175,38 @@ function StyleTransferPage() {
     setError(null);
     setIsGenerating(true);
     try {
-      const response = await fetch(cfg.endpoint, {
-        method: "POST",
-        headers: await authJsonHeaders(),
-        body: JSON.stringify({
+      window.localStorage.setItem("collabmanga.ai-job.style-transfer.mode", mode);
+      const generated = await runDurableGeneration<StyleTransferResult>(
+        "style-transfer",
+        cfg.endpoint,
+        {
           baseImageDataUrl: baseImage,
           styleId: targetStyleId,
           styleName: activeCustomStyle?.name ?? activeStyle?.name ?? "",
           styleDescription: isCustom ? "" : (activeStyle?.description ?? ""),
           customStyleImages: activeCustomStyle?.images ?? [],
-        }),
+        },
+      );
+      setResult(generated);
+      window.localStorage.removeItem("collabmanga.ai-job.style-transfer.mode");
+      void recordGeneratedImage({
+        source: "Transfert de style",
+        title: cfg.resultTitle,
+        prompt: `Style: ${activeCustomStyle?.name ?? activeStyle?.name ?? "personnalise"}`,
+        result: generated,
+        editContext: {
+          originalImageUrl: generated.imageUrl,
+          currentImageUrl: generated.imageUrl,
+          prompt: "",
+          selectedCharacterIds: [],
+          references: [
+            { id: `${mode}-source`, name: "Image source", imageDataUrl: baseImage, role: "Inspiration" as const },
+            ...(activeCustomStyle?.images ?? []).map((imageDataUrl, index) => ({ id: `${targetStyleId}-${index}`, name: `${activeCustomStyle?.name ?? "Style"} ${index + 1}`, imageDataUrl, role: "Style" as const })),
+          ],
+          aspectRatio: generated.size === "1536x1024" ? "3:2" : "2:3",
+          source: "Transfert de style",
+        },
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || `Style transfer failed (${response.status}).`);
-      }
-      setResult(payload as StyleTransferResult);
       notifyCreditsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Style transfer failed.");
@@ -368,7 +401,7 @@ function StyleTransferPage() {
                   <img
                     src={result.imageUrl}
                     alt={cfg.resultTitle}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
                 </button>
               ) : (

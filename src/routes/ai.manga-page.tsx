@@ -24,6 +24,8 @@ import { PlancheCanvas } from "@/components/canvas/PlancheCanvas";
 import { bearerHeader } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { loadSession, saveSession } from "@/lib/manga-session";
+import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
+import { openImageEditor, type ImageEditDraft } from "@/lib/image-edit-workspace";
 import {
   BookImage,
   Check,
@@ -134,8 +136,6 @@ function normalizeAspectRatio(value: unknown): AspectRatio {
 }
 
 const mangaStatusApiPath = "/api/manga/status";
-const mangaGenerateApiPath = "/api/manga/generate-page";
-const mangaGenerationTimeoutMs = 16 * 60 * 1000;
 
 type MangaApiErrorPayload = {
   error?: string;
@@ -189,18 +189,6 @@ function checkMangaBackendViaApi() {
     mangaStatusApiPath,
     { method: "GET" },
     60_000,
-  );
-}
-
-function generateMangaImageViaApi(data: MangaImageGenerationInput) {
-  return requestMangaApiJson<MangaImageGenerationResult>(
-    mangaGenerateApiPath,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    },
-    mangaGenerationTimeoutMs,
   );
 }
 
@@ -585,12 +573,32 @@ function CollabMangaAIPage() {
   }, []);
 
   useEffect(() => {
+    if (!hasPendingGeneration("manga-page")) return;
+    setIsGenerating(true);
+    void resumeDurableGeneration<MangaImageGenerationResult>("manga-page")
+      .then(async (generated) => {
+        if (!generated) return;
+        const normalizedImageUrl = await normalizeGeneratedImageAspectRatio(
+          generated.imageUrl,
+          aspectRatio,
+        );
+        setGenerationResult({
+          ...generated,
+          imageUrl: normalizedImageUrl,
+          size: generatedImageDimensions[aspectRatio].size,
+        });
+        setShowCanvas(false);
+      })
+      .catch((error) => setGenerationError(error instanceof Error ? error.message : "Image generation failed."))
+      .finally(() => setIsGenerating(false));
+  }, [aspectRatio]);
+
+  useEffect(() => {
     let cancelled = false;
-    void loadCharacterProfiles().then((savedCharacters) => {
+    void Promise.all([loadCharacterProfiles(), loadSession<MangaSessionSnapshot>("manga-page")]).then(
+      ([savedCharacters, snap]) => {
       if (cancelled) return;
       setCharacters(savedCharacters);
-
-      const snap = loadSession<MangaSessionSnapshot>("manga-page");
       if (snap) {
         setItems(mergeCharacterImagesIntoItems(snap.items ?? [], savedCharacters));
         setSelected(snap.selected ?? {});
@@ -616,7 +624,8 @@ function CollabMangaAIPage() {
         setSelectedCharacterIds({});
       }
       setCharactersLoaded(true);
-    });
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -631,7 +640,7 @@ function CollabMangaAIPage() {
 
   useEffect(() => {
     if (!charactersLoaded) return;
-    saveSession<MangaSessionSnapshot>("manga-page", {
+    void saveSession<MangaSessionSnapshot>("manga-page", {
       items,
       selected,
       selectedCharacterIds,
@@ -820,7 +829,7 @@ function CollabMangaAIPage() {
       );
       const budget = enforceImageBudget(preparedSelectedItems, characters);
       setBudgetNotice(budget.notice);
-      const result = await generateMangaImageViaApi({
+      const generationPayload: MangaImageGenerationInput = {
         operation,
         prompt,
         editPrompt,
@@ -847,7 +856,12 @@ function CollabMangaAIPage() {
         readingDirection,
         aspectRatio,
         existingImageDataUrl: generationResult?.imageUrl,
-      });
+      };
+      const result = await runDurableGeneration<MangaImageGenerationResult>(
+        "manga-page",
+        "/api/manga/generate-page",
+        generationPayload,
+      );
       const normalizedImageUrl = await normalizeGeneratedImageAspectRatio(
         result.imageUrl,
         aspectRatio,
@@ -857,6 +871,7 @@ function CollabMangaAIPage() {
         imageUrl: normalizedImageUrl,
         size: generatedImageDimensions[aspectRatio].size,
       };
+      const editContext = createImageEditDraft(normalizedResult.imageUrl);
       setGenerationResult(normalizedResult);
       notifyCreditsChanged();
       void addHistoryEntry({
@@ -867,6 +882,9 @@ function CollabMangaAIPage() {
         model: normalizedResult.model,
         size: normalizedResult.size,
         quality: normalizedResult.quality,
+        source: "Manga Page Creator",
+        title: "Planche manga",
+        editContext,
       }).then((entry) => setHistory((current) => [entry, ...current]));
       setShowCanvas(false);
       setTab("references");
@@ -883,6 +901,35 @@ function CollabMangaAIPage() {
     link.href = generationResult.imageUrl;
     link.download = `collabmanga-page-${Date.now()}.png`;
     link.click();
+  };
+
+  const createImageEditDraft = (imageUrl: string): ImageEditDraft => ({
+    originalImageUrl: imageUrl,
+    currentImageUrl: imageUrl,
+    prompt: "",
+    selectedCharacterIds: Object.entries(selectedCharacterIds)
+      .filter(([, isSelected]) => isSelected)
+      .map(([id]) => id),
+    references: selectedItems
+      .filter((item) => item.role !== "Character" && Boolean(item.imageDataUrl))
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        imageDataUrl: item.imageDataUrl!,
+        mimeType: item.mimeType,
+        description: item.description,
+        role:
+          item.role === "Generated Page"
+            ? "Inspiration"
+            : item.role,
+      })),
+    aspectRatio,
+    source: "Manga Page Creator",
+  });
+
+  const editGeneratedImage = () => {
+    if (!generationResult?.imageUrl) return;
+    void openImageEditor(createImageEditDraft(generationResult.imageUrl));
   };
 
   const selectHistoryEntry = (entry: MangaHistoryEntry) => {
@@ -967,6 +1014,7 @@ function CollabMangaAIPage() {
             onGenerate={() => requestImageGeneration("generate")}
             onRegenerate={() => requestImageGeneration("regenerate")}
             onDownload={downloadGeneratedImage}
+            onEdit={editGeneratedImage}
           />
         )}
 
@@ -1483,6 +1531,7 @@ function GenerationPanel({
   onGenerate,
   onRegenerate,
   onDownload,
+  onEdit,
 }: {
   result: MangaImageGenerationResult | null;
   error: string | null;
@@ -1498,6 +1547,7 @@ function GenerationPanel({
   onGenerate: () => void;
   onRegenerate: () => void;
   onDownload: () => void;
+  onEdit: () => void;
 }) {
   const [lightbox, setLightbox] = useState<{
     imageUrl: string;
@@ -1530,6 +1580,14 @@ function GenerationPanel({
             >
               <PenTool className="h-3.5 w-3.5" />
               Canvas
+            </button>
+            <button
+              onClick={onEdit}
+              disabled={!result}
+              className="flex h-9 items-center gap-1.5 rounded-[10px] border border-border bg-surface-2 px-2.5 text-[12px] font-bold text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              Modify
             </button>
             <button
               onClick={onDownload}

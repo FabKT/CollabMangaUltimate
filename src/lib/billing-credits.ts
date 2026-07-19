@@ -6,10 +6,17 @@
  * consommer si une image est produite, sinon restituer.
  */
 
-import { getServiceSupabase, isStripeConfigured } from "./stripe-server";
+import {
+  getServiceSupabase,
+  isStripeConfigured,
+  requiresBillingConfiguration,
+} from "./stripe-server";
 
 /** Coût OpenAI estimé par image produite (centimes). */
-export const ESTIMATED_IMAGE_COST_CENTS = 17;
+function estimatedImageCostCents() {
+  const configured = Number(process.env.OPENAI_IMAGE_COST_CENTS ?? 17);
+  return Number.isFinite(configured) && configured >= 0 ? Math.round(configured) : 17;
+}
 
 export type GenerationMeta = {
   operationType?: "generate" | "edit" | "regenerate" | "retry" | "variant";
@@ -38,9 +45,12 @@ async function userIdFromRequest(request: Request): Promise<string | null> {
 /** Traduit les exceptions des fonctions SQL de crédits en message clair. */
 function creditErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
-  if (raw.includes("NO_ACTIVE_PERIOD")) return "Aucun abonnement actif : souscris un plan pour générer des images.";
-  if (raw.includes("INSUFFICIENT_CREDITS")) return "Quota d'images épuisé pour cette période. Passe à un plan supérieur ou attends le renouvellement.";
-  if (raw.includes("PERIOD_EXPIRED")) return "Ta période d'abonnement est terminée. Renouvelle pour continuer.";
+  if (raw.includes("NO_ACTIVE_PERIOD"))
+    return "Aucun abonnement actif : souscris un plan pour générer des images.";
+  if (raw.includes("INSUFFICIENT_CREDITS"))
+    return "Quota d'images épuisé pour cette période. Passe à un plan supérieur ou attends le renouvellement.";
+  if (raw.includes("PERIOD_EXPIRED"))
+    return "Ta période d'abonnement est terminée. Renouvelle pour continuer.";
   return "Impossible de réserver un crédit d'image.";
 }
 
@@ -50,14 +60,19 @@ function creditErrorMessage(error: unknown): string {
  * - Sinon : authentification requise, réservation atomique, puis
  *   consommation (image produite) ou restitution (échec).
  */
-export async function withCredits<T extends { imageUrl?: string; imageDataUrl?: string; model?: string }>(
-  request: Request,
-  meta: GenerationMeta,
-  run: () => Promise<T>,
-): Promise<Outcome<T>> {
+export async function withCredits<
+  T extends { imageUrl?: string; imageDataUrl?: string; model?: string },
+>(request: Request, meta: GenerationMeta, run: () => Promise<T>): Promise<Outcome<T>> {
   // Tant que Stripe n'est pas configuré, aucun abonnement ne peut exister :
   // on n'impose pas de crédit (évite de bloquer le dev / la démo).
   if (!isStripeConfigured()) {
+    if (requiresBillingConfiguration()) {
+      return {
+        ok: false,
+        status: 503,
+        error: "Production billing is incomplete. Contact support before generating an image.",
+      };
+    }
     const result = await run();
     return { ok: true, result };
   }
@@ -68,7 +83,6 @@ export async function withCredits<T extends { imageUrl?: string; imageDataUrl?: 
   const sb = getServiceSupabase();
 
   // Réservation atomique d'un crédit.
-  let generationId: string;
   const reserved = await sb.rpc("reserve_credits", {
     p_user_id: userId,
     p_credits: 1,
@@ -79,7 +93,7 @@ export async function withCredits<T extends { imageUrl?: string; imageDataUrl?: 
     p_reference_images: meta.referenceImages ?? 0,
   });
   if (reserved.error) return { ok: false, status: 402, error: creditErrorMessage(reserved.error) };
-  generationId = reserved.data as string;
+  const generationId = reserved.data as string;
 
   try {
     const result = await run();
@@ -87,11 +101,16 @@ export async function withCredits<T extends { imageUrl?: string; imageDataUrl?: 
     await sb.rpc("settle_credits", {
       p_generation_id: generationId,
       p_images_produced: produced,
-      p_openai_cost_cents: produced * ESTIMATED_IMAGE_COST_CENTS,
+      p_openai_cost_cents: produced * estimatedImageCostCents(),
       p_openai_request_id: null,
       p_usage_data: result?.model ? { model: result.model } : {},
     });
-    if (produced === 0) return { ok: false, status: 502, error: "Le service n'a produit aucune image (crédit restitué)." };
+    if (produced === 0)
+      return {
+        ok: false,
+        status: 502,
+        error: "Le service n'a produit aucune image (crédit restitué).",
+      };
     return { ok: true, result };
   } catch (error) {
     // Échec → restitution du crédit réservé.

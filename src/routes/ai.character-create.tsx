@@ -4,8 +4,9 @@ import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { CharacterImageResult } from "@/server-functions/character-image";
-import { authJsonHeaders } from "@/lib/auth-header";
+import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
+import { recordGeneratedImage } from "@/lib/manga-history";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
 import { loadCustomMangaStyles, type CustomMangaStyle } from "@/lib/custom-manga-styles";
 import { CustomStyleModal } from "@/components/cma/CustomStyleModal";
@@ -90,22 +91,32 @@ function CharacterCreatePage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const snap = loadSession<CharacterSessionSnapshot>("character-create");
-    if (snap) {
-      setTab(snap.tab ?? "style");
-      setStyleId(snap.styleId ?? DEFAULT_STYLE_ID);
-      setIdentityReference(snap.identityReference ?? null);
-      setReferences(snap.references ?? []);
-      setPrompt(snap.prompt ?? "");
-      if (snap.result) setResult(snap.result);
-    }
-    setLoaded(true);
+    void loadSession<CharacterSessionSnapshot>("character-create").then((snap) => {
+      if (snap) {
+        setTab(snap.tab ?? "style");
+        setStyleId(snap.styleId ?? DEFAULT_STYLE_ID);
+        setIdentityReference(snap.identityReference ?? null);
+        setReferences(snap.references ?? []);
+        setPrompt(snap.prompt ?? "");
+        if (snap.result) setResult(snap.result);
+      }
+      setLoaded(true);
+    });
     void loadCustomMangaStyles().then(setCustomStyles);
   }, []);
 
   useEffect(() => {
+    if (!hasPendingGeneration("character-create")) return;
+    setIsGenerating(true);
+    void resumeDurableGeneration<CharacterImageResult>("character-create").then((generated) => {
+      if (generated) setResult(generated);
+    }).catch((err) => setError(err instanceof Error ? err.message : "Character generation failed."))
+      .finally(() => setIsGenerating(false));
+  }, []);
+
+  useEffect(() => {
     if (!loaded) return;
-    saveSession<CharacterSessionSnapshot>("character-create", {
+    void saveSession<CharacterSessionSnapshot>("character-create", {
       tab,
       styleId,
       identityReference,
@@ -157,10 +168,10 @@ function CharacterCreatePage() {
         activeCustomStyle ? Promise.resolve(activeCustomStyle.images[0]) : imageSourceToDataUrl(selectedStyle.face),
         imageSourceToDataUrl(selectedStyle.card),
       ]);
-      const response = await fetch("/api/character/generate", {
-        method: "POST",
-        headers: await authJsonHeaders(),
-        body: JSON.stringify({
+      const generated = await runDurableGeneration<CharacterImageResult>(
+        "character-create",
+        "/api/character/generate",
+        {
           prompt: prompt.trim(),
           identityImageDataUrl: identityReference.imageDataUrl,
           identityReferenceName: identityReference.name,
@@ -171,13 +182,31 @@ function CharacterCreatePage() {
           styleReferenceImages: activeCustomStyle?.images ?? [],
           structureImageDataUrl,
           references,
-        }),
+        },
+      );
+      setResult(generated);
+      void recordGeneratedImage({
+        source: "Creation de personnage",
+        title: identityReference.name || "Carte de personnage",
+        prompt,
+        result: generated,
+        editContext: {
+          originalImageUrl: generated.imageUrl,
+          currentImageUrl: generated.imageUrl,
+          prompt: "",
+          selectedCharacterIds: [],
+          references: [
+            { ...identityReference, imageDataUrl: identityReference.imageDataUrl, role: "Inspiration" as const },
+            ...references
+              .filter((reference) => reference.imageDataUrl)
+              .map((reference) => ({ ...reference, imageDataUrl: reference.imageDataUrl!, role: "Inspiration" as const })),
+            ...(defaultStyleImageDataUrl ? [{ id: `${styleId}-style`, name: "Style", imageDataUrl: defaultStyleImageDataUrl, role: "Style" as const }] : []),
+            ...(structureImageDataUrl ? [{ id: `${styleId}-structure`, name: "Structure", imageDataUrl: structureImageDataUrl, role: "Storyboard" as const }] : []),
+          ],
+          aspectRatio: "3:2",
+          source: "Creation de personnage",
+        },
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || `Character generation failed (${response.status}).`);
-      }
-      setResult(payload as CharacterImageResult);
       notifyCreditsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Character generation failed.");

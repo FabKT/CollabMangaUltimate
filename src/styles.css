@@ -672,3 +672,29 @@
   --font-manrope: var(--font-sans);
   --font-sora: var(--font-display);
 }
+
+/* ---------- Espace public (page d'introduction + pages /discover) ----------
+   Extrait de la page d'intro pour être partagé par le header public et les
+   pages publiques. */
+.intro-hero-panel { height: calc(100vh - 80px); height: calc(100dvh - 80px); min-height: 520px; }
+.intro-hero-panel:hover .intro-hero-border { border-color: rgba(57,255,136,0.45); }
+.intro-hero-panel .intro-hero-img { transition: transform .35s ease; }
+.intro-hero-panel:hover .intro-hero-img { transform: scale(1.03); }
+.intro-nav-link { color: #B8C4E5; font-weight: 600; font-size: 15px; text-decoration: none; transition: color .15s; }
+.intro-nav-link:hover, .intro-nav-link.active { color: #39FF88; }
+.intro-btn-ghost { background: transparent; border: 1px solid rgba(133,154,206,0.35); color: #F7FAFF; font-weight: 600; font-size: 14px; padding: 10px 20px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all .15s; }
+.intro-btn-ghost:hover { border-color: #39FF88; color: #39FF88; }
+.intro-btn-neon { background: #39FF88; border: none; color: #050B1D; font-weight: 700; font-size: 14px; padding: 11px 22px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background .15s; }
+.intro-btn-neon:hover { background: #25E575; }
+.intro-btn-outline { width: fit-content; margin-top: 8px; border: 1px solid rgba(133,154,206,0.35); color: #F7FAFF; font-weight: 600; font-size: 15px; padding: 12px 24px; border-radius: 8px; text-decoration: none; transition: all .15s; display: inline-flex; align-items: center; gap: 8px; }
+.intro-btn-outline:hover { border-color: #39FF88; color: #39FF88; }
+.intro-card { transition: border-color .18s, transform .18s; }
+.intro-card:hover { border-color: rgba(57,255,136,0.4); transform: translateY(-2px); }
+.intro-section { padding: 100px 48px; }
+.intro-section[id] { scroll-margin-top: 80px; }
+@media (max-width: 900px) {
+  .intro-hero { grid-template-columns: 1fr !important; }
+  .intro-hero-panel { height: calc(50vh - 41px); height: calc(50dvh - 41px); min-height: 380px; }
+  .intro-nav { display: none !important; }
+  .intro-section { padding: 72px 24px; }
+}
