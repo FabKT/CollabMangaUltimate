@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { StyleTransferResult } from "@/server-functions/style-transfer-image";
+import type { GenerationUsage } from "@/lib/generation-metrics";
 
 /**
  * Manga PAGE style-transfer plan (« planche »).
@@ -32,6 +33,8 @@ type PulsePlancheTransferResponse = {
   size?: string;
   createdAt?: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
   error?: string;
 };
 
@@ -411,5 +414,7 @@ export async function requestPulseNotePlancheTransfer(
     size: payload.size ?? "unknown",
     createdAt: payload.createdAt ?? new Date().toISOString(),
     creditsUsed: payload.creditsUsed,
+    costUsd: payload.costUsd,
+    usage: payload.usage,
   };
 }

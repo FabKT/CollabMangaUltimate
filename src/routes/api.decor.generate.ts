@@ -12,10 +12,13 @@ export const Route = createFileRoute("/api/decor/generate")({
       POST: async ({ request }) => {
         try {
           const input = parseDecorImageInput(await request.json());
-          const outcome = await withCredits(request, { operationType: "generate" }, () =>
-            requestPulseNoteDecorImage(input),
+          const outcome = await withCredits(
+            request,
+            { workspace: "decor-create", operationType: "generate" },
+            () => requestPulseNoteDecorImage(input),
           );
-          if (!outcome.ok) return Response.json({ error: outcome.error }, { status: outcome.status });
+          if (!outcome.ok)
+            return Response.json({ error: outcome.error }, { status: outcome.status });
           return Response.json(outcome.result);
         } catch (error) {
           return Response.json({ error: apiErrorMessage(error) }, { status: 500 });

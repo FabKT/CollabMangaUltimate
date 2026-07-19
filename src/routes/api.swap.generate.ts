@@ -8,8 +8,10 @@ export const Route = createFileRoute("/api/swap/generate")({
       POST: async ({ request }) => {
         try {
           const input = parseSwapImageInput(await request.json());
-          const outcome = await withCredits(request, { operationType: "edit" }, () =>
-            requestPulseNoteSwap(input),
+          const outcome = await withCredits(
+            request,
+            { workspace: "swap", operationType: "edit" },
+            () => requestPulseNoteSwap(input),
           );
           if (!outcome.ok)
             return Response.json({ error: outcome.error }, { status: outcome.status });

@@ -15,10 +15,13 @@ export const Route = createFileRoute("/api/planche-transfer/generate")({
       POST: async ({ request }) => {
         try {
           const input = parsePlancheTransferInput(await request.json());
-          const outcome = await withCredits(request, { operationType: "generate" }, () =>
-            requestPulseNotePlancheTransfer(input),
+          const outcome = await withCredits(
+            request,
+            { workspace: "planche-transfer", operationType: "generate" },
+            () => requestPulseNotePlancheTransfer(input),
           );
-          if (!outcome.ok) return Response.json({ error: outcome.error }, { status: outcome.status });
+          if (!outcome.ok)
+            return Response.json({ error: outcome.error }, { status: outcome.status });
           return Response.json(outcome.result);
         } catch (error) {
           return Response.json({ error: apiErrorMessage(error) }, { status: 500 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GenerationUsage } from "@/lib/generation-metrics";
 
 /**
  * Style-transfer plan.
@@ -30,6 +31,8 @@ export type StyleTransferResult = {
   size: string;
   createdAt: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
 };
 
 type PulseNoteStyleTransferResponse = {
@@ -40,6 +43,8 @@ type PulseNoteStyleTransferResponse = {
   size?: string;
   createdAt?: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
   error?: string;
 };
 
@@ -142,5 +147,7 @@ export async function requestPulseNoteStyleTransfer(
     size: payload.size ?? "unknown",
     createdAt: payload.createdAt ?? new Date().toISOString(),
     creditsUsed: payload.creditsUsed,
+    costUsd: payload.costUsd,
+    usage: payload.usage,
   };
 }

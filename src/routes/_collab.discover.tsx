@@ -2,6 +2,7 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { listProfiles, sendFriendRequestDb, startConversationWith } from "@/lib/db";
 import { SITE_LANGUAGES } from "@/lib/languages";
+import { localizeLabel, useI18n } from "@/lib/i18n";
 import {
   Search,
   SlidersHorizontal,
@@ -35,8 +36,7 @@ export const Route = createFileRoute("/_collab/discover")({
       { property: "og:title", content: "Find Users — CollabManga" },
       {
         property: "og:description",
-        content:
-          "Discover manga collaborators by role, skill, genre, availability and more.",
+        content: "Discover manga collaborators by role, skill, genre, availability and more.",
       },
     ],
   }),
@@ -45,31 +45,48 @@ export const Route = createFileRoute("/_collab/discover")({
 
 /* ---------------- data ---------------- */
 
-type Role =
-  | "Artist"
-  | "Writer"
-  | "Content creator"
-  | "Reader";
+type Role = "Artist" | "Writer" | "Content creator" | "Reader";
 
-const STATUSES: Role[] = [
-  "Artist",
-  "Writer",
-  "Content creator",
-  "Reader",
-];
+const STATUSES: Role[] = ["Artist", "Writer", "Content creator", "Reader"];
 
 const GENRES = ["Shonen", "Seinen", "Shojo", "Josei"];
 
 const SUBGENRES = [
-  "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Science fiction",
-  "Romance", "Slice of life", "Horror", "Mystery", "Historical", "Sport",
-  "Isekai", "Psychological",
+  "Action",
+  "Adventure",
+  "Comedy",
+  "Drama",
+  "Fantasy",
+  "Science fiction",
+  "Romance",
+  "Slice of life",
+  "Horror",
+  "Mystery",
+  "Historical",
+  "Sport",
+  "Isekai",
+  "Psychological",
 ];
 
 const PLATFORMS = ["YouTube", "TikTok", "Instagram", "Twitter / X", "Twitch", "Other"];
 
-const CREATOR_VIDEO_TYPES = ["Review", "Reaction", "Short videos", "Long videos", "Analysis", "Presentation"];
-const CREATOR_DURATIONS = ["0-30 s", "30-60 s", "60-120 s", "2-3 min", "3-5 min", "5-10 min", "10+ min"];
+const CREATOR_VIDEO_TYPES = [
+  "Review",
+  "Reaction",
+  "Short videos",
+  "Long videos",
+  "Analysis",
+  "Presentation",
+];
+const CREATOR_DURATIONS = [
+  "0-30 s",
+  "30-60 s",
+  "60-120 s",
+  "2-3 min",
+  "3-5 min",
+  "5-10 min",
+  "10+ min",
+];
 const CREATOR_PAYMENT_MODES = ["Abonnement", "Paiement unique", "Négociable"];
 
 type SponsorshipOption = {
@@ -123,18 +140,32 @@ type Profile = {
 
 // Plus de profils fictifs : la page charge les utilisateurs réellement inscrits (Supabase).
 function initialsOf(name: string) {
-  return name.split(/[\s_.-]+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  return (
+    name
+      .split(/[\s_.-]+/)
+      .filter(Boolean)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
 }
 
 /** Rôle choisi dans le popup de modification du profil (FR) → rôle affiché sur Discover (EN). */
 const ROLE_FROM_PROFILE: Record<string, Role> = {
-  "Dessinateur": "Artist",
-  "Scénariste": "Writer",
+  Dessinateur: "Artist",
+  Scénariste: "Writer",
   "Créateur de contenu": "Content creator",
-  "Lecteur": "Reader",
+  Lecteur: "Reader",
 };
 
-function profileFromDb(db: { id: string; username: string; display_name: string | null; avatar_url: string | null; role?: string | null }): Profile {
+function profileFromDb(db: {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role?: string | null;
+}): Profile {
   const name = db.display_name || db.username;
   return {
     id: db.id,
@@ -188,7 +219,10 @@ function creatorFilterCount(filters: CreatorAdvancedFilters) {
 
 function parseAudience(value?: string) {
   if (!value) return 0;
-  const match = value.toLowerCase().replace(",", ".").match(/([\d.]+)\s*k?/);
+  const match = value
+    .toLowerCase()
+    .replace(",", ".")
+    .match(/([\d.]+)\s*k?/);
   if (!match) return 0;
   const base = Number(match[1]);
   return value.toLowerCase().includes("k") ? base * 1000 : base;
@@ -200,22 +234,31 @@ function matchesCreatorAdvancedFilters(profile: Profile, filters: CreatorAdvance
 
   const options = profile.sponsorshipOptions ?? [];
   if (filters.sponsorshipOnly && options.length === 0) return false;
-  if (filters.platforms.length && !filters.platforms.every((platform) => profile.platforms?.includes(platform))) return false;
+  if (
+    filters.platforms.length &&
+    !filters.platforms.every((platform) => profile.platforms?.includes(platform))
+  )
+    return false;
 
   if (filters.videoTypes.length) {
-    const hasVideoType = filters.videoTypes.some((type) =>
-      options.some((option) => option.videoType === type) || profile.skills.includes(type),
+    const hasVideoType = filters.videoTypes.some(
+      (type) =>
+        options.some((option) => option.videoType === type) || profile.skills.includes(type),
     );
     if (!hasVideoType) return false;
   }
 
   if (filters.durations.length) {
-    const hasDuration = filters.durations.some((duration) => options.some((option) => option.duration === duration));
+    const hasDuration = filters.durations.some((duration) =>
+      options.some((option) => option.duration === duration),
+    );
     if (!hasDuration) return false;
   }
 
   if (filters.paymentModes.length) {
-    const hasPaymentMode = filters.paymentModes.some((mode) => options.some((option) => option.paymentMode === mode));
+    const hasPaymentMode = filters.paymentModes.some((mode) =>
+      options.some((option) => option.paymentMode === mode),
+    );
     if (!hasPaymentMode) return false;
   }
 
@@ -370,6 +413,7 @@ function PlatformIcon({ name }: { name: string }) {
 /* ---------------- page ---------------- */
 
 function UsersPage() {
+  const { locale } = useI18n();
   const navigate = useNavigate();
   const [languages, setLanguages] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<string[]>([]);
@@ -396,7 +440,8 @@ function UsersPage() {
   }, []);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [creatorFilterOpen, setCreatorFilterOpen] = useState(false);
-  const [creatorFilters, setCreatorFilters] = useState<CreatorAdvancedFilters>(EMPTY_CREATOR_FILTERS);
+  const [creatorFilters, setCreatorFilters] =
+    useState<CreatorAdvancedFilters>(EMPTY_CREATOR_FILTERS);
   const [sponsorshipProfile, setSponsorshipProfile] = useState<Profile | null>(null);
   const [friendTarget, setFriendTarget] = useState<Profile | null>(null);
   const [contactingId, setContactingId] = useState<string | null>(null);
@@ -410,7 +455,9 @@ function UsersPage() {
       const conversation = await startConversationWith(profile.id);
       await navigate({ to: "/messages", search: { conversation } });
     } catch (error) {
-      setContactError(error instanceof Error ? error.message : "Impossible d'ouvrir la conversation.");
+      setContactError(
+        error instanceof Error ? error.message : "Impossible d'ouvrir la conversation.",
+      );
     } finally {
       setContactingId(null);
     }
@@ -420,7 +467,11 @@ function UsersPage() {
     const list: { key: string; label: string; onRemove: () => void }[] = [];
     const push = (key: string, vals: string[], setter: (v: string[]) => void) =>
       vals.forEach((v) =>
-        list.push({ key: `${key}:${v}`, label: v, onRemove: () => setter(vals.filter((x) => x !== v)) }),
+        list.push({
+          key: `${key}:${v}`,
+          label: v,
+          onRemove: () => setter(vals.filter((x) => x !== v)),
+        }),
       );
     push("lang", languages, setLanguages);
     push("status", statuses, setStatuses);
@@ -431,16 +482,36 @@ function UsersPage() {
     if (maxRating < 5)
       list.push({ key: "max", label: `Max ${maxRating}★`, onRemove: () => setMaxRating(5) });
     creatorFilters.platforms.forEach((v) =>
-      list.push({ key: `creator-platform:${v}`, label: v, onRemove: () => setCreatorFilters((f) => ({ ...f, platforms: f.platforms.filter((x) => x !== v) })) }),
+      list.push({
+        key: `creator-platform:${v}`,
+        label: v,
+        onRemove: () =>
+          setCreatorFilters((f) => ({ ...f, platforms: f.platforms.filter((x) => x !== v) })),
+      }),
     );
     creatorFilters.videoTypes.forEach((v) =>
-      list.push({ key: `creator-video:${v}`, label: v, onRemove: () => setCreatorFilters((f) => ({ ...f, videoTypes: f.videoTypes.filter((x) => x !== v) })) }),
+      list.push({
+        key: `creator-video:${v}`,
+        label: v,
+        onRemove: () =>
+          setCreatorFilters((f) => ({ ...f, videoTypes: f.videoTypes.filter((x) => x !== v) })),
+      }),
     );
     creatorFilters.durations.forEach((v) =>
-      list.push({ key: `creator-duration:${v}`, label: v, onRemove: () => setCreatorFilters((f) => ({ ...f, durations: f.durations.filter((x) => x !== v) })) }),
+      list.push({
+        key: `creator-duration:${v}`,
+        label: v,
+        onRemove: () =>
+          setCreatorFilters((f) => ({ ...f, durations: f.durations.filter((x) => x !== v) })),
+      }),
     );
     creatorFilters.paymentModes.forEach((v) =>
-      list.push({ key: `creator-payment:${v}`, label: v, onRemove: () => setCreatorFilters((f) => ({ ...f, paymentModes: f.paymentModes.filter((x) => x !== v) })) }),
+      list.push({
+        key: `creator-payment:${v}`,
+        label: v,
+        onRemove: () =>
+          setCreatorFilters((f) => ({ ...f, paymentModes: f.paymentModes.filter((x) => x !== v) })),
+      }),
     );
     if (creatorFilters.minSubs.trim()) {
       list.push({
@@ -467,21 +538,38 @@ function UsersPage() {
   }, [languages, statuses, genres, subgenres, minRating, maxRating, creatorFilters]);
 
   const resetAll = () => {
-    setLanguages([]); setStatuses([]); setGenres([]); setSubgenres([]);
+    setLanguages([]);
+    setStatuses([]);
+    setGenres([]);
+    setSubgenres([]);
     setCreatorFilters(EMPTY_CREATOR_FILTERS);
-    setMinRating(0); setMaxRating(5); setQuery("");
+    setMinRating(0);
+    setMaxRating(5);
+    setQuery("");
   };
 
   const results = profiles.filter((p) => {
     if (p.rating < minRating || p.rating > maxRating) return false;
     if (statuses.length && !statuses.includes(p.role)) return false;
-    if (languages.length && !languages.some((language) => p.languages.includes(language))) return false;
+    if (languages.length && !languages.some((language) => p.languages.includes(language)))
+      return false;
     if (genres.length && !genres.some((genre) => p.genres.includes(genre))) return false;
-    if (subgenres.length && !subgenres.some((subgenre) => p.genres.includes(subgenre))) return false;
+    if (subgenres.length && !subgenres.some((subgenre) => p.genres.includes(subgenre)))
+      return false;
     if (!matchesCreatorAdvancedFilters(p, creatorFilters)) return false;
     if (query) {
       const q = query.toLowerCase();
-      const hay = [p.username, p.role, p.bio, ...p.skills, ...p.genres, ...p.languages, ...(p.platforms ?? [])].join(" ").toLowerCase();
+      const hay = [
+        p.username,
+        p.role,
+        p.bio,
+        ...p.skills,
+        ...p.genres,
+        ...p.languages,
+        ...(p.platforms ?? []),
+      ]
+        .join(" ")
+        .toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -521,7 +609,9 @@ function UsersPage() {
             >
               <option value="">Ajouter une langue…</option>
               {SITE_LANGUAGES.map((l) => (
-                <option key={l.code} value={l.label}>{l.label}</option>
+                <option key={l.code} value={l.label}>
+                  {l.label}
+                </option>
               ))}
             </select>
             {languages.map((label) => (
@@ -535,8 +625,12 @@ function UsersPage() {
         <FilterGroup title="Status" count={statuses.length || undefined}>
           <div className="flex flex-wrap gap-1.5">
             {STATUSES.map((s) => (
-              <Chip key={s} active={statuses.includes(s)} onClick={() => setStatuses(toggle(statuses, s))}>
-                {s}
+              <Chip
+                key={s}
+                active={statuses.includes(s)}
+                onClick={() => setStatuses(toggle(statuses, s))}
+              >
+                {localizeLabel(s, locale)}
               </Chip>
             ))}
           </div>
@@ -552,8 +646,12 @@ function UsersPage() {
         <FilterGroup title="Genre" count={genres.length || undefined}>
           <div className="flex flex-wrap gap-1.5">
             {GENRES.map((g) => (
-              <Chip key={g} active={genres.includes(g)} onClick={() => setGenres(toggle(genres, g))}>
-                {g}
+              <Chip
+                key={g}
+                active={genres.includes(g)}
+                onClick={() => setGenres(toggle(genres, g))}
+              >
+                {localizeLabel(g, locale)}
               </Chip>
             ))}
           </div>
@@ -562,13 +660,17 @@ function UsersPage() {
         <FilterGroup title="Subgenre" count={subgenres.length || undefined} defaultOpen={false}>
           <div className="flex flex-wrap gap-1.5">
             {SUBGENRES.map((s) => (
-              <Chip key={s} active={subgenres.includes(s)} onClick={() => setSubgenres(toggle(subgenres, s))} size="xs">
-                {s}
+              <Chip
+                key={s}
+                active={subgenres.includes(s)}
+                onClick={() => setSubgenres(toggle(subgenres, s))}
+                size="xs"
+              >
+                {localizeLabel(s, locale)}
               </Chip>
             ))}
           </div>
         </FilterGroup>
-
       </div>
 
       <div className="grid grid-cols-2 gap-2 border-t border-[color:var(--cm-border)] p-4">
@@ -596,149 +698,150 @@ function UsersPage() {
             Find Users
           </h1>
           <p className="mt-1 text-sm text-[color:var(--cm-text-2)]">
-            Search artists, writers, content creators, readers, and collaborators for manga projects.
+            Search artists, writers, content creators, readers, and collaborators for manga
+            projects.
           </p>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        {/* Desktop sidebar */}
-        <div className="hidden overflow-hidden rounded-2xl border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] lg:block lg:sticky lg:top-[76px] lg:h-[calc(100vh-96px)]">
-          {Sidebar}
-        </div>
-
-        {/* Results */}
-        <main className="min-w-0">
-          {/* Search + view */}
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="relative">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--cm-text-3)]"
-              />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by username, role, skill, genre, or language…"
-                className="h-12 w-full rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] pl-11 pr-4 text-sm text-[color:var(--cm-text)] placeholder:text-[color:var(--cm-text-3)] focus:border-[color:var(--cm-accent)] focus:outline-none focus:ring-2 focus:ring-[color:var(--cm-accent-soft)]"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCreatorFilterOpen(true)}
-                className="flex h-12 items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-4 text-sm font-semibold text-[color:var(--cm-text)] transition hover:border-[color:var(--cm-border-hover)]"
-              >
-                <SlidersHorizontal size={16} />
-                Créateurs
-                {creatorFilterCount(creatorFilters) ? (
-                  <span className="ml-1 rounded-full bg-[color:var(--cm-accent)] px-1.5 text-[10px] font-bold text-[#04180d]">
-                    {creatorFilterCount(creatorFilters)}
-                  </span>
-                ) : null}
-              </button>
-              <button
-                onClick={() => setMobileFilterOpen(true)}
-                className="flex h-12 items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-4 text-sm font-semibold text-[color:var(--cm-text)] lg:hidden"
-              >
-                <SlidersHorizontal size={16} /> Filters
-                {activeFilters.length ? (
-                  <span className="ml-1 rounded-full bg-[color:var(--cm-accent)] px-1.5 text-[10px] font-bold text-[#04180d]">
-                    {activeFilters.length}
-                  </span>
-                ) : null}
-              </button>
-              <div className="flex h-12 items-center rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] p-1">
-                <button
-                  onClick={() => setView("grid")}
-                  aria-label="Grid view"
-                  aria-pressed={view === "grid"}
-                  className={classNames(
-                    "grid h-10 w-10 place-items-center rounded-lg transition",
-                    view === "grid"
-                      ? "bg-[color:var(--cm-accent-soft)] text-[color:var(--cm-accent)]"
-                      : "text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-text)]",
-                  )}
-                >
-                  <Grid3x3 size={16} />
-                </button>
-                <button
-                  onClick={() => setView("list")}
-                  aria-label="List view"
-                  aria-pressed={view === "list"}
-                  className={classNames(
-                    "grid h-10 w-10 place-items-center rounded-lg transition",
-                    view === "list"
-                      ? "bg-[color:var(--cm-accent-soft)] text-[color:var(--cm-accent)]"
-                      : "text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-text)]",
-                  )}
-                >
-                  <List size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Active filters */}
-          {activeFilters.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-[color:var(--cm-text-3)]">Active:</span>
-              {activeFilters.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={f.onRemove}
-                  className="group inline-flex items-center gap-1.5 rounded-full border border-[color:var(--cm-accent)] bg-[color:var(--cm-accent-soft)] px-3 py-1 text-[11px] font-semibold text-[color:var(--cm-accent)]"
-                >
-                  {f.label}
-                  <X size={12} className="opacity-70 group-hover:opacity-100" />
-                </button>
-              ))}
-              <button
-                onClick={resetAll}
-                className="ml-1 text-[11px] font-semibold text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-text)]"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
-
-          {/* Result meta */}
-          <div className="mt-5 flex items-center justify-between text-xs text-[color:var(--cm-text-3)]">
-            <span>
-              <span className="font-semibold text-[color:var(--cm-text)]">{results.length}</span> profiles
-              matching your search
-            </span>
+          {/* Desktop sidebar */}
+          <div className="hidden overflow-hidden rounded-2xl border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] lg:block lg:sticky lg:top-[76px] lg:h-[calc(100vh-96px)]">
+            {Sidebar}
           </div>
 
           {/* Results */}
-          {results.length === 0 ? (
-            <EmptyState onReset={resetAll} />
-          ) : view === "grid" ? (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {results.map((p) => (
-                <UserCard
-                  key={p.id}
-                  profile={p}
-                  onSponsorshipOptions={setSponsorshipProfile}
-                  onAddFriend={setFriendTarget}
-                  onContact={(profile) => void contactProfile(profile)}
-                  contacting={contactingId === p.id}
+          <main className="min-w-0">
+            {/* Search + view */}
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="relative">
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--cm-text-3)]"
                 />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4 flex flex-col gap-3">
-              {results.map((p) => (
-                <UserRow
-                  key={p.id}
-                  profile={p}
-                  onSponsorshipOptions={setSponsorshipProfile}
-                  onAddFriend={setFriendTarget}
-                  onContact={(profile) => void contactProfile(profile)}
-                  contacting={contactingId === p.id}
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search by username, role, skill, genre, or language…"
+                  className="h-12 w-full rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] pl-11 pr-4 text-sm text-[color:var(--cm-text)] placeholder:text-[color:var(--cm-text-3)] focus:border-[color:var(--cm-accent)] focus:outline-none focus:ring-2 focus:ring-[color:var(--cm-accent-soft)]"
                 />
-              ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCreatorFilterOpen(true)}
+                  className="flex h-12 items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-4 text-sm font-semibold text-[color:var(--cm-text)] transition hover:border-[color:var(--cm-border-hover)]"
+                >
+                  <SlidersHorizontal size={16} />
+                  Créateurs
+                  {creatorFilterCount(creatorFilters) ? (
+                    <span className="ml-1 rounded-full bg-[color:var(--cm-accent)] px-1.5 text-[10px] font-bold text-[#04180d]">
+                      {creatorFilterCount(creatorFilters)}
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  onClick={() => setMobileFilterOpen(true)}
+                  className="flex h-12 items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-4 text-sm font-semibold text-[color:var(--cm-text)] lg:hidden"
+                >
+                  <SlidersHorizontal size={16} /> Filters
+                  {activeFilters.length ? (
+                    <span className="ml-1 rounded-full bg-[color:var(--cm-accent)] px-1.5 text-[10px] font-bold text-[#04180d]">
+                      {activeFilters.length}
+                    </span>
+                  ) : null}
+                </button>
+                <div className="flex h-12 items-center rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] p-1">
+                  <button
+                    onClick={() => setView("grid")}
+                    aria-label="Grid view"
+                    aria-pressed={view === "grid"}
+                    className={classNames(
+                      "grid h-10 w-10 place-items-center rounded-lg transition",
+                      view === "grid"
+                        ? "bg-[color:var(--cm-accent-soft)] text-[color:var(--cm-accent)]"
+                        : "text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-text)]",
+                    )}
+                  >
+                    <Grid3x3 size={16} />
+                  </button>
+                  <button
+                    onClick={() => setView("list")}
+                    aria-label="List view"
+                    aria-pressed={view === "list"}
+                    className={classNames(
+                      "grid h-10 w-10 place-items-center rounded-lg transition",
+                      view === "list"
+                        ? "bg-[color:var(--cm-accent-soft)] text-[color:var(--cm-accent)]"
+                        : "text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-text)]",
+                    )}
+                  >
+                    <List size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
-          )}
-        </main>
+
+            {/* Active filters */}
+            {activeFilters.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-[color:var(--cm-text-3)]">Active:</span>
+                {activeFilters.map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={f.onRemove}
+                    className="group inline-flex items-center gap-1.5 rounded-full border border-[color:var(--cm-accent)] bg-[color:var(--cm-accent-soft)] px-3 py-1 text-[11px] font-semibold text-[color:var(--cm-accent)]"
+                  >
+                    {f.label}
+                    <X size={12} className="opacity-70 group-hover:opacity-100" />
+                  </button>
+                ))}
+                <button
+                  onClick={resetAll}
+                  className="ml-1 text-[11px] font-semibold text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-text)]"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+
+            {/* Result meta */}
+            <div className="mt-5 flex items-center justify-between text-xs text-[color:var(--cm-text-3)]">
+              <span>
+                <span className="font-semibold text-[color:var(--cm-text)]">{results.length}</span>{" "}
+                profiles matching your search
+              </span>
+            </div>
+
+            {/* Results */}
+            {results.length === 0 ? (
+              <EmptyState onReset={resetAll} />
+            ) : view === "grid" ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {results.map((p) => (
+                  <UserCard
+                    key={p.id}
+                    profile={p}
+                    onSponsorshipOptions={setSponsorshipProfile}
+                    onAddFriend={setFriendTarget}
+                    onContact={(profile) => void contactProfile(profile)}
+                    contacting={contactingId === p.id}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-col gap-3">
+                {results.map((p) => (
+                  <UserRow
+                    key={p.id}
+                    profile={p}
+                    onSponsorshipOptions={setSponsorshipProfile}
+                    onAddFriend={setFriendTarget}
+                    onContact={(profile) => void contactProfile(profile)}
+                    contacting={contactingId === p.id}
+                  />
+                ))}
+              </div>
+            )}
+          </main>
         </div>
       </div>
 
@@ -798,7 +901,15 @@ function UsersPage() {
 
 /* ---------------- cards ---------------- */
 
-function Avatar({ initials, avatarUrl, size = 48 }: { initials: string; avatarUrl?: string; size?: number }) {
+function Avatar({
+  initials,
+  avatarUrl,
+  size = 48,
+}: {
+  initials: string;
+  avatarUrl?: string;
+  size?: number;
+}) {
   return (
     <div
       className="grid shrink-0 place-items-center rounded-2xl border border-[color:var(--cm-border)] bg-gradient-to-br from-[color:var(--cm-panel)] to-[color:var(--cm-card)] font-display font-bold text-[color:var(--cm-accent)]"
@@ -839,12 +950,14 @@ function AvailabilityBadge({ value }: { value: string }) {
 /* Drapeaux SVG (les emojis drapeaux ne s'affichent pas sous Windows). */
 function LangFlag({ lang }: { lang: string }) {
   const flags: Record<string, React.ReactNode> = {
-    "Français": (
+    Français: (
       <>
-        <rect width="6" height="12" fill="#0055A4" /><rect x="6" width="6" height="12" fill="#fff" /><rect x="12" width="6" height="12" fill="#EF4135" />
+        <rect width="6" height="12" fill="#0055A4" />
+        <rect x="6" width="6" height="12" fill="#fff" />
+        <rect x="12" width="6" height="12" fill="#EF4135" />
       </>
     ),
-    "English": (
+    English: (
       <>
         <rect width="18" height="12" fill="#012169" />
         <path d="M0 0 L18 12 M18 0 L0 12" stroke="#fff" strokeWidth="2.6" />
@@ -853,34 +966,43 @@ function LangFlag({ lang }: { lang: string }) {
         <path d="M9 0 V12 M0 6 H18" stroke="#C8102E" strokeWidth="2.2" />
       </>
     ),
-    "Español": (
+    Español: (
       <>
-        <rect width="18" height="12" fill="#AA151B" /><rect y="3" width="18" height="6" fill="#F1BF00" />
+        <rect width="18" height="12" fill="#AA151B" />
+        <rect y="3" width="18" height="6" fill="#F1BF00" />
       </>
     ),
-    "Italiano": (
+    Italiano: (
       <>
-        <rect width="6" height="12" fill="#009246" /><rect x="6" width="6" height="12" fill="#fff" /><rect x="12" width="6" height="12" fill="#CE2B37" />
+        <rect width="6" height="12" fill="#009246" />
+        <rect x="6" width="6" height="12" fill="#fff" />
+        <rect x="12" width="6" height="12" fill="#CE2B37" />
       </>
     ),
-    "日本語": (
+    日本語: (
       <>
-        <rect width="18" height="12" fill="#fff" /><circle cx="9" cy="6" r="3.4" fill="#BC002D" />
+        <rect width="18" height="12" fill="#fff" />
+        <circle cx="9" cy="6" r="3.4" fill="#BC002D" />
       </>
     ),
-    "Deutsch": (
+    Deutsch: (
       <>
-        <rect width="18" height="4" fill="#000" /><rect y="4" width="18" height="4" fill="#DD0000" /><rect y="8" width="18" height="4" fill="#FFCE00" />
+        <rect width="18" height="4" fill="#000" />
+        <rect y="4" width="18" height="4" fill="#DD0000" />
+        <rect y="8" width="18" height="4" fill="#FFCE00" />
       </>
     ),
-    "Nederlands": (
+    Nederlands: (
       <>
-        <rect width="18" height="4" fill="#AE1C28" /><rect y="4" width="18" height="4" fill="#fff" /><rect y="8" width="18" height="4" fill="#21468B" />
+        <rect width="18" height="4" fill="#AE1C28" />
+        <rect y="4" width="18" height="4" fill="#fff" />
+        <rect y="8" width="18" height="4" fill="#21468B" />
       </>
     ),
   };
   const shape = flags[lang];
-  if (!shape) return <span className="text-[10px] font-bold text-[color:var(--cm-text-2)]">{lang}</span>;
+  if (!shape)
+    return <span className="text-[10px] font-bold text-[color:var(--cm-text-2)]">{lang}</span>;
   return (
     <svg
       width="18"
@@ -909,21 +1031,22 @@ function UserCard({
   onContact: (profile: Profile) => void;
   contacting: boolean;
 }) {
+  const { locale } = useI18n();
   const isCreator = profile.role === "Content creator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
   const mainGenres = profile.genres.filter((g) => GENRES.includes(g));
   const subGenres = profile.genres.filter((g) => !GENRES.includes(g)).slice(0, 3);
   return (
-    <article
-      className="group flex h-full flex-col rounded-[18px] border border-[color:var(--cm-border)] bg-[color:var(--cm-card)] p-[18px] transition hover:border-[color:var(--cm-border-hover)]"
-    >
+    <article className="group flex h-full flex-col rounded-[18px] border border-[color:var(--cm-border)] bg-[color:var(--cm-card)] p-[18px] transition hover:border-[color:var(--cm-border-hover)]">
       <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
         <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} />
         <div className="min-w-0">
           <h3 className="truncate font-display text-[15px] font-semibold text-[color:var(--cm-text)]">
             {profile.username}
           </h3>
-          <div className="mt-0.5 text-[11px] font-semibold text-[color:var(--cm-text-2)]">{profile.role}</div>
+          <div className="mt-0.5 text-[11px] font-semibold text-[color:var(--cm-text-2)]">
+            {localizeLabel(profile.role, locale)}
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             <div className="flex items-center gap-1">
               <Stars value={profile.rating} />
@@ -952,7 +1075,7 @@ function UserCard({
             key={g}
             className="rounded-md border border-[color:var(--cm-accent)]/40 bg-[color:var(--cm-accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--cm-accent)]"
           >
-            {g}
+            {localizeLabel(g, locale)}
           </span>
         ))}
         {subGenres.map((g) => (
@@ -960,7 +1083,7 @@ function UserCard({
             key={g}
             className="rounded-md border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--cm-text-2)]"
           >
-            {g}
+            {localizeLabel(g, locale)}
           </span>
         ))}
       </div>
@@ -977,7 +1100,9 @@ function UserCard({
                 <Handshake size={16} />
               </span>
               <div>
-                <div className="text-[13px] font-bold text-[color:var(--cm-text)]">Options de parrainage</div>
+                <div className="text-[13px] font-bold text-[color:var(--cm-text)]">
+                  Options de parrainage
+                </div>
                 <div className="mt-0.5 text-[11px] text-[color:var(--cm-text-3)]">
                   {optionCount
                     ? `${optionCount} option${optionCount > 1 ? "s" : ""}${profile.audience ? ` · ${profile.audience}` : ""}`
@@ -987,14 +1112,19 @@ function UserCard({
             </div>
             <ChevronRight size={16} className="text-[color:var(--cm-text-3)]" />
           </div>
-          {profile.platforms?.length ? <div className="mt-3 flex flex-wrap gap-1.5">
-            {profile.platforms.map((p) => (
-              <span key={p} className="inline-flex items-center gap-1 rounded-full bg-[color:var(--cm-input)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--cm-text-2)]">
-                <PlatformIcon name={p} />
-                {p}
-              </span>
-            ))}
-          </div> : null}
+          {profile.platforms?.length ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {profile.platforms.map((p) => (
+                <span
+                  key={p}
+                  className="inline-flex items-center gap-1 rounded-full bg-[color:var(--cm-input)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--cm-text-2)]"
+                >
+                  <PlatformIcon name={p} />
+                  {p}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </button>
       ) : null}
 
@@ -1048,6 +1178,7 @@ function UserRow({
   onContact: (profile: Profile) => void;
   contacting: boolean;
 }) {
+  const { locale } = useI18n();
   const isCreator = profile.role === "Content creator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
   return (
@@ -1057,10 +1188,14 @@ function UserRow({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h3 className="truncate font-display text-[15px] font-semibold">{profile.username}</h3>
           <span className="text-[11px] text-[color:var(--cm-text-3)]">·</span>
-          <span className="text-[11px] font-semibold text-[color:var(--cm-text-2)]">{profile.role}</span>
+          <span className="text-[11px] font-semibold text-[color:var(--cm-text-2)]">
+            {localizeLabel(profile.role, locale)}
+          </span>
           <div className="flex items-center gap-1 pl-1">
             <Stars value={profile.rating} size={12} />
-            <span className="text-[11px] text-[color:var(--cm-text-2)]">{profile.rating.toFixed(1)}</span>
+            <span className="text-[11px] text-[color:var(--cm-text-2)]">
+              {profile.rating.toFixed(1)}
+            </span>
           </div>
           <span className="flex items-center gap-1">
             {profile.languages.map((l) => (
@@ -1130,7 +1265,10 @@ function CreatorAdvancedFiltersModal({
 }) {
   if (!open) return null;
 
-  const toggleFilter = (key: "platforms" | "videoTypes" | "durations" | "paymentModes", value: string) =>
+  const toggleFilter = (
+    key: "platforms" | "videoTypes" | "durations" | "paymentModes",
+    value: string,
+  ) =>
     setFilters((current) => ({
       ...current,
       [key]: toggle(current[key], value),
@@ -1140,14 +1278,26 @@ function CreatorAdvancedFiltersModal({
     setFilters((current) => ({ ...current, [key]: value.replace(/[^\d]/g, "") }));
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 px-4" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="Fermer" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/65 px-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Fermer"
+        onClick={onClose}
+      />
       <div className="relative max-h-[86vh] w-full max-w-[860px] overflow-hidden rounded-[24px] border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-[color:var(--cm-border)] px-6 py-5">
           <div>
-            <h2 className="font-display text-[24px] font-bold text-[color:var(--cm-text)]">Filtres créateurs avancés</h2>
+            <h2 className="font-display text-[24px] font-bold text-[color:var(--cm-text)]">
+              Filtres créateurs avancés
+            </h2>
             <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">
-              Affine la recherche de créateurs de contenu selon leurs plateformes, formats et options de parrainage.
+              Affine la recherche de créateurs de contenu selon leurs plateformes, formats et
+              options de parrainage.
             </p>
           </div>
           <button
@@ -1165,17 +1315,28 @@ function CreatorAdvancedFiltersModal({
             <CreatorFilterSection title="Créateur de contenu">
               <label className="flex items-center justify-between gap-4 rounded-[16px] border border-[color:var(--cm-border)] bg-[color:var(--cm-panel)] px-4 py-3">
                 <span>
-                  <span className="block text-[13px] font-bold text-[color:var(--cm-text)]">Afficher seulement les profils avec options</span>
-                  <span className="mt-0.5 block text-[12px] text-[color:var(--cm-text-3)]">Utile pour trouver directement un créateur sponsorisable.</span>
+                  <span className="block text-[13px] font-bold text-[color:var(--cm-text)]">
+                    Afficher seulement les profils avec options
+                  </span>
+                  <span className="mt-0.5 block text-[12px] text-[color:var(--cm-text-3)]">
+                    Utile pour trouver directement un créateur sponsorisable.
+                  </span>
                 </span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={filters.sponsorshipOnly}
-                  onClick={() => setFilters((current) => ({ ...current, sponsorshipOnly: !current.sponsorshipOnly }))}
+                  onClick={() =>
+                    setFilters((current) => ({
+                      ...current,
+                      sponsorshipOnly: !current.sponsorshipOnly,
+                    }))
+                  }
                   className="relative h-7 w-12 shrink-0 rounded-full border transition"
                   style={{
-                    background: filters.sponsorshipOnly ? "var(--cm-accent-soft)" : "var(--cm-input)",
+                    background: filters.sponsorshipOnly
+                      ? "var(--cm-accent-soft)"
+                      : "var(--cm-input)",
                     borderColor: filters.sponsorshipOnly ? "var(--cm-accent)" : "var(--cm-border)",
                   }}
                 >
@@ -1219,8 +1380,16 @@ function CreatorAdvancedFiltersModal({
 
             <CreatorFilterSection title="Audience">
               <div className="grid gap-4 sm:grid-cols-2">
-                <CreatorNumberField label="Nombre d'abonnés minimum" value={filters.minSubs} onChange={(value) => setValue("minSubs", value)} />
-                <CreatorNumberField label="Nombre d'abonnés maximal" value={filters.maxSubs} onChange={(value) => setValue("maxSubs", value)} />
+                <CreatorNumberField
+                  label="Nombre d'abonnés minimum"
+                  value={filters.minSubs}
+                  onChange={(value) => setValue("minSubs", value)}
+                />
+                <CreatorNumberField
+                  label="Nombre d'abonnés maximal"
+                  value={filters.maxSubs}
+                  onChange={(value) => setValue("maxSubs", value)}
+                />
               </div>
             </CreatorFilterSection>
           </div>
@@ -1376,8 +1545,9 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
               </div>
             </div>
             <p className="mt-4 text-[13px] leading-relaxed text-[color:var(--cm-text-2)]">
-              Envoyer une demande d'ami à <span className="font-bold text-[color:var(--cm-text)]">{profile.username}</span> ?
-              Il pourra l'accepter ou la refuser depuis ses notifications.
+              Envoyer une demande d'ami à{" "}
+              <span className="font-bold text-[color:var(--cm-text)]">{profile.username}</span> ? Il
+              pourra l'accepter ou la refuser depuis ses notifications.
             </p>
             {error ? (
               <p role="alert" className="mt-3 text-[12px] font-semibold text-red-300">
@@ -1422,16 +1592,29 @@ function CreatorSponsorshipOptionsModal({
   const options = profile.sponsorshipOptions ?? [];
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 px-4" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="Fermer" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/65 px-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Fermer"
+        onClick={onClose}
+      />
       <div className="relative max-h-[86vh] w-full max-w-[900px] overflow-hidden rounded-[24px] border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-[color:var(--cm-border)] px-6 py-5">
           <div className="flex items-start gap-3">
             <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} size={48} />
             <div>
-              <h2 className="font-display text-[24px] font-bold text-[color:var(--cm-text)]">Options de parrainage</h2>
+              <h2 className="font-display text-[24px] font-bold text-[color:var(--cm-text)]">
+                Options de parrainage
+              </h2>
               <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">
-                {[profile.username, profile.audience, profile.platforms?.join(", ")].filter(Boolean).join(" · ")}
+                {[profile.username, profile.audience, profile.platforms?.join(", ")]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
           </div>
@@ -1449,21 +1632,39 @@ function CreatorSponsorshipOptionsModal({
           {options.length ? (
             <div className="grid gap-4 md:grid-cols-2">
               {options.map((option) => (
-                <article key={option.id} className="rounded-[18px] border border-[color:var(--cm-border)] bg-[color:var(--cm-card)] p-5">
+                <article
+                  key={option.id}
+                  className="rounded-[18px] border border-[color:var(--cm-border)] bg-[color:var(--cm-card)] p-5"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--cm-accent)]">{option.type}</p>
-                      <h3 className="mt-1 font-display text-[18px] font-bold text-[color:var(--cm-text)]">{option.title}</h3>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--cm-accent)]">
+                        {option.type}
+                      </p>
+                      <h3 className="mt-1 font-display text-[18px] font-bold text-[color:var(--cm-text)]">
+                        {option.title}
+                      </h3>
                     </div>
                     <span className="rounded-full bg-[color:var(--cm-accent-soft)] px-3 py-1 text-[12px] font-extrabold text-[color:var(--cm-accent)]">
                       {option.price}
                     </span>
                   </div>
-                  <p className="mt-3 text-[13px] leading-[21px] text-[color:var(--cm-text-2)]">{option.description}</p>
+                  <p className="mt-3 text-[13px] leading-[21px] text-[color:var(--cm-text-2)]">
+                    {option.description}
+                  </p>
                   <div className="mt-4 grid gap-2 text-[12px] text-[color:var(--cm-text-2)]">
-                    <div className="flex justify-between gap-3"><span>Format</span><strong className="text-[color:var(--cm-text)]">{option.videoType}</strong></div>
-                    <div className="flex justify-between gap-3"><span>Durée</span><strong className="text-[color:var(--cm-text)]">{option.duration}</strong></div>
-                    <div className="flex justify-between gap-3"><span>Paiement</span><strong className="text-[color:var(--cm-text)]">{option.paymentMode}</strong></div>
+                    <div className="flex justify-between gap-3">
+                      <span>Format</span>
+                      <strong className="text-[color:var(--cm-text)]">{option.videoType}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>Durée</span>
+                      <strong className="text-[color:var(--cm-text)]">{option.duration}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>Paiement</span>
+                      <strong className="text-[color:var(--cm-text)]">{option.paymentMode}</strong>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -1479,8 +1680,12 @@ function CreatorSponsorshipOptionsModal({
           ) : (
             <div className="rounded-[18px] border border-dashed border-[color:var(--cm-border)] bg-[color:var(--cm-panel)] p-8 text-center">
               <Handshake className="mx-auto h-8 w-8 text-[color:var(--cm-accent)]" />
-              <h3 className="mt-3 font-display text-[18px] font-bold text-[color:var(--cm-text)]">Aucune option publiée</h3>
-              <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">Ce créateur n'a pas encore configuré ses offres de parrainage.</p>
+              <h3 className="mt-3 font-display text-[18px] font-bold text-[color:var(--cm-text)]">
+                Aucune option publiée
+              </h3>
+              <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">
+                Ce créateur n'a pas encore configuré ses offres de parrainage.
+              </p>
             </div>
           )}
         </div>

@@ -17,10 +17,19 @@ export const Route = createFileRoute("/api/manga/generate-page")({
           const input = parseMangaImageGenerationInput(await request.json());
           const outcome = await withCredits(
             request,
-            { operationType: input.operation === "edit" ? "edit" : input.operation === "regenerate" ? "regenerate" : "generate" },
+            {
+              workspace: "manga-page",
+              operationType:
+                input.operation === "edit"
+                  ? "edit"
+                  : input.operation === "regenerate"
+                    ? "regenerate"
+                    : "generate",
+            },
             () => requestPulseNoteMangaImage(input),
           );
-          if (!outcome.ok) return Response.json({ error: outcome.error }, { status: outcome.status });
+          if (!outcome.ok)
+            return Response.json({ error: outcome.error }, { status: outcome.status });
           return Response.json(outcome.result);
         } catch (error) {
           return Response.json({ error: apiErrorMessage(error) }, { status: 500 });

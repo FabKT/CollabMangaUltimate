@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
@@ -19,6 +19,7 @@ import { C, sora, manrope } from "@/components/intro/intro-theme";
 import { useSession } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { CatalogPage } from "./_collab.manga.index";
+import { isLocalAiClientMode } from "@/lib/local-ai-mode";
 
 /**
  * Page d'introduction CollabManga — 100 % texte + cadres (aucune image à
@@ -245,6 +246,7 @@ function HeroPanel({
 function IntroPage() {
   const { session } = useSession();
   const { t } = useI18n();
+  if (isLocalAiClientMode) return <Navigate to="/ai/manga-page" replace />;
   const collabDestination = session ? "/hub" : "/login?redirect=%2Fhub";
   const aiDestination = session ? "/ai" : "/login?redirect=%2Fai";
 

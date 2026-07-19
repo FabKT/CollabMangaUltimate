@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GenerationUsage } from "@/lib/generation-metrics";
 
 /**
  * Character-card generation plan.
@@ -48,6 +49,8 @@ export type CharacterImageResult = {
   size: string;
   createdAt: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
 };
 
 type PulseNoteCharacterResponse = {
@@ -58,6 +61,8 @@ type PulseNoteCharacterResponse = {
   size?: string;
   createdAt?: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
   error?: string;
 };
 
@@ -200,5 +205,7 @@ export async function requestPulseNoteCharacterImage(
     size: payload.size ?? CHARACTER_IMAGE_SIZE,
     createdAt: payload.createdAt ?? new Date().toISOString(),
     creditsUsed: payload.creditsUsed,
+    costUsd: payload.costUsd,
+    usage: payload.usage,
   };
 }

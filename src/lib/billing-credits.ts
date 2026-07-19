@@ -11,6 +11,8 @@ import {
   isStripeConfigured,
   requiresBillingConfiguration,
 } from "./stripe-server";
+import { recordGenerationMetric, type GenerationUsage } from "./generation-metrics";
+import { isLocalAiServerMode } from "./local-ai-mode";
 
 /** Coût OpenAI estimé par image produite (centimes). */
 function estimatedImageCostCents() {
@@ -19,6 +21,7 @@ function estimatedImageCostCents() {
 }
 
 export type GenerationMeta = {
+  workspace?: string;
   operationType?: "generate" | "edit" | "regenerate" | "retry" | "variant";
   model?: string;
   quality?: string;
@@ -61,8 +64,29 @@ function creditErrorMessage(error: unknown): string {
  *   consommation (image produite) ou restitution (échec).
  */
 export async function withCredits<
-  T extends { imageUrl?: string; imageDataUrl?: string; model?: string },
+  T extends {
+    imageUrl?: string;
+    imageDataUrl?: string;
+    model?: string;
+    quality?: string;
+    size?: string;
+    costUsd?: number;
+    usage?: GenerationUsage;
+  },
 >(request: Request, meta: GenerationMeta, run: () => Promise<T>): Promise<Outcome<T>> {
+  const operationType = meta.operationType ?? "generate";
+  const workspace = meta.workspace ?? "unknown";
+
+  if (isLocalAiServerMode()) {
+    const result = await run();
+    const produced = result?.imageUrl || result?.imageDataUrl;
+    if (!produced) {
+      return { ok: false, status: 502, error: "Le service n'a produit aucune image." };
+    }
+    await recordGenerationMetric({ userId: null, workspace, operationType, result });
+    return { ok: true, result };
+  }
+
   // Tant que Stripe n'est pas configuré, aucun abonnement ne peut exister :
   // on n'impose pas de crédit (évite de bloquer le dev / la démo).
   if (!isStripeConfigured()) {
@@ -74,6 +98,9 @@ export async function withCredits<
       };
     }
     const result = await run();
+    if (result?.imageUrl || result?.imageDataUrl) {
+      await recordGenerationMetric({ userId: null, workspace, operationType, result });
+    }
     return { ok: true, result };
   }
 
@@ -86,7 +113,7 @@ export async function withCredits<
   const reserved = await sb.rpc("reserve_credits", {
     p_user_id: userId,
     p_credits: 1,
-    p_operation_type: meta.operationType ?? "generate",
+    p_operation_type: operationType,
     p_model: meta.model ?? null,
     p_quality: meta.quality ?? null,
     p_dimensions: meta.dimensions ?? null,
@@ -111,6 +138,7 @@ export async function withCredits<
         status: 502,
         error: "Le service n'a produit aucune image (crédit restitué).",
       };
+    await recordGenerationMetric({ userId, workspace, operationType, result });
     return { ok: true, result };
   } catch (error) {
     // Échec → restitution du crédit réservé.

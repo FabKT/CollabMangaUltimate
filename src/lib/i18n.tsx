@@ -4,9 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { ChevronDown } from "lucide-react";
 import { supabase } from "./supabase";
 
 export type AppLocale = "fr" | "en";
@@ -17,7 +19,7 @@ const messages = {
   fr: {
     "common.language": "Langue",
     "common.french": "Français",
-    "common.english": "English",
+    "common.english": "Anglais",
     "common.continue": "Continuer",
     "common.save": "Enregistrer",
     "common.loading": "Chargement...",
@@ -76,6 +78,11 @@ const messages = {
     "nav.characterLibrary": "Bibliothèque de personnages",
     "nav.history": "Historique",
     "nav.plan": "Plan & Images",
+    "nav.mangaPage": "Manga Page Creator",
+    "nav.rawFinal": "Raw vers Final",
+    "nav.swap": "Swap",
+    "nav.admin": "Admin — Générations",
+    "nav.workspace": "Espace de travail",
     "intro.home": "Accueil",
     "intro.about": "À propos",
     "intro.catalog": "Catalogue",
@@ -125,10 +132,32 @@ const messages = {
     "intro.signup": "S'inscrire",
     "intro.exploreCatalog": "Explorer le catalogue",
     "intro.rights": "Tous droits réservés.",
+    "catalog.eyebrow": "Découvrir",
+    "catalog.title": "Catalogue",
+    "catalog.description": "Explorez les mangas originaux publiés par les créateurs CollabManga.",
+    "catalog.search": "Rechercher un manga...",
+    "catalog.sortDesc": "Avis décroissants",
+    "catalog.sortAsc": "Avis croissants",
+    "catalog.language": "Langue",
+    "catalog.addLanguage": "Ajouter une langue...",
+    "catalog.ratings": "Notes",
+    "catalog.genre": "Genre",
+    "catalog.chapters": "Chapitres",
+    "catalog.minimum": "Minimum",
+    "catalog.maximum": "Maximum",
+    "catalog.subgenre": "Sous-genre",
+    "catalog.clear": "Réinitialiser les filtres",
+    "catalog.results": "résultats",
+    "catalog.noResults": "Aucun manga ne correspond à ces filtres.",
+    "catalog.active": "Actifs",
+    "catalog.noResultsTitle": "Aucun manga trouvé",
+    "catalog.by": "par",
+    "catalog.view": "Voir le manga",
+    "catalog.discover": "Découvrir",
   },
   en: {
     "common.language": "Language",
-    "common.french": "Français",
+    "common.french": "French",
     "common.english": "English",
     "common.continue": "Continue",
     "common.save": "Save",
@@ -188,6 +217,11 @@ const messages = {
     "nav.characterLibrary": "Character library",
     "nav.history": "History",
     "nav.plan": "Plan & Images",
+    "nav.mangaPage": "Manga Page Creator",
+    "nav.rawFinal": "Raw to Final",
+    "nav.swap": "Swap",
+    "nav.admin": "Admin — Generations",
+    "nav.workspace": "Workspace",
     "intro.home": "Home",
     "intro.about": "About",
     "intro.catalog": "Catalog",
@@ -234,6 +268,28 @@ const messages = {
     "intro.signup": "Sign up",
     "intro.exploreCatalog": "Explore catalog",
     "intro.rights": "All rights reserved.",
+    "catalog.eyebrow": "Browse",
+    "catalog.title": "Catalog",
+    "catalog.description": "Explore original manga published by CollabManga creators.",
+    "catalog.search": "Search manga...",
+    "catalog.sortDesc": "Ratings descending",
+    "catalog.sortAsc": "Ratings ascending",
+    "catalog.language": "Language",
+    "catalog.addLanguage": "Add a language...",
+    "catalog.ratings": "Ratings",
+    "catalog.genre": "Genre",
+    "catalog.chapters": "Chapters",
+    "catalog.minimum": "Minimum",
+    "catalog.maximum": "Maximum",
+    "catalog.subgenre": "Subgenre",
+    "catalog.clear": "Reset filters",
+    "catalog.results": "results",
+    "catalog.noResults": "No manga matches these filters.",
+    "catalog.active": "Active",
+    "catalog.noResultsTitle": "No manga found",
+    "catalog.by": "by",
+    "catalog.view": "View manga",
+    "catalog.discover": "Discover",
   },
 } as const;
 
@@ -260,14 +316,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const setLocale = useCallback((next: AppLocale) => {
     setLocaleState(next);
     window.localStorage.setItem(STORAGE_KEY, next);
-    if (supabase) {
-      void supabase.auth.updateUser({ data: { site_locale: next } });
-      void supabase.auth.getSession().then(({ data }) => {
+    const client = supabase;
+    if (client) {
+      void client.auth.updateUser({ data: { site_locale: next } });
+      void client.auth.getSession().then(({ data }) => {
         if (data.session) {
-          void supabase
-            .from("profiles")
-            .update({ site_locale: next })
-            .eq("id", data.session.user.id);
+          void client.from("profiles").update({ site_locale: next }).eq("id", data.session.user.id);
         }
       });
     }
@@ -306,15 +360,143 @@ export function useI18n() {
 
 export function LanguageSelect({ className = "" }: { className?: string }) {
   const { locale, setLocale, t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const options: { value: AppLocale; label: string; flag: string }[] = [
+    { value: "fr", label: t("common.french"), flag: "/flags/fr.png" },
+    { value: "en", label: t("common.english"), flag: "/flags/en.png" },
+  ];
+  const selected = options.find((option) => option.value === locale) ?? options[0];
+
   return (
-    <select
-      aria-label={t("common.language")}
-      value={locale}
-      onChange={(event) => setLocale(event.target.value as AppLocale)}
-      className={className}
-    >
-      <option value="fr">FR</option>
-      <option value="en">EN</option>
-    </select>
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        aria-label={t("common.language")}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex h-full w-full items-center justify-center gap-2 rounded-[inherit] px-3"
+        style={{ color: "inherit", background: "transparent", border: 0 }}
+      >
+        <img src={selected.flag} alt="" className="h-[14px] w-[21px] shrink-0 object-cover" />
+        <span className="text-[12px] font-bold uppercase">{selected.value}</span>
+        <ChevronDown size={14} aria-hidden />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute right-0 z-[100] mt-2 min-w-[170px] overflow-hidden rounded-lg p-1 shadow-2xl"
+          style={{ background: "#0a1430", border: "1px solid rgba(133,154,206,0.3)" }}
+        >
+          {options.map((option) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={locale === option.value}
+              key={option.value}
+              onClick={() => {
+                setLocale(option.value);
+                setOpen(false);
+              }}
+              className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-[13px] font-semibold transition-colors"
+              style={{
+                color: locale === option.value ? "#39ff88" : "#f7faff",
+                background: locale === option.value ? "rgba(57,255,136,0.12)" : "transparent",
+              }}
+            >
+              <img src={option.flag} alt="" className="h-4 w-6 shrink-0 object-cover" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
+}
+
+const localizedLabels: Record<AppLocale, Record<string, string>> = {
+  fr: {
+    Adventure: "Aventure",
+    Comedy: "Comédie",
+    Drama: "Drame",
+    Fantasy: "Fantastique",
+    Horror: "Horreur",
+    Mystery: "Mystère",
+    Historical: "Historique",
+    Sports: "Sport",
+    Psychological: "Psychologique",
+    "Science fiction": "Science-fiction",
+    "Sci-fi": "Science-fiction",
+    Ongoing: "En cours",
+    Completed: "Terminé",
+    New: "Nouveau",
+    Artist: "Dessinateur",
+    Writer: "Scénariste",
+    Reader: "Lecteur",
+    "Content creator": "Créateur de contenu",
+  },
+  en: {
+    Aventure: "Adventure",
+    Comédie: "Comedy",
+    Drame: "Drama",
+    Fantastique: "Fantasy",
+    Horreur: "Horror",
+    Mystère: "Mystery",
+    Historique: "Historical",
+    Sport: "Sports",
+    Psychologique: "Psychological",
+    "Science-fiction": "Science fiction",
+    "Science fiction": "Science fiction",
+    "Tranche de vie": "Slice of life",
+    "En cours": "Ongoing",
+    Terminé: "Completed",
+    Nouveau: "New",
+    Dessinateur: "Artist",
+    Scénariste: "Writer",
+    Lecteur: "Reader",
+    "Créateur de contenu": "Content creator",
+    Tout: "All",
+    Rémunération: "Compensation",
+    "Long terme": "Long term",
+    Ponctuel: "One-off",
+    "Sous-genre": "Subgenre",
+    Langue: "Language",
+    "Filtres avancés": "Advanced filters",
+    Parrainage: "Sponsorship",
+    "Type de vidéo": "Video type",
+    "Durée de vidéo": "Video duration",
+    Projet: "Project",
+    Plateforme: "Platform",
+    "Mode de paiement": "Payment method",
+    "Nombre de chapitres minimum": "Minimum chapters",
+    "Nombre de chapitres maximal": "Maximum chapters",
+    "Nombre d'abonnés minimum": "Minimum followers",
+    "Nombre d'abonnés maximal": "Maximum followers",
+    Réinitialiser: "Reset",
+    Appliquer: "Apply",
+    "Post communautaire": "Community post",
+    "Vidéo longue dédiée": "Dedicated long video",
+    "Vidéo courte dédiée": "Dedicated short video",
+    "Placement dans une vidéo": "Video placement",
+    "Analyse profonde": "In-depth analysis",
+    Présentation: "Presentation",
+    Abonnement: "Subscription",
+    "Paiement unique": "One-time payment",
+    Négociable: "Negotiable",
+  },
+};
+
+export function localizeLabel(label: string, locale: AppLocale) {
+  return localizedLabels[locale][label] ?? label;
 }

@@ -15,6 +15,7 @@ import { loadStudioProjects } from "@/lib/studio-projects";
 import { getMangaRating } from "@/lib/manga-ratings";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { MangaCard } from "@/components/haven/MangaCard";
+import { localizeLabel, useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/manga/")({
   head: () => ({
@@ -31,27 +32,42 @@ export const Route = createFileRoute("/_collab/manga/")({
 });
 
 const GENRE_OPTIONS = ["Shonen", "Seinen", "Shojo", "Josei"];
-const SUBGENRE_OPTIONS = ["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique"];
+const SUBGENRE_OPTIONS = [
+  "Action",
+  "Aventure",
+  "Comédie",
+  "Drame",
+  "Fantastique",
+  "Science-fiction",
+  "Romance",
+  "Slice of life",
+  "Horreur",
+  "Mystère",
+  "Historique",
+  "Sport",
+  "Isekai",
+  "Psychologique",
+];
 // Langues alignées sur celles proposées dans le profil (langues du site).
 const LANGUAGES = ["FR", "ENG", "ES", "IT", "JP", "DE", "PT", "KR", "CN", "NL", "AR", "HI"];
 const RATING_VALUES = [0, 1, 2, 3, 4, 5];
 
 // correspondance sous-genre FR (filtre) → genres EN (données du catalogue)
 const SUBGENRE_MATCH: Record<string, string[]> = {
-  "Action": ["Action"],
-  "Aventure": ["Adventure"],
-  "Comédie": ["Comedy"],
-  "Drame": ["Drama"],
-  "Fantastique": ["Fantasy", "Supernatural"],
+  Action: ["Action"],
+  Aventure: ["Adventure"],
+  Comédie: ["Comedy"],
+  Drame: ["Drama"],
+  Fantastique: ["Fantasy", "Supernatural"],
   "Science-fiction": ["Sci-fi", "Science fiction"],
-  "Romance": ["Romance"],
+  Romance: ["Romance"],
   "Slice of life": ["Slice of life"],
-  "Horreur": ["Horror"],
-  "Mystère": ["Mystery"],
-  "Historique": ["Historical"],
-  "Sport": ["Sports", "Sport"],
-  "Isekai": ["Isekai"],
-  "Psychologique": ["Psychological"],
+  Horreur: ["Horror"],
+  Mystère: ["Mystery"],
+  Historique: ["Historical"],
+  Sport: ["Sports", "Sport"],
+  Isekai: ["Isekai"],
+  Psychologique: ["Psychological"],
 };
 
 /** Projet Studio rendu visible dans le catalogue (paramètres du projet). */
@@ -73,6 +89,7 @@ export function CatalogPage({
   publicMode?: boolean;
   embedded?: boolean;
 } = {}) {
+  const { locale, t } = useI18n();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortOption>("Avis décroissants");
   const [languages, setLanguages] = useState<string[]>([]);
@@ -95,7 +112,9 @@ export function CatalogPage({
               title: p.title,
               creator: "Toi",
               cover: p.coverDataUrl || "",
-              demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
+              demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0])
+                ? p.genres[0]
+                : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
               rating: getMangaRating(p.id),
               chapters: p.chapters.filter((c) => c.status === "Published").length,
@@ -119,7 +138,11 @@ export function CatalogPage({
       if (query && !m.title.toLowerCase().includes(query.toLowerCase())) return false;
       if (languages.length && !languages.includes(m.language)) return false;
       if (demos.length && !demos.includes(m.demographic)) return false;
-      if (subgenres.length && !subgenres.some((g) => (SUBGENRE_MATCH[g] ?? [g]).some((en) => m.genres.includes(en)))) return false;
+      if (
+        subgenres.length &&
+        !subgenres.some((g) => (SUBGENRE_MATCH[g] ?? [g]).some((en) => m.genres.includes(en)))
+      )
+        return false;
       if (minRating > 0 && m.rating < minRating) return false;
       if (maxRating > 0 && m.rating > maxRating) return false;
       if (minC > 0 && m.chapters < minC) return false;
@@ -135,17 +158,45 @@ export function CatalogPage({
         break;
     }
     return list;
-  }, [query, languages, demos, subgenres, minRating, maxRating, minChapters, maxChapters, sort, studioEntries]);
+  }, [
+    query,
+    languages,
+    demos,
+    subgenres,
+    minRating,
+    maxRating,
+    minChapters,
+    maxChapters,
+    sort,
+    studioEntries,
+  ]);
 
   const activeChips: { label: string; onRemove: () => void }[] = [
     ...(query ? [{ label: `“${query}”`, onRemove: () => setQuery("") }] : []),
-    ...languages.map((l) => ({ label: l, onRemove: () => setLanguages(languages.filter((x) => x !== l)) })),
-    ...(minRating > 0 ? [{ label: `Note min ${minRating}★`, onRemove: () => setMinRating(0) }] : []),
-    ...(maxRating > 0 ? [{ label: `Note max ${maxRating}★`, onRemove: () => setMaxRating(0) }] : []),
-    ...(minChapters ? [{ label: `Chap. min ${minChapters}`, onRemove: () => setMinChapters("") }] : []),
-    ...(maxChapters ? [{ label: `Chap. max ${maxChapters}`, onRemove: () => setMaxChapters("") }] : []),
-    ...demos.map((d) => ({ label: d, onRemove: () => setDemos(demos.filter((x) => x !== d)) })),
-    ...subgenres.map((g) => ({ label: g, onRemove: () => setSubgenres(subgenres.filter((x) => x !== g)) })),
+    ...languages.map((l) => ({
+      label: l,
+      onRemove: () => setLanguages(languages.filter((x) => x !== l)),
+    })),
+    ...(minRating > 0
+      ? [{ label: `Note min ${minRating}★`, onRemove: () => setMinRating(0) }]
+      : []),
+    ...(maxRating > 0
+      ? [{ label: `Note max ${maxRating}★`, onRemove: () => setMaxRating(0) }]
+      : []),
+    ...(minChapters
+      ? [{ label: `Chap. min ${minChapters}`, onRemove: () => setMinChapters("") }]
+      : []),
+    ...(maxChapters
+      ? [{ label: `Chap. max ${maxChapters}`, onRemove: () => setMaxChapters("") }]
+      : []),
+    ...demos.map((d) => ({
+      label: localizeLabel(d, locale),
+      onRemove: () => setDemos(demos.filter((x) => x !== d)),
+    })),
+    ...subgenres.map((g) => ({
+      label: localizeLabel(g, locale),
+      onRemove: () => setSubgenres(subgenres.filter((x) => x !== g)),
+    })),
   ];
 
   const resetAll = () => {
@@ -161,12 +212,18 @@ export function CatalogPage({
   };
 
   return (
-    <div className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 ${embedded ? "py-0" : "py-12 sm:py-16"}`}>
+    <div
+      className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 ${embedded ? "py-0" : "py-12 sm:py-16"}`}
+    >
       <header className="mb-10">
-        <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">Browse</p>
-        <h1 className="font-display text-4xl font-bold text-foreground sm:text-5xl">Catalogue</h1>
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">
+          {t("catalog.eyebrow")}
+        </p>
+        <h1 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
+          {t("catalog.title")}
+        </h1>
         <p className="mt-3 max-w-2xl text-base text-secondary-foreground">
-          Explore original manga published by CollabManga creators.
+          {t("catalog.description")}
         </p>
       </header>
 
@@ -177,7 +234,7 @@ export function CatalogPage({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search manga…"
+            placeholder={t("catalog.search")}
             className="h-12 w-full rounded-xl border border-border bg-card pl-11 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -189,7 +246,7 @@ export function CatalogPage({
           >
             {SORTS.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {s === "Avis décroissants" ? t("catalog.sortDesc") : t("catalog.sortAsc")}
               </option>
             ))}
           </select>
@@ -198,7 +255,7 @@ export function CatalogPage({
       </div>
 
       <div className="mb-6 grid gap-5 rounded-2xl border border-border bg-surface p-5 md:grid-cols-2">
-        <FilterGroup title="Language">
+        <FilterGroup title={t("catalog.language")}>
           <div className="flex flex-wrap items-center gap-2">
             <select
               value=""
@@ -207,11 +264,13 @@ export function CatalogPage({
                 if (code && !languages.includes(code)) setLanguages([...languages, code]);
               }}
               className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-primary/60 focus:outline-none"
-              aria-label="Ajouter une langue au filtre"
+              aria-label={t("catalog.addLanguage")}
             >
-              <option value="">Ajouter une langue…</option>
+              <option value="">{t("catalog.addLanguage")}</option>
               {SITE_LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>{l.label}</option>
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
               ))}
             </select>
             {languages.map((code) => (
@@ -222,7 +281,7 @@ export function CatalogPage({
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Notes">
+        <FilterGroup title={t("catalog.ratings")}>
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-xs font-semibold text-secondary-foreground">
               Min
@@ -231,7 +290,11 @@ export function CatalogPage({
                 onChange={(e) => setMinRating(Number(e.target.value))}
                 className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-primary/60 focus:outline-none"
               >
-                {RATING_VALUES.map((v) => <option key={v} value={v}>{v}</option>)}
+                {RATING_VALUES.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="flex items-center gap-2 text-xs font-semibold text-secondary-foreground">
@@ -241,29 +304,37 @@ export function CatalogPage({
                 onChange={(e) => setMaxRating(Number(e.target.value))}
                 className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:border-primary/60 focus:outline-none"
               >
-                {RATING_VALUES.map((v) => <option key={v} value={v}>{v}</option>)}
+                {RATING_VALUES.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Genre">
+        <FilterGroup title={t("catalog.genre")}>
           <div className="flex flex-wrap gap-2">
             {GENRE_OPTIONS.map((g) => (
-              <ChipBtn key={g} active={demos.includes(g)} onClick={() => toggle(demos, g, setDemos)}>
-                {g}
+              <ChipBtn
+                key={g}
+                active={demos.includes(g)}
+                onClick={() => toggle(demos, g, setDemos)}
+              >
+                {localizeLabel(g, locale)}
               </ChipBtn>
             ))}
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Chapters">
+        <FilterGroup title={t("catalog.chapters")}>
           <div className="flex items-center gap-2">
             <input
               inputMode="numeric"
               value={minChapters}
               onChange={(e) => setMinChapters(e.target.value)}
-              placeholder="Min"
+              placeholder={t("catalog.minimum")}
               className="h-10 w-28 rounded-lg border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
             />
             <span className="text-muted-foreground">–</span>
@@ -271,18 +342,22 @@ export function CatalogPage({
               inputMode="numeric"
               value={maxChapters}
               onChange={(e) => setMaxChapters(e.target.value)}
-              placeholder="Max"
+              placeholder={t("catalog.maximum")}
               className="h-10 w-28 rounded-lg border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
             />
           </div>
         </FilterGroup>
 
         <div className="md:col-span-2">
-          <FilterGroup title="Subgenre">
+          <FilterGroup title={t("catalog.subgenre")}>
             <div className="flex flex-wrap gap-2">
               {SUBGENRE_OPTIONS.map((g) => (
-                <ChipBtn key={g} active={subgenres.includes(g)} onClick={() => toggle(subgenres, g, setSubgenres)}>
-                  {g}
+                <ChipBtn
+                  key={g}
+                  active={subgenres.includes(g)}
+                  onClick={() => toggle(subgenres, g, setSubgenres)}
+                >
+                  {localizeLabel(g, locale)}
                 </ChipBtn>
               ))}
             </div>
@@ -293,14 +368,10 @@ export function CatalogPage({
       {activeChips.length > 0 && (
         <div className="mb-6 flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Active:
+            {t("catalog.active")}:
           </span>
           {activeChips.map((c, i) => (
-            <button
-              key={i}
-              onClick={c.onRemove}
-              className="chip chip-primary hover:bg-primary/20"
-            >
+            <button key={i} onClick={c.onRemove} className="chip chip-primary hover:bg-primary/20">
               {c.label} <X className="h-3 w-3" />
             </button>
           ))}
@@ -308,14 +379,15 @@ export function CatalogPage({
             onClick={resetAll}
             className="ml-1 text-xs font-bold text-primary hover:text-primary-hover"
           >
-            Reset all
+            {t("catalog.clear")}
           </button>
         </div>
       )}
 
       <div className="mb-5 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          <span className="font-bold text-foreground">{filtered.length}</span> manga
+          <span className="font-bold text-foreground">{filtered.length}</span>{" "}
+          {t("catalog.results")}
         </p>
       </div>
 
@@ -324,12 +396,12 @@ export function CatalogPage({
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft text-primary">
             <Search className="h-6 w-6" />
           </div>
-          <h3 className="mt-4 font-display text-xl font-bold text-foreground">No manga found</h3>
-          <p className="mt-2 text-sm text-secondary-foreground">
-            Try changing your filters or search terms.
-          </p>
+          <h3 className="mt-4 font-display text-xl font-bold text-foreground">
+            {t("catalog.noResultsTitle")}
+          </h3>
+          <p className="mt-2 text-sm text-secondary-foreground">{t("catalog.noResults")}</p>
           <button onClick={resetAll} className="btn-primary mt-6">
-            Reset filters
+            {t("catalog.clear")}
           </button>
         </div>
       ) : (
@@ -343,7 +415,15 @@ export function CatalogPage({
   );
 }
 
-function ChipBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function ChipBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -358,7 +438,9 @@ function ChipBtn({ active, onClick, children }: { active: boolean; onClick: () =
 function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</p>
+      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </p>
       {children}
     </div>
   );

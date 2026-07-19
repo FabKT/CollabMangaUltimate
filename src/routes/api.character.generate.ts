@@ -15,10 +15,13 @@ export const Route = createFileRoute("/api/character/generate")({
       POST: async ({ request }) => {
         try {
           const input = parseCharacterImageInput(await request.json());
-          const outcome = await withCredits(request, { operationType: "generate" }, () =>
-            requestPulseNoteCharacterImage(input),
+          const outcome = await withCredits(
+            request,
+            { workspace: "character-create", operationType: "generate" },
+            () => requestPulseNoteCharacterImage(input),
           );
-          if (!outcome.ok) return Response.json({ error: outcome.error }, { status: outcome.status });
+          if (!outcome.ok)
+            return Response.json({ error: outcome.error }, { status: outcome.status });
           return Response.json(outcome.result);
         } catch (error) {
           return Response.json({ error: apiErrorMessage(error) }, { status: 500 });

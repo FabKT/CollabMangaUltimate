@@ -25,6 +25,7 @@ import { getMyBilling } from "@/server-functions/stripe-billing";
 import { onCreditsChanged } from "@/lib/credits-events";
 import { PLANS } from "@/lib/billing-plans";
 import { LanguageSelect, useI18n, type TranslationKey } from "@/lib/i18n";
+import { isLocalAiClientMode } from "@/lib/local-ai-mode";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -56,7 +57,13 @@ const groups: Group[] = [
 ];
 
 const aiGroupKeys: TranslationKey[] = ["nav.creation", "nav.library", "nav.account"];
+const aiGroupKeyByTitle: Record<string, TranslationKey> = {
+  Création: "nav.creation",
+  Bibliothèque: "nav.library",
+  Compte: "nav.account",
+};
 const aiItemKeys: Record<string, TranslationKey> = {
+  "/ai/manga-page": "nav.mangaPage",
   "/ai/character-create": "nav.characterCreate",
   "/ai/style-transfer": "nav.styleTransfer",
   "/ai/free-studio": "nav.freeStudio",
@@ -64,6 +71,9 @@ const aiItemKeys: Record<string, TranslationKey> = {
   "/ai/characters": "nav.characterLibrary",
   "/ai/history": "nav.history",
   "/ai/plan": "nav.plan",
+  "/ai/sketch-final": "nav.rawFinal",
+  "/ai/swap": "nav.swap",
+  "/ai/admin": "nav.admin",
 };
 
 export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
@@ -73,6 +83,10 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   // Lien admin affiché uniquement pour les administrateurs (vérifié côté serveur).
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
+    if (isLocalAiClientMode) {
+      setIsAdmin(true);
+      return;
+    }
     void (async () => {
       if (!supabase) return;
       const { data } = await supabase.auth.getSession();
@@ -87,9 +101,12 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
     })();
   }, []);
 
+  const visibleGroups = isLocalAiClientMode
+    ? groups.filter((group) => group.title !== "Compte")
+    : groups;
   const renderedGroups: Group[] = isAdmin
-    ? groups.map((g) =>
-        g.title === "Compte"
+    ? visibleGroups.map((g) =>
+        g.title === (isLocalAiClientMode ? "Bibliothèque" : "Compte")
           ? {
               ...g,
               items: [
@@ -109,6 +126,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (isLocalAiClientMode) return;
       if (!supabase) return;
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
@@ -169,7 +187,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
           className="font-bold text-[15px] leading-none"
           style={{ fontFamily: "var(--font-display)" }}
         >
-          CollabManga
+          CollabManga AI
         </span>
       </div>
 
@@ -208,39 +226,41 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
             className="block text-[11px] leading-tight truncate"
             style={{ color: "var(--text-muted)" }}
           >
-            Espace de travail
+            {t("nav.workspace")}
           </span>
         </span>
         <ChevronsUpDown size={14} style={{ color: "var(--text-muted)" }} />
       </button>
 
       {/* Switch to CollabManga (social network) */}
-      <Link
-        to="/hub"
-        className="flex items-center gap-2 w-full mb-4 px-2 transition-colors"
-        style={{
-          height: 40,
-          borderRadius: 10,
-          border: "1px solid var(--border-default)",
-          background: "var(--bg-elevated)",
-        }}
-      >
-        <span
-          className="grid place-items-center shrink-0"
+      {!isLocalAiClientMode && (
+        <Link
+          to="/hub"
+          className="flex items-center gap-2 w-full mb-4 px-2 transition-colors"
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: 8,
-            background: "linear-gradient(135deg,#4ea8ff,#39ff88)",
+            height: 40,
+            borderRadius: 10,
+            border: "1px solid var(--border-default)",
+            background: "var(--bg-elevated)",
           }}
         >
-          <Users size={13} color="#04111e" strokeWidth={2.6} />
-        </span>
-        <span className="min-w-0 flex-1 text-left text-[12px] font-bold truncate">
-          CollabManga (réseau)
-        </span>
-        <ArrowLeft size={13} style={{ color: "var(--text-muted)" }} />
-      </Link>
+          <span
+            className="grid place-items-center shrink-0"
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 8,
+              background: "linear-gradient(135deg,#4ea8ff,#39ff88)",
+            }}
+          >
+            <Users size={13} color="#04111e" strokeWidth={2.6} />
+          </span>
+          <span className="min-w-0 flex-1 text-left text-[12px] font-bold truncate">
+            CollabManga (réseau)
+          </span>
+          <ArrowLeft size={13} style={{ color: "var(--text-muted)" }} />
+        </Link>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto -mr-1 pr-1">
@@ -256,7 +276,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
                   color: "var(--text-muted)",
                 }}
               >
-                {t(aiGroupKeys[i])}
+                {t(aiGroupKeyByTitle[g.title] ?? aiGroupKeys[i])}
               </div>
             )}
             <ul className="flex flex-col gap-0.5">
@@ -322,67 +342,71 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
       <LanguageSelect className="cma-input mt-3 !h-9 !w-full" />
 
       {/* Quota réel de l'abonnement (crédits restants) */}
-      <div
-        className="mt-2"
-        style={{
-          background: "var(--bg-elevated)",
-          border: "1px solid var(--border-default)",
-          borderRadius: 12,
-          padding: 12,
-        }}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <span style={{ font: "700 12px/16px var(--font-sans)" }}>
-            {quota ? (PLANS[quota.plan as keyof typeof PLANS]?.label ?? quota.plan) : "Aucun plan"}
-          </span>
-          {quota && (
-            <span
-              className="cma-chip cma-chip-active"
-              style={{ height: 18, padding: "0 6px", fontSize: 10 }}
-            >
-              Active
-            </span>
-          )}
-        </div>
-        <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          {quota ? (
-            <>
-              Crédits{" "}
-              <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>
-                {quota.remaining}
-              </span>{" "}
-              / {quota.total}
-            </>
-          ) : (
-            "Aucun abonnement actif"
-          )}
-        </div>
+      {!isLocalAiClientMode && (
         <div
-          className="my-2"
+          className="mt-2"
           style={{
-            height: 5,
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.06)",
-            overflow: "hidden",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 12,
+            padding: 12,
           }}
         >
+          <div className="flex items-center justify-between mb-1">
+            <span style={{ font: "700 12px/16px var(--font-sans)" }}>
+              {quota
+                ? (PLANS[quota.plan as keyof typeof PLANS]?.label ?? quota.plan)
+                : "Aucun plan"}
+            </span>
+            {quota && (
+              <span
+                className="cma-chip cma-chip-active"
+                style={{ height: 18, padding: "0 6px", fontSize: 10 }}
+              >
+                Active
+              </span>
+            )}
+          </div>
+          <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            {quota ? (
+              <>
+                Crédits{" "}
+                <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+                  {quota.remaining}
+                </span>{" "}
+                / {quota.total}
+              </>
+            ) : (
+              "Aucun abonnement actif"
+            )}
+          </div>
           <div
+            className="my-2"
             style={{
-              width: `${quota && quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0}%`,
-              height: "100%",
-              background: "var(--neon)",
-              boxShadow: "0 0 10px rgba(57,255,136,0.5)",
+              height: 5,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.06)",
+              overflow: "hidden",
             }}
-          />
+          >
+            <div
+              style={{
+                width: `${quota && quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0}%`,
+                height: "100%",
+                background: "var(--neon)",
+                boxShadow: "0 0 10px rgba(57,255,136,0.5)",
+              }}
+            />
+          </div>
+          <Link
+            to="/ai/plan"
+            className="cma-btn-primary w-full justify-center"
+            style={{ height: 32, fontSize: 12 }}
+          >
+            {quota ? "Gérer le plan" : "Choisir un plan"}
+          </Link>
         </div>
-        <Link
-          to="/ai/plan"
-          className="cma-btn-primary w-full justify-center"
-          style={{ height: 32, fontSize: 12 }}
-        >
-          {quota ? "Gérer le plan" : "Choisir un plan"}
-        </Link>
-      </div>
+      )}
     </aside>
   );
 }

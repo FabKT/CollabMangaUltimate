@@ -6,6 +6,7 @@ import { LanguageSelect, useI18n } from "@/lib/i18n";
 /** Boutons d'authentification du header public (connexion / compte). */
 function HeaderAuth() {
   const { session, loading } = useSession();
+  const { t } = useI18n();
 
   if (loading) return <div style={{ width: 180 }} />;
 
@@ -22,7 +23,7 @@ function HeaderAuth() {
           style={manrope}
           onClick={() => void signOut()}
         >
-          Se déconnecter
+          {t("auth.signOut")}
         </button>
       </div>
     );
@@ -35,14 +36,14 @@ function HeaderAuth() {
         className="intro-btn-ghost"
         style={{ ...manrope, textDecoration: "none", display: "inline-block" }}
       >
-        Log in
+        {t("auth.login")}
       </Link>
       <Link
         to="/signup"
         className="intro-btn-neon"
         style={{ ...manrope, textDecoration: "none", display: "inline-block" }}
       >
-        Sign up
+        {t("auth.signup")}
       </Link>
     </div>
   );
@@ -103,7 +104,7 @@ export function IntroHeader() {
         </nav>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <LanguageSelect className="intro-btn-ghost h-10" />
+        <LanguageSelect className="h-10 min-w-[104px] rounded-lg border border-[rgba(133,154,206,0.3)] bg-[#0b1430] text-[#f7faff]" />
         <HeaderAuth />
       </div>
     </header>

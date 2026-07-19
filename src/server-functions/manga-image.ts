@@ -1,22 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { GenerationUsage } from "@/lib/generation-metrics";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
 const PULSENOTE_GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
 const PULSENOTE_GENERATION_ATTEMPTS = 2;
 const PULSENOTE_RETRYABLE_STATUSES = new Set([
-  408,
-  409,
-  425,
-  429,
-  500,
-  502,
-  503,
-  504,
-  520,
-  522,
-  524,
+  408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524,
 ]);
 
 const roleSchema = z.enum([
@@ -108,6 +99,8 @@ export type MangaImageGenerationResult = {
   createdAt: string;
   creditsUsed?: number;
   diagnostics?: MangaImageDiagnostics;
+  costUsd?: number;
+  usage?: GenerationUsage;
 };
 
 export type MangaBackendStatusResult = {
@@ -147,6 +140,8 @@ type PulseNoteMangaResponse = {
   quality?: string;
   createdAt?: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
   diagnostics?: MangaImageDiagnostics;
   error?: string;
   details?: {
@@ -377,13 +372,12 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
         createdAt: payload.createdAt ?? new Date().toISOString(),
         creditsUsed: payload.creditsUsed,
         diagnostics: payload.diagnostics,
+        costUsd: payload.costUsd,
+        usage: payload.usage,
       } satisfies MangaImageGenerationResult;
     } catch (error) {
       lastError = error;
-      if (
-        attempt < PULSENOTE_GENERATION_ATTEMPTS &&
-        shouldRetryPulseNoteNetworkError(error)
-      ) {
+      if (attempt < PULSENOTE_GENERATION_ATTEMPTS && shouldRetryPulseNoteNetworkError(error)) {
         await wait(1200 * attempt);
         continue;
       }

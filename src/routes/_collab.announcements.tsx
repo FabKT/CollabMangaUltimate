@@ -6,14 +6,8 @@ import { projectAnnouncementFromRecruit, type StudioRecruitLike } from "@/lib/re
 import { supabase } from "@/lib/supabase";
 import { addInterested, listInterested } from "@/lib/announcement-interest";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
-import {
-  Bookmark,
-  X,
-  ChevronDown,
-  ImageIcon,
-  Search,
-  SlidersHorizontal,
-} from "lucide-react";
+import { localizeLabel, useI18n } from "@/lib/i18n";
+import { Bookmark, X, ChevronDown, ImageIcon, Search, SlidersHorizontal } from "lucide-react";
 import {
   respondToProposal,
   sendAnnouncementSponsoring,
@@ -384,20 +378,28 @@ function MetaLabel({ children }: { children: ReactNode }) {
 
 // ---------- Constants ----------
 
-const ROLES = [
-  "Dessinateur",
-  "Scénariste",
-  "Créateur de contenu",
-  "Lecteur",
-];
-
-
-
+const ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"];
 
 // ---------- Filter options ----------
 
 const GENRES_FR = ["Shonen", "Shojo", "Seinen", "Josei"];
-const SOUS_GENRES = ["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"];
+const SOUS_GENRES = [
+  "Action",
+  "Aventure",
+  "Comédie",
+  "Drame",
+  "Fantastique",
+  "Science fiction",
+  "Romance",
+  "Slice of life",
+  "Horreur",
+  "Mystère",
+  "Historique",
+  "Sport",
+  "Isekai",
+  "Psychologique",
+  "Mecha",
+];
 
 // ---------- Page ----------
 
@@ -490,7 +492,10 @@ function itemSearchText(item: Announcement) {
 function AnnouncementsPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [detailsFor, setDetailsFor] = useState<Announcement | null>(null);
-  const [workflowModal, setWorkflowModal] = useState<null | { kind: "apply" | "invite" | "sponsor"; item: Announcement }>(null);
+  const [workflowModal, setWorkflowModal] = useState<null | {
+    kind: "apply" | "invite" | "sponsor";
+    item: Announcement;
+  }>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [dbUsers, setDbUsers] = useState<UserAnnouncement[]>([]);
@@ -512,18 +517,24 @@ function AnnouncementsPage() {
       coverDataUrl?: string;
       recruits?: StudioRecruitLike[];
     };
-    void loadStudioProjects<StudioProjectRecruitment>().then((projects) => {
-      setStudioProjects(projects.flatMap((project) =>
-        (project.recruits ?? [])
-          .filter((recruit) => recruit.status === "Ouverte")
-          .map((recruit) => projectAnnouncementFromRecruit(recruit, {
-            projectName: project.title,
-            genre: project.genres?.[0],
-            subgenres: project.subgenres,
-            cover: project.coverDataUrl,
-          })),
-      ));
-    }).catch(() => setStudioProjects([]));
+    void loadStudioProjects<StudioProjectRecruitment>()
+      .then((projects) => {
+        setStudioProjects(
+          projects.flatMap((project) =>
+            (project.recruits ?? [])
+              .filter((recruit) => recruit.status === "Ouverte")
+              .map((recruit) =>
+                projectAnnouncementFromRecruit(recruit, {
+                  projectName: project.title,
+                  genre: project.genres?.[0],
+                  subgenres: project.subgenres,
+                  cover: project.coverDataUrl,
+                }),
+              ),
+          ),
+        );
+      })
+      .catch(() => setStudioProjects([]));
   }, []);
 
   // Annonces réelles (Supabase), affichées avant les exemples
@@ -593,10 +604,14 @@ function AnnouncementsPage() {
 
   // Production : uniquement les annonces réelles (Supabase), plus aucun exemple.
   const projectAnnouncements = useMemo(() => {
-    const keys = new Set(dbProjects.map((item) => `${item.projectName}\u0000${item.title}`.toLocaleLowerCase()));
+    const keys = new Set(
+      dbProjects.map((item) => `${item.projectName}\u0000${item.title}`.toLocaleLowerCase()),
+    );
     return [
       ...dbProjects,
-      ...studioProjects.filter((item) => !keys.has(`${item.projectName}\u0000${item.title}`.toLocaleLowerCase())),
+      ...studioProjects.filter(
+        (item) => !keys.has(`${item.projectName}\u0000${item.title}`.toLocaleLowerCase()),
+      ),
     ];
   }, [dbProjects, studioProjects]);
 
@@ -616,7 +631,11 @@ function AnnouncementsPage() {
       if (filters.remunerationOnly && !a.remuneration) return false;
       if (filters.engagement && a.engagement !== filters.engagement) return false;
       if (filters.genres.length > 0 && !filters.genres.includes(itemGenre(a))) return false;
-      if (filters.sousGenres.length > 0 && !filters.sousGenres.some((sg) => itemSubGenres(a).includes(sg))) return false;
+      if (
+        filters.sousGenres.length > 0 &&
+        !filters.sousGenres.some((sg) => itemSubGenres(a).includes(sg))
+      )
+        return false;
       return true;
     });
   }, [data, filters]);
@@ -845,13 +864,7 @@ function CardGrid({ children }: { children: ReactNode }) {
 
 // ---------- Cards ----------
 
-function CardShell({
-  children,
-  onClick,
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-}) {
+function CardShell({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
   const [hover, setHover] = useState(false);
   return (
     <article
@@ -1012,11 +1025,7 @@ function AvatarBlock({ initials, title }: { initials: string; title: string }) {
   );
 }
 
-function MetaGrid({
-  items,
-}: {
-  items: Array<{ label: string; value: string }>;
-}) {
+function MetaGrid({ items }: { items: Array<{ label: string; value: string }> }) {
   return (
     <div
       style={{
@@ -1107,10 +1116,7 @@ function CardHeader({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           {remuneration && <RemunerationBadge />}
-          <IconButton
-            ariaLabel={saved ? "Remove bookmark" : "Save announcement"}
-            onClick={onSave}
-          >
+          <IconButton ariaLabel={saved ? "Remove bookmark" : "Save announcement"} onClick={onSave}>
             <Bookmark
               size={16}
               style={{ color: saved ? C.neon : C.sec }}
@@ -1170,13 +1176,7 @@ function CardFooter({
   );
 }
 
-function RoleSpotlight({
-  label,
-  role,
-}: {
-  label: string;
-  role: string;
-}) {
+function RoleSpotlight({ label, role }: { label: string; role: string }) {
   return (
     <div
       style={{
@@ -1257,7 +1257,15 @@ export function ProjectCard({
   );
 }
 
-function UserCard({ item, onView, onInvite }: { item: UserAnnouncement; onView: () => void; onInvite: () => void }) {
+function UserCard({
+  item,
+  onView,
+  onInvite,
+}: {
+  item: UserAnnouncement;
+  onView: () => void;
+  onInvite: () => void;
+}) {
   const [saved, setSaved] = useState(false);
   return (
     <CardShell>
@@ -1368,11 +1376,7 @@ function SkeletonCard() {
   );
 }
 
-function EmptyState({
-  onReset,
-}: {
-  onReset: () => void;
-}) {
+function EmptyState({ onReset }: { onReset: () => void }) {
   return (
     <div
       style={{
@@ -1565,11 +1569,7 @@ export function DetailsModal({
 
   return (
     <ModalShell onClose={onClose} maxWidth={1280} label="Announcement details">
-      <ModalHeader
-        title={item.title}
-        subtitle={entityTitle}
-        onClose={onClose}
-      />
+      <ModalHeader title={item.title} subtitle={entityTitle} onClose={onClose} />
       <div
         style={{
           overflow: "auto",
@@ -1585,7 +1585,9 @@ export function DetailsModal({
         >
           <aside style={{ padding: 24, borderRight: `1px solid ${C.border}` }}>
             {isProject ? (
-              <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}` }}>
+              <div
+                style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}` }}
+              >
                 <CoverArt title={item.projectName} />
               </div>
             ) : (
@@ -1611,10 +1613,28 @@ export function DetailsModal({
 
             <div style={{ marginTop: 16 }}>
               <CategoryChip>{entitySubtitle}</CategoryChip>
-              <h3 style={{ ...sora, marginTop: 10, fontSize: 22, lineHeight: "30px", fontWeight: 700, color: C.text }}>
+              <h3
+                style={{
+                  ...sora,
+                  marginTop: 10,
+                  fontSize: 22,
+                  lineHeight: "30px",
+                  fontWeight: 700,
+                  color: C.text,
+                }}
+              >
                 {entityTitle}
               </h3>
-              <p style={{ ...manrope, marginTop: 10, fontSize: 14, lineHeight: "22px", fontWeight: 500, color: C.sec }}>
+              <p
+                style={{
+                  ...manrope,
+                  marginTop: 10,
+                  fontSize: 14,
+                  lineHeight: "22px",
+                  fontWeight: 500,
+                  color: C.sec,
+                }}
+              >
                 {entityDescription}
               </p>
             </div>
@@ -1638,10 +1658,28 @@ export function DetailsModal({
               <Chip>{remunerationLabel(item)}</Chip>
               <Chip>{item.engagement}</Chip>
             </div>
-            <h2 style={{ ...sora, marginTop: 14, fontSize: 28, lineHeight: "36px", fontWeight: 800, color: C.text }}>
+            <h2
+              style={{
+                ...sora,
+                marginTop: 14,
+                fontSize: 28,
+                lineHeight: "36px",
+                fontWeight: 800,
+                color: C.text,
+              }}
+            >
               {item.title}
             </h2>
-            <p style={{ ...manrope, marginTop: 12, fontSize: 15, lineHeight: "24px", fontWeight: 500, color: C.sec }}>
+            <p
+              style={{
+                ...manrope,
+                marginTop: 12,
+                fontSize: 15,
+                lineHeight: "24px",
+                fontWeight: 500,
+                color: C.sec,
+              }}
+            >
               {item.description}
             </p>
             <div
@@ -1652,14 +1690,28 @@ export function DetailsModal({
               }}
             >
               <MetaLabel>Description</MetaLabel>
-              <p style={{ ...manrope, marginTop: 8, fontSize: 14, lineHeight: "23px", fontWeight: 500, color: C.text }}>
+              <p
+                style={{
+                  ...manrope,
+                  marginTop: 8,
+                  fontSize: 14,
+                  lineHeight: "23px",
+                  fontWeight: 500,
+                  color: C.text,
+                }}
+              >
                 {item.fullDescription}
               </p>
             </div>
           </section>
 
           <aside style={{ padding: 18, borderLeft: `1px solid ${C.border}` }}>
-            <div className="cm-popup-tabs" role="tablist" aria-label="Activite de l'annonce" style={{ width: "100%", padding: 4, borderRadius: 14 }}>
+            <div
+              className="cm-popup-tabs"
+              role="tablist"
+              aria-label="Activite de l'annonce"
+              style={{ width: "100%", padding: 4, borderRadius: 14 }}
+            >
               <button
                 type="button"
                 role="tab"
@@ -1685,25 +1737,76 @@ export function DetailsModal({
             </div>
 
             <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-              {tab === "comments"
-                ? comments.map((comment, index) => (
-                    <div key={comment} style={{ padding: 12, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
-                      <p style={{ ...manrope, color: C.text, fontSize: 12, fontWeight: 800 }}>Utilisateur {index + 1}</p>
-                      <p style={{ ...manrope, marginTop: 6, color: C.sec, fontSize: 13, fontWeight: 500, lineHeight: "20px" }}>
-                        {comment}
-                      </p>
+              {tab === "comments" ? (
+                comments.map((comment, index) => (
+                  <div
+                    key={comment}
+                    style={{
+                      padding: 12,
+                      borderRadius: 12,
+                      background: C.card,
+                      border: `1px solid ${C.border}`,
+                    }}
+                  >
+                    <p style={{ ...manrope, color: C.text, fontSize: 12, fontWeight: 800 }}>
+                      Utilisateur {index + 1}
+                    </p>
+                    <p
+                      style={{
+                        ...manrope,
+                        marginTop: 6,
+                        color: C.sec,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        lineHeight: "20px",
+                      }}
+                    >
+                      {comment}
+                    </p>
+                  </div>
+                ))
+              ) : interested.length === 0 ? (
+                <p
+                  style={{ ...manrope, color: C.muted, fontSize: 13, fontWeight: 500, padding: 8 }}
+                >
+                  Aucun intéressé pour l'instant.
+                </p>
+              ) : (
+                interested.map((name) => (
+                  <div
+                    key={name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: 10,
+                      borderRadius: 12,
+                      background: C.card,
+                      border: `1px solid ${C.border}`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        background: C.input,
+                        color: C.neon,
+                        ...sora,
+                        fontSize: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {name.slice(0, 2).toUpperCase()}
                     </div>
-                  ))
-                : interested.length === 0
-                  ? <p style={{ ...manrope, color: C.muted, fontSize: 13, fontWeight: 500, padding: 8 }}>Aucun intéressé pour l'instant.</p>
-                  : interested.map((name) => (
-                      <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
-                        <div style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: C.input, color: C.neon, ...sora, fontSize: 12, fontWeight: 800 }}>
-                          {name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <span style={{ ...manrope, color: C.text, fontSize: 13, fontWeight: 800 }}>{name}</span>
-                      </div>
-                    ))}
+                    <span style={{ ...manrope, color: C.text, fontSize: 13, fontWeight: 800 }}>
+                      {name}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </aside>
         </div>
@@ -1720,7 +1823,11 @@ export function DetailsModal({
         }}
       >
         <GhostButton onClick={() => setSaved((s) => !s)}>
-          <Bookmark size={16} fill={saved ? "currentColor" : "none"} style={{ marginRight: 6, display: "inline", verticalAlign: "middle" }} />
+          <Bookmark
+            size={16}
+            fill={saved ? "currentColor" : "none"}
+            style={{ marginRight: 6, display: "inline", verticalAlign: "middle" }}
+          />
           {saved ? "Enregistré" : "Save"}
         </GhostButton>
         {!hideApply && <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>}
@@ -1771,7 +1878,9 @@ export function AnnouncementWorkflowModal({
   onDone: (message: string) => void;
 }) {
   const [message, setMessage] = useState("");
-  const [projectTitle, setProjectTitle] = useState(item.kind === "project" ? item.projectName : "Neon Ronin");
+  const [projectTitle, setProjectTitle] = useState(
+    item.kind === "project" ? item.projectName : "Neon Ronin",
+  );
   const [role, setRole] = useState(item.kind === "project" ? item.roleNeeded : item.roleOffered);
   const [duration, setDuration] = useState("14 jours");
   const [level, setLevel] = useState("Standard");
@@ -1781,8 +1890,13 @@ export function AnnouncementWorkflowModal({
   useEffect(() => {
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data }) => {
-      const meta = data.session?.user.user_metadata as Record<string, string | undefined> | undefined;
-      const name = meta?.display_name || meta?.full_name || meta?.username || data.session?.user.email?.split("@")[0];
+      const meta = data.session?.user.user_metadata as
+        Record<string, string | undefined> | undefined;
+      const name =
+        meta?.display_name ||
+        meta?.full_name ||
+        meta?.username ||
+        data.session?.user.email?.split("@")[0];
       if (name) setMeName(name);
     });
   }, []);
@@ -1852,7 +1966,12 @@ export function AnnouncementWorkflowModal({
         {action === "invite" && (
           <>
             <FieldLabel>Projet concerné</FieldLabel>
-            <TextInput value={projectTitle} onChange={setProjectTitle} placeholder="Titre du projet" ariaLabel="Projet concerné" />
+            <TextInput
+              value={projectTitle}
+              onChange={setProjectTitle}
+              placeholder="Titre du projet"
+              ariaLabel="Projet concerné"
+            />
             <FieldLabel>Rôle proposé</FieldLabel>
             <select
               value={role}
@@ -1860,7 +1979,9 @@ export function AnnouncementWorkflowModal({
               style={selectStyle}
             >
               {["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"].map((r) => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>
+                  {r}
+                </option>
               ))}
             </select>
           </>
@@ -1868,7 +1989,12 @@ export function AnnouncementWorkflowModal({
         {action === "sponsor" && (
           <>
             <FieldLabel>Durée du sponsoring</FieldLabel>
-            <TextInput value={duration} onChange={setDuration} placeholder="Ex : 14 jours" ariaLabel="Durée du sponsoring" />
+            <TextInput
+              value={duration}
+              onChange={setDuration}
+              placeholder="Ex : 14 jours"
+              ariaLabel="Durée du sponsoring"
+            />
             <FieldLabel>Niveau de mise en avant</FieldLabel>
             <select
               value={level}
@@ -1876,12 +2002,16 @@ export function AnnouncementWorkflowModal({
               style={selectStyle}
             >
               {["Standard", "Premium", "Top"].map((option) => (
-                <option key={option} value={option}>{option}</option>
+                <option key={option} value={option}>
+                  {option}
+                </option>
               ))}
             </select>
           </>
         )}
-        <FieldLabel>{action === "apply" ? "Message de réponse" : "Message personnalisé"}</FieldLabel>
+        <FieldLabel>
+          {action === "apply" ? "Message de réponse" : "Message personnalisé"}
+        </FieldLabel>
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
@@ -1892,11 +2022,24 @@ export function AnnouncementWorkflowModal({
           }
           style={textareaStyle}
         />
-        {error && <div style={{ ...manrope, color: C.danger, fontSize: 13, fontWeight: 700 }}>{error}</div>}
+        {error && (
+          <div style={{ ...manrope, color: C.danger, fontSize: 13, fontWeight: 700 }}>{error}</div>
+        )}
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, padding: "16px 24px", borderTop: `1px solid ${C.border}`, background: C.panel }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 12,
+          padding: "16px 24px",
+          borderTop: `1px solid ${C.border}`,
+          background: C.panel,
+        }}
+      >
         <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-        <PrimaryButton onClick={submit}>{action === "sponsor" ? "Envoyer la demande" : "Confirmer"}</PrimaryButton>
+        <PrimaryButton onClick={submit}>
+          {action === "sponsor" ? "Envoyer la demande" : "Confirmer"}
+        </PrimaryButton>
       </div>
     </ModalShell>
   );
@@ -1944,7 +2087,15 @@ function FieldLabel({ children }: { children: ReactNode }) {
   );
 }
 
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -1987,6 +2138,7 @@ function AnnouncementAdvancedFiltersModal({
   setFilters: React.Dispatch<React.SetStateAction<Filters>>;
   onClose: () => void;
 }) {
+  const { locale } = useI18n();
   const toggleArr = (key: "langue" | "genres" | "sousGenres", val: string) =>
     setFilters((f) => {
       const arr = f[key];
@@ -2005,7 +2157,11 @@ function AnnouncementAdvancedFiltersModal({
 
   return (
     <ModalShell onClose={onClose} maxWidth={820} label="Filtres avancés">
-      <ModalHeader title="Filtres avancés" subtitle="Affinez par langue, genre et sous-genre." onClose={onClose} />
+      <ModalHeader
+        title="Filtres avancés"
+        subtitle="Affinez par langue, genre et sous-genre."
+        onClose={onClose}
+      />
       <div style={{ overflow: "auto", padding: 24, background: C.details }}>
         <FilterChipRow label="Langage">
           <select
@@ -2028,7 +2184,9 @@ function AnnouncementAdvancedFiltersModal({
           >
             <option value="">Ajouter une langue…</option>
             {SITE_LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>{l.label}</option>
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
             ))}
           </select>
           {filters.langue.map((language) => (
@@ -2071,7 +2229,7 @@ function AnnouncementAdvancedFiltersModal({
           {GENRES_FR.map((genre) => (
             <FilterChip
               key={genre}
-              label={genre}
+              label={localizeLabel(genre, locale)}
               active={filters.genres.includes(genre)}
               onClick={() => toggleArr("genres", genre)}
             />
@@ -2082,7 +2240,7 @@ function AnnouncementAdvancedFiltersModal({
           {SOUS_GENRES.map((subGenre) => (
             <FilterChip
               key={subGenre}
-              label={subGenre}
+              label={localizeLabel(subGenre, locale)}
               active={filters.sousGenres.includes(subGenre)}
               onClick={() => toggleArr("sousGenres", subGenre)}
             />

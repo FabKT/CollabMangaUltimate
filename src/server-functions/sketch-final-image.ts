@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GenerationUsage } from "@/lib/generation-metrics";
 
 /**
  * Sketch-to-final plan.
@@ -20,22 +21,24 @@ const sketchReferenceSchema = z.object({
   description: z.string().optional(),
 });
 
-const sketchFinalInputSchema = z.object({
-  baseImageDataUrl: z.string().optional(),
-  sketchImageDataUrl: z.string().optional(),
-  styleImageDataUrl: z.string().min(1),
-  styleId: z.string().default("current"),
-  styleName: z.string().default("Style actuel"),
-  styleDescription: z.string().default(""),
-  elementReferences: z.array(sketchReferenceSchema).default([]),
-  references: z.array(sketchReferenceSchema).default([]),
-  notes: z.string().optional(),
-  prompt: z.string().optional(),
-  size: z.enum(["1024x1536", "1536x1024"]).optional(),
-}).refine((data) => data.sketchImageDataUrl || data.baseImageDataUrl, {
-  message: "Missing sketch image.",
-  path: ["sketchImageDataUrl"],
-});
+const sketchFinalInputSchema = z
+  .object({
+    baseImageDataUrl: z.string().optional(),
+    sketchImageDataUrl: z.string().optional(),
+    styleImageDataUrl: z.string().min(1),
+    styleId: z.string().default("current"),
+    styleName: z.string().default("Style actuel"),
+    styleDescription: z.string().default(""),
+    elementReferences: z.array(sketchReferenceSchema).default([]),
+    references: z.array(sketchReferenceSchema).default([]),
+    notes: z.string().optional(),
+    prompt: z.string().optional(),
+    size: z.enum(["1024x1536", "1536x1024"]).optional(),
+  })
+  .refine((data) => data.sketchImageDataUrl || data.baseImageDataUrl, {
+    message: "Missing sketch image.",
+    path: ["sketchImageDataUrl"],
+  });
 
 export type SketchFinalInput = z.infer<typeof sketchFinalInputSchema>;
 
@@ -46,6 +49,8 @@ export type SketchFinalResult = {
   size: string;
   createdAt: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
 };
 
 type PulseNoteSketchFinalResponse = {
@@ -56,6 +61,8 @@ type PulseNoteSketchFinalResponse = {
   size?: string;
   createdAt?: string;
   creditsUsed?: number;
+  costUsd?: number;
+  usage?: GenerationUsage;
   error?: string;
 };
 
@@ -201,5 +208,7 @@ export async function requestPulseNoteSketchFinal(
     size: payload.size ?? "unknown",
     createdAt: payload.createdAt ?? new Date().toISOString(),
     creditsUsed: payload.creditsUsed,
+    costUsd: payload.costUsd,
+    usage: payload.usage,
   };
 }

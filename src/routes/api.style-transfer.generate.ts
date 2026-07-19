@@ -15,10 +15,13 @@ export const Route = createFileRoute("/api/style-transfer/generate")({
       POST: async ({ request }) => {
         try {
           const input = parseStyleTransferInput(await request.json());
-          const outcome = await withCredits(request, { operationType: "generate" }, () =>
-            requestPulseNoteStyleTransfer(input),
+          const outcome = await withCredits(
+            request,
+            { workspace: "style-transfer", operationType: "generate" },
+            () => requestPulseNoteStyleTransfer(input),
           );
-          if (!outcome.ok) return Response.json({ error: outcome.error }, { status: outcome.status });
+          if (!outcome.ok)
+            return Response.json({ error: outcome.error }, { status: outcome.status });
           return Response.json(outcome.result);
         } catch (error) {
           return Response.json({ error: apiErrorMessage(error) }, { status: 500 });
