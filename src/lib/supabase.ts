@@ -21,42 +21,50 @@ let client: SupabaseClient | null = null;
 
 if (supabaseUrl && supabaseKey) {
   const defaultStorageKey = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+  const legacyTabStorageKeyName = "collabmanga.supabase.tab-storage-key";
+  const stableSessionKey = "collabmanga.supabase.auth-session";
+  // Supabase uses storageKey for its cross-tab channel. It must be fresh on
+  // every page load because browsers clone sessionStorage when a tab is
+  // duplicated. The adapter below maps this volatile key to a stable key
+  // inside the current tab so reloads still preserve that tab's session.
   const tabStorageKey =
     typeof window === "undefined"
       ? defaultStorageKey
-      : (() => {
-          const key = "collabmanga.supabase.tab-storage-key";
-          const existing = window.sessionStorage.getItem(key);
-          if (existing) return existing;
-          const next = `collabmanga-auth-${crypto.randomUUID()}`;
-          window.sessionStorage.setItem(key, next);
-          return next;
-        })();
+      : `collabmanga-auth-${crypto.randomUUID()}`;
 
   const storage =
     typeof window === "undefined"
       ? undefined
       : {
           getItem(key: string) {
-            const tabSession = window.sessionStorage.getItem(key);
+            const stableKey = key.replace(tabStorageKey, stableSessionKey);
+            const tabSession = window.sessionStorage.getItem(stableKey);
             if (tabSession !== null) return tabSession;
 
-            // Migrate the previous browser-wide session once. All subsequent
-            // authentication changes remain isolated to this tab.
+            // Migrate sessions created by the previous browser-wide and
+            // per-tab implementations. Subsequent writes remain tab-local.
+            const legacyTabStorageKey = window.sessionStorage.getItem(legacyTabStorageKeyName);
+            const legacyKey = legacyTabStorageKey
+              ? key.replace(tabStorageKey, legacyTabStorageKey)
+              : null;
             const sharedSession =
-              window.localStorage.getItem(key) ?? window.localStorage.getItem(defaultStorageKey);
+              (legacyKey ? window.sessionStorage.getItem(legacyKey) : null) ??
+              window.sessionStorage.getItem(key) ??
+              (key === tabStorageKey ? window.localStorage.getItem(defaultStorageKey) : null);
             if (sharedSession !== null) {
-              window.sessionStorage.setItem(key, sharedSession);
-              window.localStorage.removeItem(key);
-              window.localStorage.removeItem(defaultStorageKey);
+              window.sessionStorage.setItem(stableKey, sharedSession);
+              if (legacyKey) window.sessionStorage.removeItem(legacyKey);
+              window.sessionStorage.removeItem(key);
+              if (key === tabStorageKey) window.localStorage.removeItem(defaultStorageKey);
             }
+            window.sessionStorage.removeItem(legacyTabStorageKeyName);
             return sharedSession;
           },
           setItem(key: string, value: string) {
-            window.sessionStorage.setItem(key, value);
+            window.sessionStorage.setItem(key.replace(tabStorageKey, stableSessionKey), value);
           },
           removeItem(key: string) {
-            window.sessionStorage.removeItem(key);
+            window.sessionStorage.removeItem(key.replace(tabStorageKey, stableSessionKey));
           },
         };
 

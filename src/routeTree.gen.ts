@@ -60,7 +60,7 @@ import { Route as ApiFreeStudioGenerateRouteImport } from './routes/api.free-stu
 import { Route as ApiDecorGenerateRouteImport } from './routes/api.decor.generate'
 import { Route as ApiCharacterGenerateRouteImport } from './routes/api.character.generate'
 import { Route as CollabSponsorshipHubIdRouteImport } from './routes/_collab.sponsorship-hub_.$id'
-import { Route as CollabProfileProfileIdRouteImport } from './routes/_collab.profile.$profileId'
+import { Route as CollabProfileProfileIdRouteImport } from './routes/_collab.profile_.$profileId'
 import { Route as CollabMangaIdIndexRouteImport } from './routes/_collab.manga.$id.index'
 import { Route as CatalogIdChapterChapterIdRouteImport } from './routes/catalog.$id.chapter.$chapterId'
 import { Route as CollabMangaIdChapterChapterIdRouteImport } from './routes/_collab.manga.$id.chapter.$chapterId'
@@ -322,9 +322,9 @@ const CollabSponsorshipHubIdRoute = CollabSponsorshipHubIdRouteImport.update({
   getParentRoute: () => CollabRoute,
 } as any)
 const CollabProfileProfileIdRoute = CollabProfileProfileIdRouteImport.update({
-  id: '/$profileId',
-  path: '/$profileId',
-  getParentRoute: () => CollabProfileRoute,
+  id: '/profile_/$profileId',
+  path: '/profile/$profileId',
+  getParentRoute: () => CollabRoute,
 } as any)
 const CollabMangaIdIndexRoute = CollabMangaIdIndexRouteImport.update({
   id: '/manga/$id/',
@@ -358,7 +358,7 @@ export interface FileRoutesByFullPath {
   '/ideas': typeof CollabIdeasRoute
   '/messages': typeof CollabMessagesRoute
   '/notifications': typeof CollabNotificationsRoute
-  '/profile': typeof CollabProfileRouteWithChildren
+  '/profile': typeof CollabProfileRoute
   '/showcase': typeof CollabShowcaseRoute
   '/sponsorship': typeof CollabSponsorshipRoute
   '/sponsorship-hub': typeof CollabSponsorshipHubRoute
@@ -413,7 +413,7 @@ export interface FileRoutesByTo {
   '/ideas': typeof CollabIdeasRoute
   '/messages': typeof CollabMessagesRoute
   '/notifications': typeof CollabNotificationsRoute
-  '/profile': typeof CollabProfileRouteWithChildren
+  '/profile': typeof CollabProfileRoute
   '/showcase': typeof CollabShowcaseRoute
   '/sponsorship': typeof CollabSponsorshipRoute
   '/sponsorship-hub': typeof CollabSponsorshipHubRoute
@@ -470,7 +470,7 @@ export interface FileRoutesById {
   '/_collab/ideas': typeof CollabIdeasRoute
   '/_collab/messages': typeof CollabMessagesRoute
   '/_collab/notifications': typeof CollabNotificationsRoute
-  '/_collab/profile': typeof CollabProfileRouteWithChildren
+  '/_collab/profile': typeof CollabProfileRoute
   '/_collab/showcase': typeof CollabShowcaseRoute
   '/_collab/sponsorship': typeof CollabSponsorshipRoute
   '/_collab/sponsorship-hub': typeof CollabSponsorshipHubRoute
@@ -495,7 +495,7 @@ export interface FileRoutesById {
   '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/catalog/$id': typeof CatalogIdRouteWithChildren
   '/ai/': typeof AiIndexRoute
-  '/_collab/profile/$profileId': typeof CollabProfileProfileIdRoute
+  '/_collab/profile_/$profileId': typeof CollabProfileProfileIdRoute
   '/_collab/sponsorship-hub_/$id': typeof CollabSponsorshipHubIdRoute
   '/api/character/generate': typeof ApiCharacterGenerateRoute
   '/api/decor/generate': typeof ApiDecorGenerateRoute
@@ -664,7 +664,7 @@ export interface FileRouteTypes {
     | '/api/generation-jobs'
     | '/catalog/$id'
     | '/ai/'
-    | '/_collab/profile/$profileId'
+    | '/_collab/profile_/$profileId'
     | '/_collab/sponsorship-hub_/$id'
     | '/api/character/generate'
     | '/api/decor/generate'
@@ -1061,12 +1061,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CollabSponsorshipHubIdRouteImport
       parentRoute: typeof CollabRoute
     }
-    '/_collab/profile/$profileId': {
-      id: '/_collab/profile/$profileId'
-      path: '/$profileId'
+    '/_collab/profile_/$profileId': {
+      id: '/_collab/profile_/$profileId'
+      path: '/profile/$profileId'
       fullPath: '/profile/$profileId'
       preLoaderRoute: typeof CollabProfileProfileIdRouteImport
-      parentRoute: typeof CollabProfileRoute
+      parentRoute: typeof CollabRoute
     }
     '/_collab/manga/$id/': {
       id: '/_collab/manga/$id/'
@@ -1092,18 +1092,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface CollabProfileRouteChildren {
-  CollabProfileProfileIdRoute: typeof CollabProfileProfileIdRoute
-}
-
-const CollabProfileRouteChildren: CollabProfileRouteChildren = {
-  CollabProfileProfileIdRoute: CollabProfileProfileIdRoute,
-}
-
-const CollabProfileRouteWithChildren = CollabProfileRoute._addFileChildren(
-  CollabProfileRouteChildren,
-)
-
 interface CollabRouteChildren {
   CollabAnnouncementsRoute: typeof CollabAnnouncementsRoute
   CollabChatRoute: typeof CollabChatRoute
@@ -1113,11 +1101,12 @@ interface CollabRouteChildren {
   CollabIdeasRoute: typeof CollabIdeasRoute
   CollabMessagesRoute: typeof CollabMessagesRoute
   CollabNotificationsRoute: typeof CollabNotificationsRoute
-  CollabProfileRoute: typeof CollabProfileRouteWithChildren
+  CollabProfileRoute: typeof CollabProfileRoute
   CollabShowcaseRoute: typeof CollabShowcaseRoute
   CollabSponsorshipRoute: typeof CollabSponsorshipRoute
   CollabSponsorshipHubRoute: typeof CollabSponsorshipHubRoute
   CollabStudioRoute: typeof CollabStudioRoute
+  CollabProfileProfileIdRoute: typeof CollabProfileProfileIdRoute
   CollabSponsorshipHubIdRoute: typeof CollabSponsorshipHubIdRoute
   CollabMangaIndexRoute: typeof CollabMangaIndexRoute
   CollabMangaIdIndexRoute: typeof CollabMangaIdIndexRoute
@@ -1133,11 +1122,12 @@ const CollabRouteChildren: CollabRouteChildren = {
   CollabIdeasRoute: CollabIdeasRoute,
   CollabMessagesRoute: CollabMessagesRoute,
   CollabNotificationsRoute: CollabNotificationsRoute,
-  CollabProfileRoute: CollabProfileRouteWithChildren,
+  CollabProfileRoute: CollabProfileRoute,
   CollabShowcaseRoute: CollabShowcaseRoute,
   CollabSponsorshipRoute: CollabSponsorshipRoute,
   CollabSponsorshipHubRoute: CollabSponsorshipHubRoute,
   CollabStudioRoute: CollabStudioRoute,
+  CollabProfileProfileIdRoute: CollabProfileProfileIdRoute,
   CollabSponsorshipHubIdRoute: CollabSponsorshipHubIdRoute,
   CollabMangaIndexRoute: CollabMangaIndexRoute,
   CollabMangaIdIndexRoute: CollabMangaIdIndexRoute,
