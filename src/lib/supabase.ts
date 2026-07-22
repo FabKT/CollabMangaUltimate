@@ -20,6 +20,19 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | un
 let client: SupabaseClient | null = null;
 
 if (supabaseUrl && supabaseKey) {
+  const defaultStorageKey = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+  const tabStorageKey =
+    typeof window === "undefined"
+      ? defaultStorageKey
+      : (() => {
+          const key = "collabmanga.supabase.tab-storage-key";
+          const existing = window.sessionStorage.getItem(key);
+          if (existing) return existing;
+          const next = `collabmanga-auth-${crypto.randomUUID()}`;
+          window.sessionStorage.setItem(key, next);
+          return next;
+        })();
+
   const storage =
     typeof window === "undefined"
       ? undefined
@@ -30,10 +43,12 @@ if (supabaseUrl && supabaseKey) {
 
             // Migrate the previous browser-wide session once. All subsequent
             // authentication changes remain isolated to this tab.
-            const sharedSession = window.localStorage.getItem(key);
+            const sharedSession =
+              window.localStorage.getItem(key) ?? window.localStorage.getItem(defaultStorageKey);
             if (sharedSession !== null) {
               window.sessionStorage.setItem(key, sharedSession);
               window.localStorage.removeItem(key);
+              window.localStorage.removeItem(defaultStorageKey);
             }
             return sharedSession;
           },
@@ -49,6 +64,7 @@ if (supabaseUrl && supabaseKey) {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      storageKey: tabStorageKey,
       storage,
     },
   });
