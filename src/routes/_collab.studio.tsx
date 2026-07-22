@@ -24,6 +24,7 @@ import {
 } from "@/lib/user-workflows";
 import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
 import { addAnnouncement } from "@/lib/db";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/studio")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -74,6 +75,8 @@ interface Project {
   recruits?: RecruitAnnouncement[];
   /** Sous-genres favoris du projet. */
   subgenres?: string[];
+  /** Langue du projet (par défaut : langue du site choisie par l'utilisateur). */
+  language?: string;
   /** Couverture importée (data URL). */
   coverDataUrl?: string;
   /** Projet visible dans le catalogue public (masquable dans les paramètres). */
@@ -1916,8 +1919,12 @@ function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chap
 }
 
 function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCreate: (project: Project) => void }) {
+  const { locale } = useI18n();
+  // La langue du projet démarre sur la langue du site choisie par l'utilisateur.
+  const defaultLang = locale === "fr" ? "FR" : "ENG";
   const [title, setTitle] = useState("");
   const [synopsis, setSynopsis] = useState("");
+  const [language, setLanguage] = useState<string[]>([defaultLang]);
   const [genres, setGenres] = useState<string[]>([]);
   const [subgenres, setSubgenres] = useState<string[]>([]);
   const [productionNote, setProductionNote] = useState("");
@@ -1950,6 +1957,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
       updated: "À l'instant",
       genres,
       subgenres,
+      language: language[0] ?? defaultLang,
       chapters: [],
       notes: productionNote.trim()
         ? [{
@@ -1997,6 +2005,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
         <div className="flex flex-col gap-5">
           <ModalField label="Titre du projet"><TextInput value={title} onChange={setTitle} placeholder="Nom du manga" /></ModalField>
           <ModalField label="Synopsis"><textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Résumé court du projet, ton, objectif principal." className={modalTextarea} /></ModalField>
+          <ChoiceRow label="Langue du projet" defaultValue={defaultLang} options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
           <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
           <ChoiceRow
             multi

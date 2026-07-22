@@ -13,6 +13,7 @@ import { HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS, type CatalogManga, type 
 import { MangaCard } from "@/components/haven/MangaCard";
 import { loadStudioProjects } from "@/lib/studio-projects";
 import { getMangaRating } from "@/lib/manga-ratings";
+import { useI18n } from "@/lib/i18n";
 
 type StudioCatalogChapter = { id: string; number: number; title: string; status: string; updated: string };
 type StudioCatalogProject = {
@@ -99,6 +100,7 @@ export const Route = createFileRoute("/_collab/hub")({
 });
 
 function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
+  const { t } = useI18n();
   const [i, setI] = useState(0);
   const total = slides.length;
   const go = useCallback((n: number) => setI((prev) => (prev + n + total) % total), [total]);
@@ -121,22 +123,21 @@ function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
             <div className="max-w-2xl">
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <span className="chip chip-primary">
-                  <Sparkles className="h-3 w-3" /> Bienvenue sur CollabManga
+                  <Sparkles className="h-3 w-3" /> {t("hub.welcomeBadge")}
                 </span>
               </div>
               <h1 className="font-display text-4xl font-extrabold text-foreground drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:text-5xl md:text-6xl lg:text-7xl">
-                Créez et publiez des manga, ensemble
+                {t("hub.welcomeTitle")}
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-secondary-foreground sm:text-base">
-                Le catalogue se remplit à mesure que les créateurs publient leurs séries. Lance ton
-                projet dans le Studio ou explore les outils IA pour produire tes premières planches.
+                {t("hub.welcomeText")}
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-3">
-                <Link to="/studio" className="btn-primary">
-                  <Play className="h-4 w-4" /> Ouvrir le Studio
+                <Link to="/studio" search={{ project: undefined, chapter: undefined }} className="btn-primary">
+                  <Play className="h-4 w-4" /> {t("hub.openStudio")}
                 </Link>
                 <Link to="/ai" className="btn-ghost">
-                  <Info className="h-4 w-4" /> Découvrir CollabManga AI
+                  <Info className="h-4 w-4" /> {t("intro.discoverAi")}
                 </Link>
               </div>
             </div>
@@ -167,7 +168,7 @@ function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
           <div className="max-w-2xl">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="chip chip-primary">
-                <Sparkles className="h-3 w-3" /> Top Manga #{slide.rank}
+                <Sparkles className="h-3 w-3" /> {t("hub.topManga")} #{slide.rank}
               </span>
               <span className="chip">{slide.demographic}</span>
               <span className="chip">{slide.status}</span>
@@ -185,10 +186,10 @@ function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link to="/manga/$id" params={{ id: slide.id }} className="btn-primary">
-                <Play className="h-4 w-4" /> Read now
+                <Play className="h-4 w-4" /> {t("hub.readNow")}
               </Link>
               <Link to="/manga/$id" params={{ id: slide.id }} className="btn-ghost">
-                <Info className="h-4 w-4" /> Details
+                <Info className="h-4 w-4" /> {t("hub.details")}
               </Link>
             </div>
           </div>
@@ -252,6 +253,7 @@ function SectionHeader({
 }
 
 function NewChapterRow({ drops }: { drops: NewDrop[] }) {
+  const { t } = useI18n();
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {drops.map((c) => (
@@ -276,7 +278,7 @@ function NewChapterRow({ drops }: { drops: NewDrop[] }) {
                 {c.date}
               </span>
               <span className="inline-flex items-center gap-1 text-xs font-bold text-primary group-hover:text-primary-hover">
-                Read chapter <ArrowRight className="h-3 w-3" />
+                {t("hub.readChapter")} <ArrowRight className="h-3 w-3" />
               </span>
             </div>
           </div>
@@ -287,6 +289,7 @@ function NewChapterRow({ drops }: { drops: NewDrop[] }) {
 }
 
 function HomePage() {
+  const { t } = useI18n();
   const studioEntries = useVisibleStudioEntries();
   const studioDrops = useVisibleStudioChapters();
   const all = [...studioEntries, ...CATALOG_MANGA];
@@ -321,18 +324,17 @@ function HomePage() {
               <BookOpen className="h-6 w-6 text-primary" />
             </div>
             <h2 className="mt-5 font-display text-2xl font-bold text-foreground sm:text-3xl">
-              Le catalogue est encore vide
+              {t("hub.emptyTitle")}
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm text-secondary-foreground sm:text-base">
-              Les mangas publiés par les créateurs apparaîtront ici : favoris des lecteurs,
-              nouveaux chapitres et pépites à découvrir. Sois parmi les premiers à publier.
+              {t("hub.emptyText")}
             </p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">
-              <Link to="/studio" className="btn-primary">
-                Lancer un projet <ArrowRight className="h-4 w-4" />
+              <Link to="/studio" search={{ project: undefined, chapter: undefined }} className="btn-primary">
+                {t("hub.launchProject")} <ArrowRight className="h-4 w-4" />
               </Link>
               <Link to="/announcements" className="btn-ghost">
-                Trouver des collaborateurs
+                {t("hub.findCollaborators")}
               </Link>
             </div>
           </div>
@@ -342,15 +344,15 @@ function HomePage() {
       {hasCatalog && (
         <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <SectionHeader
-            eyebrow="Reader picks"
-            title="Favorite Manga"
-            subtitle="The stories readers keep coming back to on CollabManga."
+            eyebrow={t("hub.readerPicks")}
+            title={t("hub.favoriteManga")}
+            subtitle={t("hub.favoriteSubtitle")}
             cta={
               <Link
                 to="/manga"
                 className="hidden items-center gap-1 text-sm font-bold text-primary hover:text-primary-hover sm:inline-flex"
               >
-                See all <ArrowRight className="h-4 w-4" />
+                {t("hub.seeAll")} <ArrowRight className="h-4 w-4" />
               </Link>
             }
           />
@@ -366,9 +368,9 @@ function HomePage() {
         <section className="border-y border-border/70 bg-surface">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
             <SectionHeader
-              eyebrow="Latest drops"
-              title="New Chapter Releases"
-              subtitle="Fresh from the studio — the most recent chapters posted by creators."
+              eyebrow={t("hub.latestDrops")}
+              title={t("hub.newReleases")}
+              subtitle={t("hub.newReleasesSubtitle")}
             />
             <NewChapterRow drops={newDrops} />
           </div>
@@ -378,9 +380,9 @@ function HomePage() {
       {hasCatalog && (
         <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <SectionHeader
-            eyebrow="Underrated"
-            title="Hidden Gems"
-            subtitle="Lesser-known manga that deserve a spot on your shelf."
+            eyebrow={t("hub.underrated")}
+            title={t("hub.hiddenGems")}
+            subtitle={t("hub.hiddenGemsSubtitle")}
           />
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {gems.map((m) => (
@@ -397,20 +399,20 @@ function HomePage() {
           <div className="relative grid gap-8 md:grid-cols-[1.4fr_1fr] md:items-center">
             <div>
               <div className="mb-4 inline-flex items-center gap-2 chip chip-primary">
-                <BookOpen className="h-3.5 w-3.5" /> Explore CollabManga
+                <BookOpen className="h-3.5 w-3.5" /> {t("hub.exploreBadge")}
               </div>
               <h2 className="font-display text-3xl font-bold text-foreground sm:text-4xl md:text-5xl">
-                Discover more original manga
+                {t("hub.discoverMore")}
               </h2>
               <p className="mt-4 max-w-xl text-base text-secondary-foreground">
-                Explore the catalog and find new stories created by CollabManga creators.
+                {t("hub.discoverMoreText")}
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link to="/manga" className="btn-primary">
-                  Explore Catalog <ArrowRight className="h-4 w-4" />
+                  {t("intro.exploreCatalog")} <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link to="/ai/manga-page" className="btn-ghost">
-                  Start a Manga Project
+                  {t("hub.startProject")}
                 </Link>
               </div>
             </div>
