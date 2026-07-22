@@ -19,8 +19,8 @@ export default defineConfig(() => {
       tanstackStart({
         server: { entry: "server" },
       }),
-      isNetlify ? netlify() : nitro({ preset: "node_server" }),
       viteReact(),
+      isNetlify ? netlify() : nitro({ preset: "node_server" }),
       tailwindcss(),
     ],
     resolve: {
