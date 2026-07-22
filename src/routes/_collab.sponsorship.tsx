@@ -10,6 +10,7 @@ import { AnnouncementCard, CardSkeleton } from "@/components/sponsorship/Announc
 import { DetailDialog } from "@/components/sponsorship/DetailDialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { sendSponsorshipContact } from "@/lib/user-workflows";
+import { useI18n } from "@/lib/i18n";
 import {
   AdvancedFiltersDialog,
   emptyFilters,
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/_collab/sponsorship")({
 });
 
 function SponsorshipPage() {
+  const { t } = useI18n();
   const [mode, setMode] = useState<AnnouncementMode>("creator");
   const [search, setSearch] = useState("");
   const [userAnnouncements, setUserAnnouncements] = useState<Announcement[]>([]);
@@ -53,7 +55,7 @@ function SponsorshipPage() {
 
   const activeFilters = useMemo(() => {
     const chips: { key: string; label: string; clear: () => void }[] = [];
-    if (search) chips.push({ key: "search", label: `Recherche : ${search}`, clear: () => setSearch("") });
+    if (search) chips.push({ key: "search", label: `${t("sponsor.searchChip")} ${search}`, clear: () => setSearch("") });
 
     const arrayFields: (keyof SponsorFilters)[] = [
       "sponsorTypes",
@@ -75,12 +77,12 @@ function SponsorshipPage() {
     });
 
     const numFields: [keyof SponsorFilters, string][] = [
-      ["minPrice", "Prix min"],
-      ["maxPrice", "Prix max"],
-      ["minChapters", "Chapitres min"],
-      ["maxChapters", "Chapitres max"],
-      ["minSubs", "Abonnés min"],
-      ["maxSubs", "Abonnés max"],
+      ["minPrice", t("sponsor.priceMin")],
+      ["maxPrice", t("sponsor.priceMax")],
+      ["minChapters", t("sponsor.chipMinChapters")],
+      ["maxChapters", t("sponsor.chipMaxChapters")],
+      ["minSubs", t("sponsor.chipMinSubs")],
+      ["maxSubs", t("sponsor.chipMaxSubs")],
     ];
     numFields.forEach(([key, lbl]) => {
       const val = filters[key] as string;
@@ -138,9 +140,9 @@ function SponsorshipPage() {
         {/* header */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-2xl">
-            <h1 className="font-sora text-[28px] font-bold leading-[36px] text-cm-text">Sponsorship</h1>
+            <h1 className="font-sora text-[28px] font-bold leading-[36px] text-cm-text">{t("sponsor.title")}</h1>
             <p className="mt-1 font-manrope text-[14px] font-medium leading-[22px] text-cm-text2">
-              Trouvez des créateurs de contenu, des offres de parrainage et des projets manga à mettre en avant.
+              {t("sponsor.subtitle")}
             </p>
           </div>
         </header>
@@ -149,8 +151,8 @@ function SponsorshipPage() {
         <div className="mt-6 inline-flex gap-2 rounded-full bg-cm-panel p-1">
           {(
             [
-              { key: "project", label: "Trouver un projet" },
-              { key: "creator", label: "Trouver un créateur de contenu" },
+              { key: "project", label: t("sponsor.findProject") },
+              { key: "creator", label: t("sponsor.findCreator") },
             ] as const
           ).map((opt) => (
             <button
@@ -175,9 +177,9 @@ function SponsorshipPage() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-[220px] flex-1">
               <input
-                aria-label={mode === "creator" ? "Rechercher un créateur de contenu" : "Rechercher un projet"}
+                aria-label={mode === "creator" ? t("sponsor.searchCreator") : t("sponsor.searchProject")}
                 className={inputCls}
-                placeholder={mode === "creator" ? "Rechercher un créateur de contenu…" : "Rechercher un projet…"}
+                placeholder={mode === "creator" ? `${t("sponsor.searchCreator")}…` : `${t("sponsor.searchProject")}…`}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -185,18 +187,18 @@ function SponsorshipPage() {
 
             <div className="flex items-center gap-2">
               <input
-                aria-label="Prix minimum"
+                aria-label={t("sponsor.priceMinAria")}
                 className={cn(inputCls, "w-24")}
-                placeholder="Prix min"
+                placeholder={t("sponsor.priceMin")}
                 inputMode="numeric"
                 value={filters.minPrice}
                 onChange={(e) => setFilters((f) => ({ ...f, minPrice: e.target.value }))}
               />
               <span className="text-cm-muted">–</span>
               <input
-                aria-label="Prix maximal"
+                aria-label={t("sponsor.priceMaxAria")}
                 className={cn(inputCls, "w-24")}
-                placeholder="Prix max"
+                placeholder={t("sponsor.priceMax")}
                 inputMode="numeric"
                 value={filters.maxPrice}
                 onChange={(e) => setFilters((f) => ({ ...f, maxPrice: e.target.value }))}
@@ -204,7 +206,7 @@ function SponsorshipPage() {
             </div>
 
             <button type="button" className={btnSecondary} onClick={() => setAdvancedOpen(true)}>
-              <SlidersHorizontal className="h-4 w-4" /> Filtres avancés
+              <SlidersHorizontal className="h-4 w-4" /> {t("sponsor.advancedFilters")}
               {activeFilters.length > 0 && (
                 <span className="ml-1 inline-flex min-w-[20px] items-center justify-center rounded-full bg-cm-neon px-1.5 text-[11px] font-extrabold text-[#04111e]">
                   {activeFilters.length}
@@ -215,7 +217,7 @@ function SponsorshipPage() {
 
           {/* Type de parrainage — filtre de base */}
           <div className="mt-3">
-            <div className={cn(metaLabel, "mb-2")}>Type de parrainage</div>
+            <div className={cn(metaLabel, "mb-2")}>{t("sponsor.sponsorType")}</div>
             <div className="flex flex-wrap gap-2">
               {SPONSOR_TYPES.map((t) => {
                 const active = filters.sponsorTypes.includes(t);
@@ -246,9 +248,9 @@ function SponsorshipPage() {
 
         {/* active filters */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className={metaLabel}>Filtres actifs</span>
+          <span className={metaLabel}>{t("sponsor.activeFilters")}</span>
           {activeFilters.length === 0 ? (
-            <span className="font-manrope text-[13px] font-medium text-cm-muted">Aucun filtre actif.</span>
+            <span className="font-manrope text-[13px] font-medium text-cm-muted">{t("sponsor.noActiveFilters")}</span>
           ) : (
             <>
               {activeFilters.map((f) => (
@@ -260,7 +262,7 @@ function SponsorshipPage() {
                 >
                   {f.label}
                   <X className="h-3.5 w-3.5" />
-                  <span className="sr-only">Retirer le filtre</span>
+                  <span className="sr-only">{t("sponsor.removeFilter")}</span>
                 </button>
               ))}
               <button
@@ -268,7 +270,7 @@ function SponsorshipPage() {
                 onClick={resetFilters}
                 className="font-manrope text-[13px] font-bold text-cm-text2 underline-offset-2 hover:text-cm-text hover:underline"
               >
-                Tout réinitialiser
+                {t("sponsor.resetAll")}
               </button>
             </>
           )}
@@ -285,14 +287,14 @@ function SponsorshipPage() {
           ) : results.length === 0 ? (
             <div className="rounded-[22px] border border-[rgba(133,154,206,0.18)] bg-cm-panel p-10 text-center">
               <h2 className="font-sora text-[18px] font-bold leading-[26px] text-cm-text">
-                Aucune annonce de parrainage trouvée
+                {t("sponsor.noResults")}
               </h2>
               <p className="mx-auto mt-2 max-w-md font-manrope text-[14px] font-medium leading-[22px] text-cm-text2">
-                Essayez d'ajuster vos filtres.
+                {t("sponsor.noResultsText")}
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <button type="button" className={btnSecondary} onClick={resetFilters}>
-                  Réinitialiser les filtres
+                  {t("sponsor.resetFilters")}
                 </button>
               </div>
             </div>
@@ -356,6 +358,7 @@ function SponsorshipContactDialog({
   onOpenChange: (open: boolean) => void;
   onDone: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [linked, setLinked] = useState("");
   const [budget, setBudget] = useState("");
   const [message, setMessage] = useState("");
@@ -365,7 +368,7 @@ function SponsorshipContactDialog({
 
   useEffect(() => {
     if (!a) return;
-    setLinked(a.mode === "project" ? "Ma chaîne / mon profil créateur" : "Mon projet manga");
+    setLinked(a.mode === "project" ? t("sponsor.linkedProjectDefault") : t("sponsor.linkedCreatorDefault"));
     setBudget(a.price ?? "");
     setMessage("");
     setError("");
@@ -374,11 +377,11 @@ function SponsorshipContactDialog({
   const submit = () => {
     if (!a) return;
     if (!linked.trim()) {
-      setError(isProjectAnnouncement ? "Indique ton profil ou ta chaîne." : "Indique le projet à promouvoir.");
+      setError(isProjectAnnouncement ? t("sponsor.errorProfile") : t("sponsor.errorProject"));
       return;
     }
     if (!message.trim()) {
-      setError("Ajoute un court message pour contextualiser la demande.");
+      setError(t("sponsor.errorMessage"));
       return;
     }
     sendSponsorshipContact({
@@ -386,15 +389,11 @@ function SponsorshipContactDialog({
       announcementMode: a.mode,
       owner: a.ownerName,
       linked,
-      budgetOrPrice: budget || a.price || "A définir",
+      budgetOrPrice: budget || a.price || t("sponsor.budgetTBD"),
       sponsorshipType: a.sponsorshipType,
       message,
     });
-    onDone(
-      isProjectAnnouncement
-        ? "Candidature envoyée au projet. Le workflow de parrainage est créé."
-        : "Message envoyé au créateur de contenu. Le workflow de parrainage est créé.",
-    );
+    onDone(isProjectAnnouncement ? t("sponsor.sentProject") : t("sponsor.sentCreator"));
   };
 
   return (
@@ -404,7 +403,7 @@ function SponsorshipContactDialog({
           <>
             <DialogHeader>
               <DialogTitle className="font-sora text-[22px] font-bold">
-                {isProjectAnnouncement ? "Répondre à ce projet" : "Contacter ce créateur"}
+                {isProjectAnnouncement ? t("sponsor.replyProject") : t("sponsor.contactCreator")}
               </DialogTitle>
               <DialogDescription className="font-manrope text-cm-text2">
                 {a.title} · {a.ownerName}
@@ -414,38 +413,38 @@ function SponsorshipContactDialog({
             <div className="space-y-4">
               <div>
                 <label className={cn(metaLabel, "mb-2 block")}>
-                  {isProjectAnnouncement ? "Profil créateur / chaîne" : "Projet manga à promouvoir"}
+                  {isProjectAnnouncement ? t("sponsor.creatorProfile") : t("sponsor.mangaToPromote")}
                 </label>
                 <input
                   className={inputCls}
                   value={linked}
                   onChange={(event) => setLinked(event.target.value)}
-                  placeholder={isProjectAnnouncement ? "Ex : ma chaîne YouTube manga" : "Ex : Neon Ronin"}
+                  placeholder={isProjectAnnouncement ? t("sponsor.creatorPlaceholder") : t("sponsor.projectPlaceholder")}
                 />
               </div>
 
               <div>
                 <label className={cn(metaLabel, "mb-2 block")}>
-                  {isProjectAnnouncement ? "Tarif proposé" : "Budget ou créneau souhaité"}
+                  {isProjectAnnouncement ? t("sponsor.proposedRate") : t("sponsor.budgetSlot")}
                 </label>
                 <input
                   className={inputCls}
                   value={budget}
                   onChange={(event) => setBudget(event.target.value)}
-                  placeholder={isProjectAnnouncement ? "Ex : 250 €" : "Ex : budget à définir"}
+                  placeholder={isProjectAnnouncement ? t("sponsor.ratePlaceholder") : t("sponsor.budgetPlaceholder")}
                 />
               </div>
 
               <div>
-                <label className={cn(metaLabel, "mb-2 block")}>Message</label>
+                <label className={cn(metaLabel, "mb-2 block")}>{t("sponsor.message")}</label>
                 <textarea
                   className="min-h-[128px] w-full resize-y rounded-[14px] border border-[rgba(133,154,206,0.20)] bg-cm-input px-[14px] py-3 font-manrope text-[14px] font-medium text-cm-text outline-none placeholder:text-cm-muted focus:border-cm-neon focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]"
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
                   placeholder={
                     isProjectAnnouncement
-                      ? "Présente ton audience, ton format de contenu et ce que tu proposes pour ce projet."
-                      : "Présente ton manga, ton objectif de promotion et la période souhaitée."
+                      ? t("sponsor.messageProjectPlaceholder")
+                      : t("sponsor.messageCreatorPlaceholder")
                   }
                 />
               </div>
@@ -459,11 +458,11 @@ function SponsorshipContactDialog({
 
             <DialogFooter className="gap-2 sm:space-x-0">
               <button type="button" className={btnSecondary} onClick={() => onOpenChange(false)}>
-                Annuler
+                {t("sponsor.cancel")}
               </button>
               <button type="button" className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-cm-neon px-[18px] font-manrope text-[14px] font-bold text-[#04111e] transition-colors hover:bg-cm-neon-hover" onClick={submit}>
                 <Send className="h-4 w-4" />
-                Envoyer
+                {t("sponsor.send")}
               </button>
             </DialogFooter>
           </>
