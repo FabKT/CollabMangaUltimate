@@ -9,6 +9,7 @@ import { DetailDialog } from "@/components/sponsorship/DetailDialog";
 import { announcementFromOption } from "@/lib/sponsorship-map";
 import { listSponsorOptions } from "@/lib/sponsorship-options";
 import type { Announcement } from "@/lib/sponsorship-data";
+import { useI18n } from "@/lib/i18n";
 
 type StudioCollaborator = { id: string; name: string; role: string; level: string };
 
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/_collab/manga/$id/")({
 });
 
 function MangaDetailSwitch() {
+  const { t } = useI18n();
   const { id } = Route.useLoaderData() as { id: string };
   const [studio, setStudio] = useState<StudioReadableProject | null | "loading">("loading");
 
@@ -60,7 +62,7 @@ function MangaDetailSwitch() {
   if (studio === "loading") {
     return (
       <div className="mx-auto max-w-[600px] px-6 py-16 text-center text-[14px] text-[color:var(--color-text-secondary)]">
-        Chargement…
+        {t("mangaDetail.loading")}
       </div>
     );
   }
@@ -69,6 +71,7 @@ function MangaDetailSwitch() {
 }
 
 function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<MangaTab>("chapters");
   const [viewRecruit, setViewRecruit] = useState<ProjectAnnouncement | null>(null);
   const [applyRecruit, setApplyRecruit] = useState<ProjectAnnouncement | null>(null);
@@ -111,10 +114,10 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
   const collaborators = project.collaborators ?? [];
 
   const TABS: { id: MangaTab; label: string; icon: typeof BookOpen; count: number }[] = [
-    { id: "chapters", label: "Chapitres", icon: BookOpen, count: published.length },
-    { id: "recrutement", label: "Recrutement", icon: Megaphone, count: recruits.length },
-    { id: "parrainage", label: "Parrainage", icon: Handshake, count: sponsors.length },
-    { id: "collaborateurs", label: "Collaborateurs", icon: Users, count: collaborators.length },
+    { id: "chapters", label: t("mangaDetail.tabChapters"), icon: BookOpen, count: published.length },
+    { id: "recrutement", label: t("mangaDetail.tabRecruitment"), icon: Megaphone, count: recruits.length },
+    { id: "parrainage", label: t("mangaDetail.tabSponsorship"), icon: Handshake, count: sponsors.length },
+    { id: "collaborateurs", label: t("mangaDetail.tabCollaborators"), icon: Users, count: collaborators.length },
   ];
 
   const panel = { background: "var(--color-panel)", border: "1px solid var(--color-border-default)", borderRadius: 28 } as const;
@@ -123,7 +126,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
       <div className="mb-6">
         <Link to="/manga" className="btn-ghost -ml-3 h-10">
-          <ArrowLeft className="h-4 w-4" /> Back to catalog
+          <ArrowLeft className="h-4 w-4" /> {t("mangaDetail.backToCatalog")}
         </Link>
       </div>
 
@@ -135,7 +138,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
                 <img src={project.coverDataUrl} alt={`${project.title} cover`} className="h-full w-full object-cover" />
               ) : (
                 <div className="grid h-full w-full place-items-center text-[13px] font-bold uppercase tracking-widest text-[color:var(--color-text-muted)]" style={{ background: "linear-gradient(160deg,#0E1736,#050B1D)" }}>
-                  Cover pending
+                  {t("mangaDetail.coverPending")}
                 </div>
               )}
             </div>
@@ -153,7 +156,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
               {project.synopsis}
             </p>
             <div className="mt-5">
-              <p className="meta-label mb-2">Genre & sous-genres</p>
+              <p className="meta-label mb-2">{t("mangaDetail.genreSubgenres")}</p>
               <div className="flex flex-wrap gap-1.5">
                 {project.genres.map((g) => <span key={g} className="chip-active font-bold">{g}</span>)}
                 {(project.subgenres ?? []).map((g) => <span key={g} className="chip-neutral">{g}</span>)}
@@ -165,17 +168,17 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
 
       {/* Onglets — même design que la page « projet sélectionné » (studio) */}
       <div className="scrollbar-thin mb-6 flex gap-1 overflow-x-auto rounded-[16px] border border-[var(--border-default)] bg-[var(--panel)] p-1.5">
-        {TABS.map((t) => {
-          const active = tab === t.id;
-          const Icon = t.icon;
+        {TABS.map((tabItem) => {
+          const active = tab === tabItem.id;
+          const Icon = tabItem.icon;
           return (
             <button
-              key={t.id}
+              key={tabItem.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(tabItem.id)}
               className={`inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[12px] px-4 text-[13px] font-bold transition-colors ${active ? "bg-[var(--neon-soft)] text-[var(--neon)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
             >
-              <Icon className="h-4 w-4" /> {t.label}
+              <Icon className="h-4 w-4" /> {tabItem.label}
             </button>
           );
         })}
@@ -189,9 +192,9 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
 
       {tab === "chapters" && (
         <section className="p-6 md:p-8" style={panel}>
-          <h2 className="font-display text-[20px] font-extrabold">Chapitres publiés</h2>
+          <h2 className="font-display text-[20px] font-extrabold">{t("mangaDetail.publishedChapters")}</h2>
           {published.length === 0 ? (
-            <p className="mt-3 text-[14px] text-[color:var(--color-text-secondary)]">Aucun chapitre publié pour l'instant.</p>
+            <p className="mt-3 text-[14px] text-[color:var(--color-text-secondary)]">{t("mangaDetail.noChapters")}</p>
           ) : (
             <div className="mt-4 grid gap-2">
               {published.map((c) => {
@@ -208,7 +211,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
                   >
                     <div>
                       <div className="text-[14px] font-bold">Ch. {c.number} — {c.title}</div>
-                      <div className="text-[12px] text-[color:var(--color-text-muted)]">{readablePages} page{readablePages > 1 ? "s" : ""} lisible{readablePages > 1 ? "s" : ""}</div>
+                      <div className="text-[12px] text-[color:var(--color-text-muted)]">{readablePages} {readablePages > 1 ? t("mangaDetail.readablePages") : t("mangaDetail.readablePage")}</div>
                     </div>
                     <Play className="h-4 w-4 text-[color:var(--color-text-secondary)]" />
                   </Link>
@@ -221,9 +224,9 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
 
       {tab === "recrutement" && (
         <section className="p-6 md:p-8" style={panel}>
-          <h2 className="mb-4 font-display text-[20px] font-extrabold">Annonces de recrutement</h2>
+          <h2 className="mb-4 font-display text-[20px] font-extrabold">{t("mangaDetail.recruitmentAnnouncements")}</h2>
           {recruits.length === 0 ? (
-            <p className="text-[14px] text-[color:var(--color-text-secondary)]">Aucune annonce de recrutement publiée.</p>
+            <p className="text-[14px] text-[color:var(--color-text-secondary)]">{t("mangaDetail.noRecruitment")}</p>
           ) : (
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {recruits.map((a) => (
@@ -236,9 +239,9 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
 
       {tab === "parrainage" && (
         <section className="p-6 md:p-8" style={panel}>
-          <h2 className="mb-4 font-display text-[20px] font-extrabold">Annonces de parrainage</h2>
+          <h2 className="mb-4 font-display text-[20px] font-extrabold">{t("mangaDetail.sponsorshipAnnouncements")}</h2>
           {sponsors.length === 0 ? (
-            <p className="text-[14px] text-[color:var(--color-text-secondary)]">Aucune annonce de parrainage publiée.</p>
+            <p className="text-[14px] text-[color:var(--color-text-secondary)]">{t("mangaDetail.noSponsorship")}</p>
           ) : (
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {sponsors.map((a) => (
@@ -258,9 +261,9 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
 
       {tab === "collaborateurs" && (
         <section className="p-6 md:p-8" style={panel}>
-          <h2 className="mb-4 font-display text-[20px] font-extrabold">Collaborateurs</h2>
+          <h2 className="mb-4 font-display text-[20px] font-extrabold">{t("mangaDetail.collaborators")}</h2>
           {collaborators.length === 0 ? (
-            <p className="text-[14px] text-[color:var(--color-text-secondary)]">Aucun collaborateur pour l'instant.</p>
+            <p className="text-[14px] text-[color:var(--color-text-secondary)]">{t("mangaDetail.noCollaborators")}</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {collaborators.map((c) => (
@@ -307,15 +310,16 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
 }
 
 function NotFound() {
+  const { t } = useI18n();
   return (
     <div className="mx-auto max-w-[600px] px-6 py-16 text-center">
-      <h1 className="font-display text-[28px] font-extrabold">Manga not found</h1>
+      <h1 className="font-display text-[28px] font-extrabold">{t("mangaDetail.notFound")}</h1>
       <p className="mt-2 text-[14px] text-[color:var(--color-text-secondary)]">
-        This manga doesn't exist or is no longer available.
+        {t("mangaDetail.notFoundText")}
       </p>
       <div className="mt-6">
         <Link to="/manga" className="btn-secondary">
-          <ArrowLeft className="h-4 w-4" /> Back to catalog
+          <ArrowLeft className="h-4 w-4" /> {t("mangaDetail.backToCatalog")}
         </Link>
       </div>
     </div>
