@@ -41,6 +41,9 @@ export interface Sponsorship {
   participants: Participant[];
   conditions?: string;
   createdAt: string;
+  ownerId?: string;
+  creatorId?: string;
+  projectId?: string;
 }
 
 const LEGACY_STORAGE_KEY = "collabmanga.sponsorships.v1";
@@ -135,6 +138,9 @@ function normalizeSponsorships(value: unknown): Sponsorship[] {
         : [],
       conditions: asOptionalString(item.conditions),
       createdAt: asString(item.createdAt, new Date().toISOString().slice(0, 10)),
+      ownerId: asOptionalString(item.ownerId),
+      creatorId: asOptionalString(item.creatorId),
+      projectId: asOptionalString(item.projectId),
     };
   });
 }
@@ -148,13 +154,18 @@ async function relationIds(sponsorship: Sponsorship) {
     (participant) => participant.role === "creator" && UUID_PATTERN.test(participant.id),
   );
   const sb = getSupabase();
-  const { data: project } = await sb
+  if (sponsorship.projectId) {
+    return { creatorId: sponsorship.creatorId ?? creator?.id ?? null, projectId: sponsorship.projectId };
+  }
+  const { data: project, error } = await sb
     .from("studio_projects")
     .select("id")
+    .eq("owner_id", (await currentUserId()) ?? "")
     .ilike("title", sponsorship.project)
     .limit(1)
     .maybeSingle();
-  return { creatorId: creator?.id ?? null, projectId: project?.id ?? null };
+  if (error) throw new Error(error.message);
+  return { creatorId: sponsorship.creatorId ?? creator?.id ?? null, projectId: project?.id ?? null };
 }
 
 async function insertRemote(sponsorship: Sponsorship, ownerId: string) {
@@ -198,10 +209,15 @@ export async function listSponsorships(force = false): Promise<Sponsorship[]> {
     await importLegacy(uid);
     const { data, error } = await getSupabase()
       .from("sponsorships")
-      .select("data")
+      .select("owner_id, creator_id, project_id, data")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    state = normalizeSponsorships((data ?? []).map((row) => row.data));
+    state = normalizeSponsorships((data ?? []).map((row) => ({
+      ...(isRecord(row.data) ? row.data : {}),
+      ownerId: row.owner_id,
+      creatorId: row.creator_id,
+      projectId: row.project_id,
+    })));
     loadedFor = uid;
     notify();
     return state;
@@ -221,7 +237,23 @@ export function getSnapshot() {
 export function useSponsorships(): Sponsorship[] {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   useEffect(() => {
-    void listSponsorships().catch(() => undefined);
+    const sb = getSupabase();
+    let active = true;
+    const refresh = () => void listSponsorships(true).catch(() => undefined);
+    refresh();
+    const { data: authListener } = sb.auth.onAuthStateChange(() => {
+      loadedFor = null;
+      if (active) refresh();
+    });
+    const channel = sb
+      .channel(`my-sponsorships-${crypto.randomUUID()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sponsorships" }, refresh)
+      .subscribe();
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+      void sb.removeChannel(channel);
+    };
   }, []);
   return snapshot;
 }
@@ -256,38 +288,50 @@ export async function createSponsorship(
   return sponsorship;
 }
 
-export function updateSponsorship(id: string, patch: Partial<Sponsorship>) {
+export async function updateSponsorship(id: string, patch: Partial<Sponsorship>) {
+  const previous = state;
   state = state.map((sponsorship) =>
     sponsorship.id === id ? { ...sponsorship, ...patch } : sponsorship,
   );
   notify();
   const sponsorship = state.find((item) => item.id === id);
   if (sponsorship) {
-    void getSupabase()
+    const { error } = await getSupabase()
       .from("sponsorships")
       .update({ data: sponsorship, updated_at: new Date().toISOString() })
       .eq("id", id);
+    if (error) {
+      state = previous;
+      notify();
+      throw new Error(error.message);
+    }
   }
 }
-export function deleteSponsorship(id: string) {
+export async function deleteSponsorship(id: string) {
+  const previous = state;
   state = state.filter((sponsorship) => sponsorship.id !== id);
   notify();
-  void getSupabase().from("sponsorships").delete().eq("id", id);
+  const { error } = await getSupabase().from("sponsorships").delete().eq("id", id);
+  if (error) {
+    state = previous;
+    notify();
+    throw new Error(error.message);
+  }
 }
-export function upsertService(sponsorshipId: string, service: Service) {
+export async function upsertService(sponsorshipId: string, service: Service) {
   const sponsorship = state.find((item) => item.id === sponsorshipId);
   if (!sponsorship) return;
   const exists = sponsorship.services.some((item) => item.id === service.id);
-  updateSponsorship(sponsorshipId, {
+  await updateSponsorship(sponsorshipId, {
     services: exists
       ? sponsorship.services.map((item) => (item.id === service.id ? service : item))
       : [...sponsorship.services, service],
   });
 }
-export function removeService(sponsorshipId: string, serviceId: string) {
+export async function removeService(sponsorshipId: string, serviceId: string) {
   const sponsorship = state.find((item) => item.id === sponsorshipId);
   if (!sponsorship) return;
-  updateSponsorship(sponsorshipId, {
+  await updateSponsorship(sponsorshipId, {
     services: sponsorship.services.filter((service) => service.id !== serviceId),
   });
 }

@@ -21,6 +21,7 @@ export type SponsorOption = {
   language?: string;
   createdAt: string;
   ownerId?: string;
+  projectId?: string;
   ownerAvatarUrl?: string | null;
   ownerBannerUrl?: string | null;
 };
@@ -143,4 +144,13 @@ export async function removeSponsorOption(id: string) {
   const sb = getSupabase();
   const { error } = await sb.from("sponsor_options").delete().eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+export function subscribeSponsorOptions(onChange: () => void) {
+  const sb = getSupabase();
+  const channel = sb
+    .channel(`sponsor-options-${crypto.randomUUID()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "sponsor_options" }, onChange)
+    .subscribe();
+  return () => { void sb.removeChannel(channel); };
 }

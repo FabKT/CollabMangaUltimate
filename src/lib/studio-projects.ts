@@ -44,6 +44,7 @@ const LEGACY_MIGRATION_OWNER_KEY = "collabmanga.studio.supabaseMigrationOwner.v1
 
 const lastSavedPayload = new Map<string, string>();
 const uploadedDataUrls = new Map<string, string>();
+let saveQueue: Promise<boolean> = Promise.resolve(true);
 
 function isProject(value: unknown): value is StudioProjectLike {
   return Boolean(
@@ -188,7 +189,17 @@ async function listRemoteRows(userId: string): Promise<StudioProjectRow[]> {
             : member.profile?.display_name || member.profile?.username || "Collaborateur",
         role: member.role || member.profile?.role || "Collaborateur",
         level: member.access_level,
+        isCurrentUser: member.user_id === userId,
       }));
+    if (row.owner_id === userId && !collaborators.some((member) => member.id === userId)) {
+      collaborators.unshift({
+        id: userId,
+        name: "Vous",
+        role: "Créateur",
+        level: "chef",
+        isCurrentUser: true,
+      });
+    }
     return {
       ...row,
       data: collaborators.length > 0 ? { ...row.data, collaborators } : row.data,
@@ -199,11 +210,23 @@ async function listRemoteRows(userId: string): Promise<StudioProjectRow[]> {
 async function saveRemoteProjects(projects: StudioProjectLike[], userId: string): Promise<boolean> {
   const sb = getSupabase();
   const ids = projects.map((project) => project.id);
-  const existingResult = ids.length
-    ? await sb.from("studio_projects").select("id, owner_id").in("id", ids)
-    : { data: [] as { id: string; owner_id: string }[], error: null };
+  const [existingResult, membershipResult] = await Promise.all([
+    ids.length
+    ? sb.from("studio_projects").select("id, owner_id").in("id", ids)
+    : Promise.resolve({ data: [] as { id: string; owner_id: string }[], error: null }),
+    ids.length
+      ? sb
+          .from("studio_project_members")
+          .select("project_id, access_level")
+          .eq("user_id", userId)
+          .eq("status", "active")
+          .in("project_id", ids)
+      : Promise.resolve({ data: [] as Array<{ project_id: string; access_level: string }>, error: null }),
+  ]);
   if (existingResult.error) throw new Error(existingResult.error.message);
+  if (membershipResult.error) throw new Error(membershipResult.error.message);
   const owners = new Map((existingResult.data ?? []).map((row) => [row.id, row.owner_id]));
+  const accessLevels = new Map((membershipResult.data ?? []).map((row) => [row.project_id, row.access_level]));
 
   for (const project of projects) {
     // Collaborators are derived from membership rows and may contain the session label "Vous".
@@ -216,6 +239,16 @@ async function saveRemoteProjects(projects: StudioProjectLike[], userId: string)
     const payload = JSON.stringify(persisted);
     const cacheKey = `${userId}:${project.id}`;
     if (lastSavedPayload.get(cacheKey) === payload) continue;
+
+    if (owners.get(project.id) !== userId && accessLevels.get(project.id) === "collaborateur") {
+      const { error } = await sb.rpc("merge_studio_candidate_images", {
+        target_project_id: project.id,
+        incoming_data: persisted,
+      });
+      if (error) throw new Error(error.message);
+      lastSavedPayload.set(cacheKey, payload);
+      continue;
+    }
 
     const ownerId = owners.get(project.id) ?? userId;
     const { error } = await sb.from("studio_projects").upsert(
@@ -273,6 +306,17 @@ export async function loadStudioProjects<T>(): Promise<T[]> {
     lastSavedPayload.set(`${userId}:${row.id}`, JSON.stringify(row.data));
     return row.data as T;
   });
+}
+
+export function subscribeStudioProjects(onChange: () => void): () => void {
+  const sb = getSupabase();
+  const suffix = crypto.randomUUID();
+  const projectsChannel = sb
+    .channel(`studio-projects-${suffix}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "studio_projects" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "studio_project_members" }, onChange)
+    .subscribe();
+  return () => { void sb.removeChannel(projectsChannel); };
 }
 
 /** Charge les projets publiés pour le catalogue, y compris sans session. */
@@ -351,7 +395,11 @@ export async function loadProfileStudioProjects<T>(ownerId: string): Promise<T[]
 export async function saveStudioProjects<T>(projects: T[]): Promise<boolean> {
   const userId = await sessionUserId();
   if (!userId) return false;
-  return saveRemoteProjects(projects.filter(isProject) as StudioProjectLike[], userId);
+  const nextSave = saveQueue
+    .catch(() => true)
+    .then(() => saveRemoteProjects(projects.filter(isProject) as StudioProjectLike[], userId));
+  saveQueue = nextSave;
+  return nextSave;
 }
 
 export async function deleteStudioProject(projectId: string): Promise<void> {
@@ -372,21 +420,20 @@ export async function updateStudioProjectMember(
   accessLevel: "chef" | "editeur" | "collaborateur",
 ): Promise<void> {
   const sb = getSupabase();
-  const { error } = await sb
-    .from("studio_project_members")
-    .update({ access_level: accessLevel })
-    .eq("project_id", projectId)
-    .eq("user_id", userId);
+  const { error } = await sb.rpc("set_studio_project_member_level", {
+    target_project_id: projectId,
+    target_user_id: userId,
+    next_access_level: accessLevel,
+  });
   if (error) throw new Error(error.message);
 }
 
 export async function removeStudioProjectMember(projectId: string, userId: string): Promise<void> {
   const sb = getSupabase();
-  const { error } = await sb
-    .from("studio_project_members")
-    .delete()
-    .eq("project_id", projectId)
-    .eq("user_id", userId);
+  const { error } = await sb.rpc("remove_studio_project_member", {
+    target_project_id: projectId,
+    target_user_id: userId,
+  });
   if (error) throw new Error(error.message);
 }
 

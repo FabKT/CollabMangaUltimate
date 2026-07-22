@@ -27,12 +27,14 @@ export function ServiceModal({
   sponsorshipId,
   initial,
   onSaveDraft,
+  onError,
 }: {
   open: boolean;
   onClose: () => void;
   sponsorshipId?: string;
   initial?: Service;
   onSaveDraft?: (service: Service) => void;
+  onError?: (message: string) => void;
 }) {
   const isEdit = !!initial;
 
@@ -58,7 +60,7 @@ export function ServiceModal({
             }
           : undefined
       }
-      onSubmit={(values) => {
+      onSubmit={async (values) => {
         const svc: Service = {
           id: initial?.id ?? newServiceId(),
           name: values.format,
@@ -74,7 +76,12 @@ export function ServiceModal({
         if (onSaveDraft) {
           onSaveDraft(svc);
         } else if (sponsorshipId) {
-          upsertService(sponsorshipId, svc);
+          try {
+            await upsertService(sponsorshipId, svc);
+          } catch (error) {
+            onError?.(error instanceof Error ? error.message : "Le service n'a pas pu être enregistré.");
+            return;
+          }
         }
         onClose();
       }}

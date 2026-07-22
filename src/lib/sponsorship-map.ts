@@ -65,6 +65,7 @@ export function announcementFromOption(o: SponsorOption): Announcement {
     title: o.format,
     ownerName: o.ownerName,
     ownerId: o.ownerId,
+    projectId: o.projectId,
     ownerAvatarUrl: o.ownerAvatarUrl,
     ownerBannerUrl: o.ownerBannerUrl,
     category: "",

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { addComment, listComments, type CommentEntityType, type DbComment } from "@/lib/db";
+import { addComment, listComments, subscribeComments, type CommentEntityType, type DbComment } from "@/lib/db";
 
 export function CommentsPanel({ entityType, entityId }: { entityType: CommentEntityType; entityId: string }) {
   const [comments, setComments] = useState<DbComment[]>([]);
@@ -9,13 +9,16 @@ export function CommentsPanel({ entityType, entityId }: { entityType: CommentEnt
 
   useEffect(() => {
     let cancelled = false;
-    void listComments(entityType, entityId)
+    const refresh = () => void listComments(entityType, entityId)
       .then((rows) => {
         if (!cancelled) setComments(rows);
       })
       .catch(() => setComments([]));
+    refresh();
+    const unsubscribe = subscribeComments(entityType, entityId, refresh);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [entityType, entityId]);
 
@@ -25,7 +28,7 @@ export function CommentsPanel({ entityType, entityId }: { entityType: CommentEnt
     setError(null);
     try {
       const created = await addComment(entityType, entityId, draft);
-      setComments((current) => [...current, created]);
+      setComments((current) => current.some((comment) => comment.id === created.id) ? current : [...current, created]);
       setDraft("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Envoi impossible.");

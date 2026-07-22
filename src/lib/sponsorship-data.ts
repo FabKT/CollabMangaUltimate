@@ -29,6 +29,7 @@ export interface Announcement {
   title: string;
   ownerName: string;
   ownerId?: string;
+  projectId?: string;
   ownerAvatarUrl?: string | null;
   ownerBannerUrl?: string | null;
   category: string;

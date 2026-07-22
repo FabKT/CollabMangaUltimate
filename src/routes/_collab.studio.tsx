@@ -8,7 +8,7 @@ import {
   ArrowUpDown, Target, Star, X,
   Users, UserPlus, Rocket, Undo2, Handshake,
 } from "lucide-react";
-import { addSponsorOption } from "@/lib/sponsorship-options";
+import { addSponsorOption, updateSponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
 import { DetailDialog } from "@/components/sponsorship/DetailDialog";
 import { announcementFromStudioSponsorship } from "@/lib/sponsorship-map";
@@ -20,11 +20,17 @@ import {
   loadStudioProjects,
   removeStudioProjectMember,
   saveStudioProjects,
+  subscribeStudioProjects,
   transferStudioProjectOwnership,
   updateStudioProjectMember,
 } from "@/lib/studio-projects";
-import { addAnnouncement, sendProjectInvitationDb } from "@/lib/db";
+import { addAnnouncement, sendProjectInvitationDb, updateAnnouncement } from "@/lib/db";
 import { useI18n } from "@/lib/i18n";
+import {
+  formatMoney as formatSponsorshipMoney,
+  STATUS_META as SPONSORSHIP_STATUS_META,
+  useSponsorships as useLinkedSponsorships,
+} from "@/features/sponsorships/store";
 
 export const Route = createFileRoute("/_collab/studio")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -58,12 +64,14 @@ interface Note {
 }
 interface Sponsorship {
   id: string; title: string; status: "Draft" | "Open" | "Paused" | "Closed" | "Archived";
+  publicId?: string;
   description: string; created: string;
   platform: string; videoType: string; duration: string;
   subscribers: number; subscribersMax?: number; quantity: number; price: string; paymentMode: string;
 }
 interface RecruitAnnouncement {
   id: string; title: string; hook: string; language: string;
+  publicId?: string;
   role: string; status: "Ouverte" | "Brouillon";
   description: string; commitment: string; compensation: string;
   remunerated: boolean; created: string;
@@ -422,7 +430,7 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
 
 /** Niveaux d'accès au projet : un seul chef (le créateur), des éditeurs, des collaborateurs. */
 type CollabLevel = "chef" | "editeur" | "collaborateur";
-type Collaborator = { id: string; name: string; role: string; level: CollabLevel };
+type Collaborator = { id: string; name: string; role: string; level: CollabLevel; isCurrentUser?: boolean };
 
 const LEVEL_LABEL: Record<CollabLevel, string> = {
   chef: "Chef",
@@ -431,7 +439,7 @@ const LEVEL_LABEL: Record<CollabLevel, string> = {
 };
 
 const defaultCollaborators = (): Collaborator[] => [
-  { id: "co-owner", name: "Vous", role: "Scénariste", level: "chef" },
+  { id: "co-owner", name: "Vous", role: "Scénariste", level: "chef", isCurrentUser: true },
 ];
 
 function projectCollaborators(p: Project): Collaborator[] {
@@ -440,7 +448,7 @@ function projectCollaborators(p: Project): Collaborator[] {
 
 /** Niveau de l'utilisateur courant (« Vous ») dans le projet. */
 function myLevel(p: Project): CollabLevel {
-  return projectCollaborators(p).find((c) => c.name === "Vous")?.level ?? "chef";
+  return projectCollaborators(p).find((c) => c.isCurrentUser || c.name === "Vous")?.level ?? "collaborateur";
 }
 
 function StarRating({ value }: { value: number }) {
@@ -668,24 +676,32 @@ function ProjectWorkspace({
         <AddParrainageModal
           onClose={() => setModal(null)}
           onAdd={(sponsorship) => {
-            updateProject((p) => ({ ...p, sponsorships: [sponsorship, ...p.sponsorships], updated: "À l'instant" }));
-            // Annonce créée par un projet → visible dans « Trouver un projet ».
-            void addSponsorOption({
-              mode: "project",
-              format: sponsorship.title,
-              platforms: sponsorship.platform.split(", ").filter(Boolean),
-              videoType: sponsorship.videoType,
-              duration: sponsorship.duration,
-              paymentMode: sponsorship.paymentMode,
-              price: sponsorship.price,
-              quantity: sponsorship.quantity,
-              description: sponsorship.description,
-              ownerName: project.title,
-            }).catch((error: unknown) => {
-              onWorkflow(error instanceof Error ? error.message : "L'annonce n'a pas pu être publiée.");
-            });
-            setModal(null);
-            onWorkflow("Annonce de parrainage publiée.");
+            void (async () => {
+              try {
+                const publicOption = await addSponsorOption({
+                  mode: "project",
+                  format: sponsorship.title,
+                  platforms: sponsorship.platform.split(", ").filter(Boolean),
+                  videoType: sponsorship.videoType,
+                  duration: sponsorship.duration,
+                  paymentMode: sponsorship.paymentMode,
+                  price: sponsorship.price,
+                  quantity: sponsorship.quantity,
+                  description: sponsorship.description,
+                  ownerName: project.title,
+                  projectId: project.id,
+                });
+                updateProject((p) => ({
+                  ...p,
+                  sponsorships: [{ ...sponsorship, publicId: publicOption.id }, ...p.sponsorships],
+                  updated: "À l'instant",
+                }));
+                setModal(null);
+                onWorkflow("Annonce de parrainage publiée.");
+              } catch (error) {
+                onWorkflow(error instanceof Error ? error.message : "L'annonce n'a pas pu être publiée.");
+              }
+            })();
           }}
         />
       )}
@@ -693,24 +709,32 @@ function ProjectWorkspace({
         <AddRecruitModal
           onClose={() => setModal(null)}
           onAdd={(recruit) => {
-            updateProject((p) => ({ ...p, recruits: [recruit, ...(p.recruits ?? [])], updated: "À l'instant" }));
-            void addAnnouncement({
-              mode: "project",
-              title: recruit.title,
-              hook: recruit.hook,
-              description: recruit.description,
-              language: recruit.language,
-              status_sought: recruit.role,
-              genres: project.genres,
-              subgenres: project.subgenres ?? [],
-              project_title: project.title,
-              remuneration: recruit.remunerated,
-              engagement: recruit.commitment === "Ponctuel" ? "Ponctuel" : "Long terme",
-            }).catch(() => {
-              onWorkflow("Annonce enregistrée dans le projet et disponible localement, mais sa publication en ligne a échoué.");
-            });
-            setModal(null);
-            onWorkflow("Annonce de recrutement publiée.");
+            void (async () => {
+              try {
+                const publicAnnouncement = await addAnnouncement({
+                  mode: "project",
+                  title: recruit.title,
+                  hook: recruit.hook,
+                  description: recruit.description,
+                  language: recruit.language,
+                  status_sought: recruit.role,
+                  genres: project.genres,
+                  subgenres: project.subgenres ?? [],
+                  project_title: project.title,
+                  remuneration: recruit.remunerated,
+                  engagement: recruit.commitment === "Ponctuel" ? "Ponctuel" : "Long terme",
+                });
+                updateProject((p) => ({
+                  ...p,
+                  recruits: [{ ...recruit, publicId: publicAnnouncement.id }, ...(p.recruits ?? [])],
+                  updated: "À l'instant",
+                }));
+                setModal(null);
+                onWorkflow("Annonce de recrutement publiée.");
+              } catch (error) {
+                onWorkflow(error instanceof Error ? error.message : "L'annonce n'a pas pu être publiée.");
+              }
+            })();
           }}
         />
       )}
@@ -1365,14 +1389,33 @@ function RecrutementTab({
   const [editing, setEditing] = useState<RecruitAnnouncement | null>(null);
   const canManage = myLevel(project) !== "collaborateur";
   const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas gérer les annonces.");
-  const saveRecruit = (id: string, patch: Partial<RecruitAnnouncement>) => {
+  const saveRecruit = async (id: string, patch: Partial<RecruitAnnouncement>) => {
     if (!canManage) return denyManage();
+    const current = recruit.find((item) => item.id === id);
+    if (!current) return;
+    const next = { ...current, ...patch };
+    try {
+      if (current.publicId) {
+        await updateAnnouncement(current.publicId, {
+          title: next.title,
+          hook: next.hook,
+          description: next.description,
+          language: next.language,
+          status_sought: next.role,
+          remuneration: next.remunerated,
+          engagement: next.commitment === "Ponctuel" ? "Ponctuel" : "Long terme",
+        });
+      }
     updateProject?.((p) => ({
       ...p,
       recruits: (p.recruits ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)),
       updated: "À l'instant",
     }));
-    onWorkflow?.("Annonce de recrutement mise à jour.");
+      setEditing(null);
+      onWorkflow?.("Annonce de recrutement mise à jour.");
+    } catch (error) {
+      onWorkflow?.(error instanceof Error ? error.message : "L'annonce publique n'a pas pu être mise à jour.");
+    }
   };
   return (
     <div className="flex flex-col gap-4">
@@ -1425,7 +1468,7 @@ function RecrutementTab({
         <EditRecruitModal
           recruit={editing}
           onClose={() => setEditing(null)}
-          onSave={(patch) => { saveRecruit(editing.id, patch); setEditing(null); }}
+          onSave={(patch) => { void saveRecruit(editing.id, patch); }}
         />
       )}
     </div>
@@ -1486,18 +1529,41 @@ function ParrainageTab({
   updateProject?: (updater: (p: Project) => Project) => void;
   onWorkflow?: (message: string) => void;
 }) {
+  const linkedSponsorships = useLinkedSponsorships().filter((item) => item.projectId === project.id);
   const [detail, setDetail] = useState<Sponsorship | null>(null);
   const [editing, setEditing] = useState<Sponsorship | null>(null);
   const canManage = myLevel(project) !== "collaborateur";
   const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas gérer les parrainages.");
-  const saveSponsorship = (id: string, patch: Partial<Sponsorship>) => {
+  const saveSponsorship = async (id: string, patch: Partial<Sponsorship>) => {
     if (!canManage) return denyManage();
+    const current = project.sponsorships.find((item) => item.id === id);
+    if (!current) return;
+    const next = { ...current, ...patch };
+    try {
+      if (current.publicId) {
+        await updateSponsorOption(current.publicId, {
+          format: next.title,
+          platforms: next.platform.split(", ").filter(Boolean),
+          videoType: next.videoType,
+          duration: next.duration,
+          paymentMode: next.paymentMode,
+          price: next.price,
+          quantity: next.quantity,
+          description: next.description,
+          subscribersMin: next.subscribers || undefined,
+          subscribersMax: next.subscribersMax,
+        });
+      }
     updateProject?.((p) => ({
       ...p,
       sponsorships: p.sponsorships.map((s) => (s.id === id ? { ...s, ...patch } : s)),
       updated: "À l'instant",
     }));
-    onWorkflow?.("Annonce de parrainage mise à jour.");
+      setEditing(null);
+      onWorkflow?.("Annonce de parrainage mise à jour.");
+    } catch (error) {
+      onWorkflow?.(error instanceof Error ? error.message : "L'annonce publique n'a pas pu être mise à jour.");
+    }
   };
   return (
     <div className="flex flex-col gap-8">
@@ -1546,7 +1612,34 @@ function ParrainageTab({
           <h2 className="font-display text-[18px] font-bold">Parrainages du projet</h2>
           <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">Parrainages réalisés ou en cours liés à ce projet.</p>
         </div>
-        <p className="text-[14px] text-[var(--text-muted)]">Aucun parrainage pour l'instant.</p>
+        {linkedSponsorships.length === 0 ? (
+          <p className="text-[14px] text-[var(--text-muted)]">Aucun parrainage pour l'instant.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {linkedSponsorships.map((item) => {
+              const status = SPONSORSHIP_STATUS_META[item.status];
+              return (
+                <div key={item.id} className="rounded-[18px] border border-[var(--border-default)] bg-[var(--elevated)] p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-display text-[16px] font-bold">{item.name}</h3>
+                      <p className="mt-1 text-[13px] text-[var(--text-secondary)]">{item.creator}</p>
+                    </div>
+                    <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: status.color, background: status.bg, border: `1px solid ${status.ring}` }}>
+                      {status.label}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <strong className="text-[15px] text-[var(--neon)]">{formatSponsorshipMoney(item.totalPrice, item.currency)}</strong>
+                    <Link to="/sponsorship-hub/$id" params={{ id: item.id }} className="rounded-[12px] border border-[var(--border-default)] px-3 py-2 text-[12px] font-bold text-[var(--text-primary)] hover:border-[var(--neon-border)]">
+                      Ouvrir
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {detail && (
@@ -1561,7 +1654,7 @@ function ParrainageTab({
         <EditParrainageModal
           sponsorship={editing}
           onClose={() => setEditing(null)}
-          onSave={(patch) => { saveSponsorship(editing.id, patch); setEditing(null); }}
+          onSave={(patch) => { void saveSponsorship(editing.id, patch); }}
         />
       )}
     </div>
@@ -1575,23 +1668,10 @@ function ParrainageTab({
  * (à défaut, le collaborateur le plus ancien) ; le projet reste vide si personne d'autre.
  */
 function leaveProjectAction(
-  updateProject: (updater: (p: Project) => Project) => void,
-  onWorkflow: ((message: string) => void) | undefined,
+  _updateProject: (updater: (p: Project) => Project) => void,
+  _onWorkflow: ((message: string) => void) | undefined,
   onLeft: (() => void) | undefined,
 ) {
-  updateProject((p) => {
-    const list = projectCollaborators(p);
-    const me = list.find((c) => c.name === "Vous");
-    const others = list.filter((c) => c.name !== "Vous");
-    let nextList = others;
-    if (me?.level === "chef" && others.length > 0) {
-      const idx = others.findIndex((c) => c.level === "editeur");
-      const promoteIdx = idx !== -1 ? idx : 0;
-      nextList = others.map((c, i) => (i === promoteIdx ? { ...c, level: "chef" as CollabLevel } : c));
-    }
-    return { ...p, collaborators: nextList, updated: "À l'instant" };
-  });
-  onWorkflow?.("Tu as quitté le projet.");
   onLeft?.();
 }
 
@@ -1626,61 +1706,69 @@ function CollaborateursTab({
 
   /** Règles : chef → tout ; éditeur → promouvoir/exclure les collaborateurs seulement ; collaborateur → rien.
    *  Sur soi-même, la seule action possible est « Quitter le projet ». */
-  const promote = (target: Collaborator) => {
+  const promote = async (target: Collaborator) => {
     setMenuFor(null);
-    if (target.name === "Vous") return deny("utilise « Quitter le projet » pour agir sur toi-même.");
+    if (target.isCurrentUser) return deny("utilise « Quitter le projet » pour agir sur toi-même.");
     if (me === "collaborateur") return deny("un collaborateur ne peut pas promouvoir.");
     if (target.level === "collaborateur") {
-      setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "editeur" } : c)));
-      void updateStudioProjectMember(project.id, target.id, "editeur").catch((error: unknown) =>
-        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié."),
-      );
-      onWorkflow?.(`${target.name} est maintenant éditeur.`);
+      try {
+        await updateStudioProjectMember(project.id, target.id, "editeur");
+        setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "editeur" } : c)));
+        onWorkflow?.(`${target.name} est maintenant éditeur.`);
+      } catch (error) {
+        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié.");
+      }
       return;
     }
     if (target.level === "editeur") {
       if (me !== "chef") return deny("seul le chef peut promouvoir un éditeur.");
       // L'éditeur devient chef, l'ancien chef devient éditeur (un seul chef par projet).
-      setCollabs((list) =>
-        list.map((c) =>
-          c.id === target.id ? { ...c, level: "chef" } : c.level === "chef" ? { ...c, level: "editeur" } : c,
-        ),
-      );
-      void transferStudioProjectOwnership(project.id, target.id).catch((error: unknown) =>
-        onWorkflow?.(error instanceof Error ? error.message : "Le projet n'a pas pu être transféré."),
-      );
-      onWorkflow?.(`${target.name} est maintenant le chef du projet — tu deviens éditeur.`);
+      try {
+        await transferStudioProjectOwnership(project.id, target.id);
+        setCollabs((list) =>
+          list.map((c) =>
+            c.id === target.id ? { ...c, level: "chef" } : c.level === "chef" ? { ...c, level: "editeur" } : c,
+          ),
+        );
+        onWorkflow?.(`${target.name} est maintenant le chef du projet — tu deviens éditeur.`);
+      } catch (error) {
+        onWorkflow?.(error instanceof Error ? error.message : "Le projet n'a pas pu être transféré.");
+      }
       return;
     }
     deny("le chef ne peut pas être promu.");
   };
 
-  const demote = (target: Collaborator) => {
+  const demote = async (target: Collaborator) => {
     setMenuFor(null);
-    if (target.name === "Vous") return deny("utilise « Quitter le projet » pour agir sur toi-même.");
+    if (target.isCurrentUser) return deny("utilise « Quitter le projet » pour agir sur toi-même.");
     if (me !== "chef") return deny("seul le chef peut rétrograder.");
     if (target.level === "editeur") {
-      setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "collaborateur" } : c)));
-      void updateStudioProjectMember(project.id, target.id, "collaborateur").catch((error: unknown) =>
-        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié."),
-      );
-      onWorkflow?.(`${target.name} est maintenant collaborateur.`);
+      try {
+        await updateStudioProjectMember(project.id, target.id, "collaborateur");
+        setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "collaborateur" } : c)));
+        onWorkflow?.(`${target.name} est maintenant collaborateur.`);
+      } catch (error) {
+        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié.");
+      }
       return;
     }
     deny("ce membre ne peut pas être rétrogradé.");
   };
 
-  const exclude = (target: Collaborator) => {
+  const exclude = async (target: Collaborator) => {
     setMenuFor(null);
-    if (target.name === "Vous") return deny("utilise « Quitter le projet » pour agir sur toi-même.");
+    if (target.isCurrentUser) return deny("utilise « Quitter le projet » pour agir sur toi-même.");
     if (target.level === "chef") return deny("le chef ne peut pas être exclu.");
     if (me === "collaborateur") return deny("un collaborateur ne peut exclure personne.");
     if (me === "editeur" && target.level === "editeur") return deny("un éditeur ne peut pas exclure un autre éditeur.");
-    setCollabs((list) => list.filter((c) => c.id !== target.id));
-    void removeStudioProjectMember(project.id, target.id).catch((error: unknown) =>
-      onWorkflow?.(error instanceof Error ? error.message : "Le collaborateur n'a pas pu être retiré."),
-    );
-    onWorkflow?.(`${target.name} a été exclu du projet.`);
+    try {
+      await removeStudioProjectMember(project.id, target.id);
+      setCollabs((list) => list.filter((c) => c.id !== target.id));
+      onWorkflow?.(`${target.name} a été exclu du projet.`);
+    } catch (error) {
+      onWorkflow?.(error instanceof Error ? error.message : "Le collaborateur n'a pas pu être retiré.");
+    }
   };
 
   return (
@@ -1699,7 +1787,7 @@ function CollaborateursTab({
           <div key={c.id} className="relative flex items-center gap-3 rounded-[18px] border border-[var(--border-default)] bg-[var(--elevated)] p-4 shadow-[var(--shadow-card)]">
             <Link
               to="/profile/$profileId"
-              params={{ profileId: c.name === "Vous" ? "moi" : c.id }}
+              params={{ profileId: c.isCurrentUser ? "moi" : c.id }}
               className="flex min-w-0 flex-1 items-center gap-3"
               title={`Voir le profil de ${c.name}`}
             >
@@ -1717,19 +1805,19 @@ function CollaborateursTab({
               <div
                 className="absolute right-3 top-14 z-20 w-48 overflow-hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--panel)] py-1 shadow-[0_18px_44px_rgba(0,0,0,0.45)]"
               >
-                {c.name === "Vous" ? (
+                {c.isCurrentUser ? (
                   <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={leave}>
                     Quitter le projet
                   </button>
                 ) : (
                   <>
-                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => promote(c)}>
+                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => void promote(c)}>
                       Promouvoir
                     </button>
-                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => demote(c)}>
+                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => void demote(c)}>
                       Rétrograder
                     </button>
-                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={() => exclude(c)}>
+                    <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={() => void exclude(c)}>
                       Exclure du projet
                     </button>
                   </>
@@ -2473,6 +2561,11 @@ function ChapterWorkspace({
     setPublishedState(chapter.status === "Published");
   }, [chapter.status]);
 
+  useEffect(() => {
+    setPages(chapter.pages);
+    setPageIndex((current) => Math.min(current, Math.max(0, chapter.pages.length - 1)));
+  }, [chapter.id, chapter.pages]);
+
   // Permissions par niveau : le collaborateur peut seulement AJOUTER des images.
   const level = myLevel(project);
   const [permNotice, setPermNotice] = useState<string | null>(null);
@@ -2976,13 +3069,21 @@ function CollabMangaPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void loadStudioProjects<unknown>().then((saved) => {
+    let refreshTimer: number | null = null;
+    const refresh = () => void loadStudioProjects<unknown>().then((saved) => {
       if (cancelled) return;
       setProjects(saved.map(normalizeStoredProject).filter((project): project is Project => project !== null));
       setLoaded(true);
     });
+    refresh();
+    const unsubscribe = subscribeStudioProjects(() => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(refresh, 350);
+    });
     return () => {
       cancelled = true;
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      unsubscribe();
     };
   }, []);
 
@@ -3020,32 +3121,43 @@ function CollabMangaPage() {
     feedbackTimeoutRef.current = window.setTimeout(() => setFeedback(null), 3200);
   };
 
-  const addProject = (project: Project) => {
-    setProjects((current) => [project, ...current]);
-    void navigate({ search: { project: project.id, chapter: undefined } });
-    showFeedback("Projet créé.");
+  const addProject = async (project: Project) => {
+    const next = [project, ...projects];
+    try {
+      const saved = await saveStudioProjects(next);
+      if (!saved) throw new Error("Connecte-toi pour créer un projet.");
+      setProjects(next);
+      await navigate({ search: { project: project.id, chapter: undefined } });
+      showFeedback("Projet créé.");
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : "La création du projet a échoué.");
+    }
   };
 
   const updateProject = (id: string, updater: (project: Project) => Project) => {
     setProjects((current) => current.map((p) => (p.id === id ? deriveProjectState(updater(p)) : p)));
   };
 
-  const deleteProject = (id: string) => {
-    setProjects((current) => current.filter((p) => p.id !== id));
-    void deleteStudioProject(id).catch((error: unknown) => {
+  const deleteProject = async (id: string) => {
+    try {
+      await deleteStudioProject(id);
+      setProjects((current) => current.filter((p) => p.id !== id));
+      await navigate({ search: { project: undefined, chapter: undefined } });
+      showFeedback("Projet supprimé.");
+    } catch (error) {
       showFeedback(error instanceof Error ? error.message : "La suppression du projet a échoué.");
-    });
-    void navigate({ search: { project: undefined, chapter: undefined } });
-    showFeedback("Projet supprimé.");
+    }
   };
 
-  const leaveProject = (id: string) => {
-    setProjects((current) => current.filter((project) => project.id !== id));
-    void leaveStudioProject(id).catch((error: unknown) => {
+  const leaveProject = async (id: string) => {
+    try {
+      await leaveStudioProject(id);
+      setProjects((current) => current.filter((project) => project.id !== id));
+      await navigate({ search: { project: undefined, chapter: undefined } });
+      showFeedback("Tu as quitté le projet.");
+    } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Impossible de quitter le projet.");
-    });
-    void navigate({ search: { project: undefined, chapter: undefined } });
-    showFeedback("Tu as quitté le projet.");
+    }
   };
 
   if (!loaded) {
@@ -3069,8 +3181,8 @@ function CollabMangaPage() {
             onOpenChapter={(id) => void navigate({ search: { project: project.id, chapter: id } })}
             onWorkflow={showFeedback}
             updateProject={(updater) => updateProject(project.id, updater)}
-            onDeleteProject={() => deleteProject(project.id)}
-            onLeaveProject={() => leaveProject(project.id)}
+            onDeleteProject={() => void deleteProject(project.id)}
+            onLeaveProject={() => void leaveProject(project.id)}
           />
         )}
         {project && chapter && (
@@ -3115,7 +3227,7 @@ function CollabMangaPage() {
           <CreateProjectModal
             onClose={() => setCreateProjectOpen(false)}
             onCreate={(newProject) => {
-              addProject(newProject);
+              void addProject(newProject);
               setCreateProjectOpen(false);
             }}
           />

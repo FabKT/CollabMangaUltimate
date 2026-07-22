@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Send, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ANNOUNCEMENTS, type Announcement, type AnnouncementMode } from "@/lib/sponsorship-data";
-import { listSponsorOptions } from "@/lib/sponsorship-options";
+import { listSponsorOptions, subscribeSponsorOptions } from "@/lib/sponsorship-options";
 import { announcementFromOption } from "@/lib/sponsorship-map";
 import { btnSecondary, inputCls, metaLabel } from "@/components/sponsorship/ui";
 import { AnnouncementCard, CardSkeleton } from "@/components/sponsorship/AnnouncementCard";
@@ -13,6 +13,7 @@ import { sendSponsorshipContact } from "@/lib/user-workflows";
 import { useI18n } from "@/lib/i18n";
 import { loadStudioProjects } from "@/lib/studio-projects";
 import { listFavorites, setFavorite } from "@/lib/favorites";
+import { getSupabase } from "@/lib/supabase";
 import {
   createSponsorship,
   formatMoney,
@@ -40,9 +41,13 @@ function SponsorshipPage() {
   const [userAnnouncements, setUserAnnouncements] = useState<Announcement[]>([]);
 
   useEffect(() => {
-    void listSponsorOptions()
-      .then((options) => setUserAnnouncements(options.map(announcementFromOption)))
-      .catch(() => setUserAnnouncements([]));
+    let active = true;
+    const refresh = () => void listSponsorOptions()
+      .then((options) => { if (active) setUserAnnouncements(options.map(announcementFromOption)); })
+      .catch(() => { if (active) setUserAnnouncements([]); });
+    refresh();
+    const unsubscribe = subscribeSponsorOptions(() => { if (active) refresh(); });
+    return () => { active = false; unsubscribe(); };
   }, []);
   const [filters, setFilters] = useState<SponsorFilters>(emptyFilters);
 
@@ -118,7 +123,7 @@ function SponsorshipPage() {
     });
 
     return chips;
-  }, [search, filters]);
+  }, [search, filters, t]);
 
   // normalisation plateforme ("Youtube" ≈ "YouTube", "Twitter" ≈ "Twitter / X")
   const normPlatform = (p: string) => p.toLowerCase().replace(/[^a-z]/g, "");
@@ -413,7 +418,7 @@ function SponsorshipContactDialog({
         })
         .catch(() => setProjects([]));
     }
-  }, [a]);
+  }, [a, t]);
 
   const submit = async () => {
     if (!a) return;
@@ -430,6 +435,8 @@ function SponsorshipContactDialog({
     try {
       let sponsorshipId: string | undefined;
       if (a.mode === "creator") {
+        const selectedProject = projects.find((project) => project.title === linked.trim());
+        if (!selectedProject) throw new Error("Sélectionne un projet existant.");
         const amount = Number((budget || a.price || "0").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
         const service: Service = {
           id: `sv-${crypto.randomUUID()}`,
@@ -451,7 +458,9 @@ function SponsorshipContactDialog({
         const sponsorship = await createSponsorship({
           name: `${linked.trim()} - ${a.ownerName}`,
           project: linked.trim(),
+          projectId: selectedProject.id,
           creator: a.ownerName,
+          creatorId: a.ownerId,
           totalPrice: amount,
           currency: "EUR",
           status: "pending",
@@ -470,6 +479,61 @@ function SponsorshipContactDialog({
           ],
         });
         sponsorshipId = sponsorship.id;
+      } else {
+        if (!a.projectId) throw new Error("Le projet lie a cette annonce est introuvable.");
+        const sb = getSupabase();
+        const uid = (await sb.auth.getSession()).data.session?.user.id;
+        if (!uid) throw new Error("Connecte-toi pour envoyer une candidature.");
+        const { data: profile, error: profileError } = await sb
+          .from("profiles")
+          .select("display_name, username")
+          .eq("id", uid)
+          .single();
+        if (profileError) throw new Error(profileError.message);
+        const creatorName = profile.display_name || profile.username || "Createur de contenu";
+        const amount = Number((budget || a.price || "0").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+        const service: Service = {
+          id: `sv-${crypto.randomUUID()}`,
+          name: a.sponsorshipType,
+          format: a.videoType || a.sponsorshipType,
+          duration: a.duration || "A definir",
+          platforms: a.platforms
+            .map((platform) => (platform === "Twitter / X" ? "Twitter/X" : platform))
+            .filter((platform): platform is SponsorshipPlatform =>
+              ["TikTok", "YouTube", "Instagram", "Twitter/X", "Other"].includes(platform),
+            ),
+          quantity: 1,
+          price: amount,
+          paymentType: a.paymentMode.toLocaleLowerCase().includes("abonnement")
+            ? ("subscription" as PaymentType)
+            : ("one_time" as PaymentType),
+          notes: a.fullDescription,
+        };
+        const sponsorship = await createSponsorship({
+          name: `${a.ownerName} - ${creatorName}`,
+          project: a.ownerName,
+          projectId: a.projectId,
+          creator: creatorName,
+          creatorId: uid,
+          totalPrice: amount,
+          currency: "EUR",
+          status: "pending",
+          paymentType: service.paymentType,
+          notes: message.trim(),
+          conditions: "En attente de validation par le projet.",
+          services: [service],
+          participants: [
+            {
+              id: uid,
+              name: creatorName,
+              role: "creator",
+              meta: "Createur de contenu",
+              initials: creatorName.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase() || "CM",
+            },
+          ],
+        });
+        sponsorshipId = sponsorship.id;
+        setLinked(creatorName);
       }
       if (!a.ownerId) throw new Error("Le propriétaire de cette annonce est introuvable.");
       await sendSponsorshipContact({

@@ -42,6 +42,7 @@ function SponsorshipDetailPage() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [serviceModal, setServiceModal] = useState<{ open: boolean; initial?: Service }>({ open: false });
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,13 +56,17 @@ function SponsorshipDetailPage() {
   // Résout l'id du projet Studio (pour « View project ») en associant le titre.
   const projectName = s?.project;
   useEffect(() => {
+    if (s?.projectId) {
+      setProjectId(s.projectId);
+      return;
+    }
     if (!projectName) return;
     let active = true;
     void loadStudioProjects<{ id: string; title: string }>()
       .then((rows) => { if (active) setProjectId(rows.find((p) => p.title === projectName)?.id ?? null); })
       .catch(() => {});
     return () => { active = false; };
-  }, [projectName]);
+  }, [projectName, s?.projectId]);
 
   if (!s) {
     return (
@@ -78,20 +83,38 @@ function SponsorshipDetailPage() {
   const servicesTotal = s.services.reduce((sum, x) => sum + x.price, 0);
   const linkedCount = s.services.filter((x) => x.deliveryLink).length;
 
-  const setStatus = (st: SponsorshipStatus) => { updateSponsorship(s.id, { status: st }); setMenuOpen(false); setStatusOpen(false); };
-  const onDelete = () => {
+  const setStatus = async (st: SponsorshipStatus) => {
+    setActionError(null);
+    try {
+      await updateSponsorship(s.id, { status: st });
+      setMenuOpen(false);
+      setStatusOpen(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "La mise à jour a échoué.");
+    }
+  };
+  const onDelete = async () => {
     if (confirm(t("sponsorDetail.confirmDelete"))) {
-      deleteSponsorship(s.id);
-      navigate({ to: "/sponsorship-hub" });
+      setActionError(null);
+      try {
+        await deleteSponsorship(s.id);
+        await navigate({ to: "/sponsorship-hub" });
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : "La suppression a échoué.");
+      }
     }
   };
   // Quitter le parrainage : on sort de la collaboration (statut annulé) et on
   // revient à la liste. Distinct de « Cancel » qui reste sur la fiche.
-  const onLeave = () => {
+  const onLeave = async () => {
     setMenuOpen(false);
     if (confirm(t("sponsorDetail.confirmLeave"))) {
-      updateSponsorship(s.id, { status: "cancelled" });
-      navigate({ to: "/sponsorship-hub" });
+      try {
+        await updateSponsorship(s.id, { status: "cancelled" });
+        await navigate({ to: "/sponsorship-hub" });
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : "Impossible de quitter ce parrainage.");
+      }
     }
   };
   const openProject = () => {
@@ -101,6 +124,11 @@ function SponsorshipDetailPage() {
   return (
     <main className="min-h-dvh">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        {actionError && (
+          <div className="mb-4 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm font-semibold text-danger">
+            {actionError}
+          </div>
+        )}
         {/* Header */}
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
           <Link
@@ -146,7 +174,7 @@ function SponsorshipDetailPage() {
                         <button
                           key={st}
                           role="menuitem"
-                          onClick={() => setStatus(st)}
+                          onClick={() => void setStatus(st)}
                           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition hover:bg-surface-3 ${s.status === st ? "text-neon" : "text-text-secondary"}`}
                         >
                           <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_META[st].color }} />
@@ -157,11 +185,11 @@ function SponsorshipDetailPage() {
                   )}
                 </div>
                 <div className="border-t border-border" />
-                <MenuItem label={t("sponsorDetail.finish")} onClick={() => setStatus("finished")} />
-                <MenuItem label={t("sponsorDetail.cancel")} onClick={() => setStatus("cancelled")} />
-                <MenuItem label={t("sponsorDetail.leave")} onClick={onLeave} />
+                <MenuItem label={t("sponsorDetail.finish")} onClick={() => void setStatus("finished")} />
+                <MenuItem label={t("sponsorDetail.cancel")} onClick={() => void setStatus("cancelled")} />
+                <MenuItem label={t("sponsorDetail.leave")} onClick={() => void onLeave()} />
                 <div className="border-t border-border" />
-                <MenuItem label={t("sponsorDetail.delete")} danger onClick={onDelete} />
+                <MenuItem label={t("sponsorDetail.delete")} danger onClick={() => void onDelete()} />
               </div>
             )}
           </div>
@@ -285,7 +313,13 @@ function SponsorshipDetailPage() {
                         {t("sponsorDetail.edit")}
                       </button>
                       <button
-                        onClick={() => confirm(t("sponsorDetail.confirmRemoveService")) && removeService(s.id, sv.id)}
+                        onClick={() => {
+                          if (!confirm(t("sponsorDetail.confirmRemoveService"))) return;
+                          setActionError(null);
+                          void removeService(s.id, sv.id).catch((error: unknown) =>
+                            setActionError(error instanceof Error ? error.message : "La suppression du service a échoué."),
+                          );
+                        }}
                         className="flex-1 rounded-md border border-border bg-surface-3 py-2 text-xs font-semibold text-text-muted hover:border-danger/50 hover:text-danger"
                       >
                         {t("sponsorDetail.remove")}
@@ -375,6 +409,7 @@ function SponsorshipDetailPage() {
         onClose={() => setServiceModal({ open: false })}
         sponsorshipId={s.id}
         initial={serviceModal.initial}
+        onError={setActionError}
       />
     </main>
   );

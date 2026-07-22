@@ -26,7 +26,7 @@ type CreatorOption = {
 };
 
 export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [project, setProject] = useState("");
+  const [projectId, setProjectId] = useState("");
   const [myProjects, setMyProjects] = useState<StudioProjectOption[]>([]);
   const [query, setQuery] = useState("");
   const [creatorOptions, setCreatorOptions] = useState<CreatorOption[]>([]);
@@ -44,7 +44,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
     void Promise.all([loadStudioProjects<StudioProjectOption>(), listProfiles(200), listSponsorOptions()])
       .then(([projects, profiles, options]) => {
         setMyProjects(projects);
-        setProject((current) => current || projects[0]?.title || "");
+        setProjectId((current) => current || projects[0]?.id || "");
         const creators = profiles
           .filter((profile) => {
             const role = (profile.role ?? "").toLocaleLowerCase();
@@ -96,15 +96,16 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
     return creatorOptions.filter((creator) =>
       `${creator.name} ${creator.meta} ${creator.bio}`.toLowerCase().includes(term),
     );
-  }, [query]);
+  }, [creatorOptions, query]);
 
   const selectedCreator = creatorOptions.find((creator) => creator.id === creatorId) ?? creatorOptions[0];
+  const selectedProject = myProjects.find((item) => item.id === projectId) ?? null;
   const availableServices = [...(selectedCreator?.services ?? []), ...customServices];
   const selectedServices = availableServices.filter((service) => selectedServiceIds.includes(service.id));
   const total = selectedServices.reduce((sum, item) => sum + item.price, 0);
 
   const reset = () => {
-    setProject("");
+    setProjectId("");
     setQuery("");
     setCreatorId(creatorOptions[0]?.id ?? "");
     setSelectedServiceIds([]);
@@ -128,7 +129,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
 
   const submit = async () => {
     setError("");
-    if (!project.trim()) {
+    if (!selectedProject) {
       setError("Sélectionne ou renseigne le projet concerné.");
       return;
     }
@@ -155,8 +156,10 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
 
     try {
       const sponsorship = await createSponsorship({
-        name: `${project.trim()} - ${selectedCreator.name}`,
-        project: project.trim(),
+        name: `${selectedProject.title} - ${selectedCreator.name}`,
+        project: selectedProject.title,
+        projectId: selectedProject.id,
+        creatorId: selectedCreator.id,
         creator: selectedCreator.name,
         totalPrice: total,
         currency,
@@ -178,10 +181,10 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
 
       await sendSponsorshipContact({
         sponsorshipId: sponsorship.id,
-        announcementTitle: messageTitle.trim() || `Demande de parrainage - ${project.trim()}`,
+        announcementTitle: messageTitle.trim() || `Demande de parrainage - ${selectedProject.title}`,
         announcementMode: "creator",
         owner: selectedCreator.id,
-        linked: project.trim(),
+        linked: selectedProject.title,
         budgetOrPrice: formatMoney(total, currency),
         sponsorshipType: selectedServices.map(serviceLabel).join(", "),
         message: message.trim(),
@@ -222,13 +225,15 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
             <Field label="Projet manga à parrainer" required>
               {myProjects.length > 0 ? (
-                <select className={inputCls} value={project} onChange={(e) => setProject(e.target.value)}>
+                <select className={inputCls} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                   {myProjects.map((p) => (
-                    <option key={p.id} value={p.title}>{p.title}</option>
+                    <option key={p.id} value={p.id}>{p.title}</option>
                   ))}
                 </select>
               ) : (
-                <input className={inputCls} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Nom du projet" />
+                <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm font-semibold text-warning">
+                  Crée d'abord un projet avant d'ajouter un parrainage.
+                </p>
               )}
             </Field>
             <Field label="Rechercher un créateur de contenu">
