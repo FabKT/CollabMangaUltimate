@@ -792,6 +792,9 @@ export async function respondFriendRequestDb(recordId: string, accept: boolean):
     .from("workflow_records")
     .update({ status: accept ? "accepted" : "declined", updated_at: new Date().toISOString() })
     .eq("id", recordId)
+    .eq("kind", "friend_request")
+    .eq("status", "pending")
+    .eq("recipient_id", uid)
     .select("initiator_id")
     .single();
   if (error) throw new Error(error.message);
@@ -924,6 +927,7 @@ export type DbNotification = {
   meta: { label: string; value: string }[] | null;
   read: boolean;
   created_at: string;
+  actor?: DbProfile | null;
 };
 
 /** Notifications reçues par l'utilisateur connecté (amis, messages…). */
@@ -933,12 +937,43 @@ export async function listMyNotifications(): Promise<DbNotification[]> {
   if (!uid) return [];
   const { data, error } = await sb
     .from("notifications")
-    .select("*")
+    .select(`*, actor:profiles!notifications_actor_id_fkey(${PROFILE_COLS})`)
     .eq("recipient_id", uid)
     .order("created_at", { ascending: false })
     .limit(80);
   if (error) throw new Error(error.message);
   return (data ?? []) as DbNotification[];
+}
+
+export async function getWorkflowRecordPayload(
+  recordId: string,
+): Promise<Record<string, unknown> | null> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return null;
+  const { data, error } = await sb
+    .from("workflow_records")
+    .select("payload")
+    .eq("id", recordId)
+    .or(`initiator_id.eq.${uid},recipient_id.eq.${uid}`)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.payload as Record<string, unknown> | null) ?? null;
+}
+
+export async function completeNotificationAction(
+  notificationId: string,
+  status: string,
+): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return;
+  const { error } = await sb
+    .from("notifications")
+    .update({ read: true, actions: [], entity_status: status })
+    .eq("id", notificationId)
+    .eq("recipient_id", uid);
+  if (error) throw new Error(error.message);
 }
 
 export async function subscribeMyNotifications(onChange: () => void): Promise<() => void> {

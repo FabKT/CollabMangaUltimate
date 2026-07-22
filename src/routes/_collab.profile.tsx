@@ -14,6 +14,7 @@ import {
   getProfileByUsername,
   respondFriendRequestDb,
   sendFriendRequestDb,
+  sendProjectInvitationDb,
   sendProfileWorkflowDb,
   startConversationWith,
   updateMyRole,
@@ -26,12 +27,14 @@ import {
 } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
 import { signOut } from "@/lib/auth";
-import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
+import { addFavorite, listFavorites, removeFavorite, type Favorite } from "@/lib/favorites";
 import { addSponsorOption, listSponsorOptions, updateSponsorOption, type SponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
+import { SponsorshipModal } from "@/features/sponsorships/SponsorshipModal";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
   loadProfileStudioProjects,
+  loadOwnedStudioProjects,
   loadStudioProjects,
   saveStudioProjects,
 } from "@/lib/studio-projects";
@@ -189,6 +192,8 @@ function ProfilePage({
   // Id Supabase du profil affiché (le mien en own ; celui visité en public).
   const [shownUserId, setShownUserId] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<ProfilePreferences>(DEFAULT_PROFILE_PREFERENCES);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [preferencesUserId, setPreferencesUserId] = useState<string | null>(null);
 
   const identityFromProfile = (p: {
     username: string;
@@ -245,11 +250,13 @@ function ProfilePage({
         const user = data.session?.user;
         if (!user || cancelled) return;
         setShownUserId(user.id);
-        let { data: profileRow, error: profileError } = await supabase
+        const profileResult = await supabase
           .from("profiles")
           .select("username, display_name, avatar_url, banner_url, role, secondary_role")
           .eq("id", user.id)
           .maybeSingle();
+        let profileRow = profileResult.data;
+        const profileError = profileResult.error;
         if (profileError) {
           const fallback = await supabase
             .from("profiles")
@@ -357,12 +364,22 @@ function ProfilePage({
 
   useEffect(() => {
     let cancelled = false;
+    setPreferencesLoaded(false);
+    setPreferencesUserId(null);
     void loadProfilePreferences(shownUserId)
       .then((value) => {
-        if (!cancelled) setPreferences(value);
+        if (!cancelled) {
+          setPreferences(value);
+          setPreferencesLoaded(true);
+          setPreferencesUserId(shownUserId);
+        }
       })
       .catch(() => {
-        if (!cancelled) setPreferences(DEFAULT_PROFILE_PREFERENCES);
+        if (!cancelled) {
+          setPreferences(DEFAULT_PROFILE_PREFERENCES);
+          setPreferencesLoaded(true);
+          setPreferencesUserId(shownUserId);
+        }
       });
     return () => {
       cancelled = true;
@@ -430,9 +447,18 @@ function ProfilePage({
             { id: "projects", label: "Projects Promoted" },
             { id: "propositions", label: "Idées" },
           ];
-    if (mode === "own") base.push({ id: "friends", label: "Amis" }, { id: "favorites", label: "Favoris" }, { id: "account", label: "Account" });
+    if (mode === "public") {
+      return base.filter((item) => {
+        if (item.id === "projects") return preferences.showProjects;
+        if (item.id === "illustrations") return preferences.showIllustrations;
+        if (item.id === "propositions") return preferences.showIdeas;
+        if (item.id === "sponsorship") return preferences.showSponsorships;
+        return true;
+      });
+    }
+    base.push({ id: "friends", label: "Amis" }, { id: "favorites", label: "Favoris" }, { id: "account", label: "Account" });
     return base;
-  }, [profileType, mode]);
+  }, [profileType, mode, preferences.showIdeas, preferences.showIllustrations, preferences.showProjects, preferences.showSponsorships]);
 
   if (publicLocked && publicProfileStatus !== "ready") {
     const isLoading = publicProfileStatus === "loading";
@@ -469,6 +495,27 @@ function ProfilePage({
     );
   }
 
+  if (publicLocked && (!preferencesLoaded || preferencesUserId !== shownUserId)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050B1D] px-4 text-[#F7FAFF]">
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-[#39FF88]/30 border-t-[#39FF88]" aria-label="Chargement du profil" />
+      </div>
+    );
+  }
+
+  if (publicLocked && preferences.visibility !== "Public") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050B1D] px-4 text-[#F7FAFF]">
+        <div className="w-full max-w-md text-center">
+          <h1 className="font-display text-2xl font-bold">Profil privé</h1>
+          <p className="mt-3 text-sm text-[#B8C4E5]">
+            Ce membre a choisi de ne pas rendre son profil public.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#050B1D", color: "#F7FAFF" }}>
       <div
@@ -493,6 +540,9 @@ function ProfilePage({
           onFriend={() => setWorkflowOpen("friend")}
           onMessage={() => void openConversation()}
           contacting={contacting}
+          allowInvites={preferences.allowInvites}
+          allowMessages={preferences.allowMessages}
+          allowPatronage={preferences.showSponsorships && myOptions.length > 0}
         />
 
         <div className="mt-6">
@@ -528,8 +578,11 @@ function ProfilePage({
                   onAdd={setAddOpen}
                   projects={myProjects}
                   onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "own" })}
-                  onOpenProject={(id) => void navigate({ to: "/studio", search: { project: id, chapter: undefined } })}
+                  onOpenProject={(id) => void (mode === "public"
+                    ? navigate({ to: "/manga/$id", params: { id } })
+                    : navigate({ to: "/studio", search: { project: id, chapter: undefined } }))}
                   onEditSponsorship={setEditSponsorship}
+                  showPrimaryContent={mode === "own" || (profileType === "creator" ? preferences.showProjects : preferences.showSponsorships)}
                 />
               </Tabs.Content>
               <Tabs.Content value="projects">
@@ -539,7 +592,9 @@ function ProfilePage({
                   projects={myProjects}
                   onAdd={() => setAddOpen("project")}
                   onDetails={(t) => setDetailsOpen({ title: t, kind: "Project", source: "own" })}
-                  onOpenProject={(id) => void navigate({ to: "/studio", search: { project: id, chapter: undefined } })}
+                  onOpenProject={(id) => void (mode === "public"
+                    ? navigate({ to: "/manga/$id", params: { id } })
+                    : navigate({ to: "/studio", search: { project: id, chapter: undefined } }))}
                 />
               </Tabs.Content>
               <Tabs.Content value="illustrations">
@@ -581,7 +636,13 @@ function ProfilePage({
                     <ProfileFriendsTab />
                   </Tabs.Content>
                   <Tabs.Content value="favorites">
-                    <FavoritesTab favorites={favorites} onDetails={(t, k) => setDetailsOpen({ title: t, kind: k, source: "favorite" })} />
+                    <FavoritesTab
+                      favorites={favorites}
+                      onRemove={async (id) => {
+                        await removeFavorite(id);
+                        setFavorites((items) => items.filter((item) => item.id !== id));
+                      }}
+                    />
                   </Tabs.Content>
                   <Tabs.Content value="account">
                     <AccountTab
@@ -640,7 +701,7 @@ function ProfilePage({
       <AddIllustrationModal open={addOpen === "illustration"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
       <AddPropositionModal open={addOpen === "proposition"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
       <AddProjectModal open={addOpen === "project"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
-      {workflowOpen && (
+      {workflowOpen && workflowOpen !== "patronage" && (
         <ProfileWorkflowModal
           type={workflowOpen}
           profileType={profileType}
@@ -654,6 +715,12 @@ function ProfilePage({
           }}
         />
       )}
+      <SponsorshipModal
+        open={workflowOpen === "patronage"}
+        initialCreatorId={shownUserId}
+        onClose={() => setWorkflowOpen(null)}
+        onCreated={() => showFeedback("Demande de parrainage créée et envoyée.")}
+      />
       {feedback && <ProfileToast>{feedback}</ProfileToast>}
 
       <style>{`
@@ -941,6 +1008,9 @@ function ProfileHeader({
   onFriend,
   onMessage,
   contacting,
+  allowInvites,
+  allowMessages,
+  allowPatronage,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
@@ -958,6 +1028,9 @@ function ProfileHeader({
   onFriend: () => void;
   onMessage: () => void;
   contacting: boolean;
+  allowInvites: boolean;
+  allowMessages: boolean;
+  allowPatronage: boolean;
 }) {
   const languages = identity.languages ?? (mode === "own" ? ["EN", "FR", "JP"] : []);
   return (
@@ -1057,15 +1130,15 @@ function ProfileHeader({
             </>
           ) : profileType === "content" ? (
             <>
-              <PrimaryButton icon={<Send size={16} />} onClick={onPatronage}>Propose Sponsorship</PrimaryButton>
-              <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton>
+              {allowPatronage ? <PrimaryButton icon={<Send size={16} />} onClick={onPatronage}>Propose Sponsorship</PrimaryButton> : null}
+              {allowMessages ? <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton> : null}
               <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
               <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
             </>
           ) : (
             <>
-              <PrimaryButton icon={<Users size={16} />} onClick={onInvite}>Invite to Project</PrimaryButton>
-              <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton>
+              {allowInvites ? <PrimaryButton icon={<Users size={16} />} onClick={onInvite}>Invite to Project</PrimaryButton> : null}
+              {allowMessages ? <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton> : null}
               <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
               <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
             </>
@@ -1183,6 +1256,7 @@ function OverviewTab({
   projects,
   onOpenProject,
   onEditSponsorship,
+  showPrimaryContent,
 }: {
   profileType: ProfileType;
   mode: ViewMode;
@@ -1198,6 +1272,7 @@ function OverviewTab({
   projects?: StudioProjectLite[];
   onOpenProject: (id: string) => void;
   onEditSponsorship: (title: string) => void;
+  showPrimaryContent: boolean;
 }) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -1214,7 +1289,7 @@ function OverviewTab({
         />
       </div>
       <div className="lg:col-span-2 space-y-6">
-        {profileType === "creator" ? (
+        {!showPrimaryContent ? null : profileType === "creator" ? (
           <ProjectShowcase projects={projects} mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} onOpenProject={onOpenProject} />
         ) : (
           <SponsorshipShowcase mode={mode} options={options} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} onManage={onEditSponsorship} />
@@ -1780,11 +1855,11 @@ function ProfileFriendsTab() {
   );
 }
 
-function FavoritesTab({ favorites, onDetails }: { favorites?: Favorite[]; onDetails: (title: string, kind: string) => void }) {
-  // Favoris réels (store local) — chaque publication créée y est ajoutée.
+function FavoritesTab({ favorites, onRemove }: { favorites?: Favorite[]; onRemove: (id: string) => Promise<void> }) {
+  // Favoris réels du compte connecté, enregistrés dans Supabase.
   const all = favorites ?? [];
-  const byKind = (kind: string) => all.filter((f) => f.kind === kind).map((f) => f.title);
-  const groups: { title: string; kind: string; items: string[] }[] = [
+  const byKind = (kind: string) => all.filter((f) => f.kind === kind);
+  const groups: { title: string; kind: string; items: Favorite[] }[] = [
     { title: "Annonces", kind: "Announcement", items: byKind("Announcement") },
     { title: "Idées", kind: "Idée", items: byKind("Idée") },
     { title: "Illustrations", kind: "Illustration", items: byKind("Illustration") },
@@ -1808,15 +1883,15 @@ function FavoritesTab({ favorites, onDetails }: { favorites?: Favorite[]; onDeta
             <div className="mt-4 space-y-3">
               {group.items.map((item) => (
                 <div
-                  key={item}
+                  key={item.id}
                   className="flex items-center justify-between gap-3 rounded-[14px] border px-3 py-3"
                   style={{ borderColor: "rgba(133,154,206,0.18)", background: "#0E193A" }}
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{item}</p>
+                    <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{item.title}</p>
                     <p className="mt-0.5 text-[12px] font-semibold" style={{ color: "#7F8CB3" }}>{group.kind}</p>
                   </div>
-                  <SecondaryButton onClick={() => onDetails(item, group.kind)}>Details</SecondaryButton>
+                  <SecondaryButton onClick={() => void onRemove(item.id)}>Retirer</SecondaryButton>
                 </div>
               ))}
             </div>
@@ -2415,15 +2490,17 @@ function MediaUploadButton({ kind, onDone }: { kind: "avatar" | "banner"; onDone
     setState("saving");
     try {
       const url = await uploadImage(file, kind === "avatar" ? "avatars" : "banners");
-      await supabase.auth.updateUser({
+      const { error: authError } = await supabase.auth.updateUser({
         data: kind === "avatar" ? { avatar_url: url } : { banner_url: url },
       });
+      if (authError) throw authError;
       const uid = (await supabase.auth.getSession()).data.session?.user.id;
       if (uid) {
-        await supabase
+        const { error: profileError } = await supabase
           .from("profiles")
           .update(kind === "avatar" ? { avatar_url: url } : { banner_url: url })
           .eq("id", uid);
+        if (profileError) throw profileError;
       }
       setState("saved");
       onDone?.();
@@ -2709,7 +2786,6 @@ function AddSponsorshipModal({
           } as const;
           if (existing) await updateSponsorOption(existing.id, next);
           else await addSponsorOption(next);
-          await addFavorite("Sponsorship option", values.format);
           onCreated?.();
           onClose();
         })();
@@ -2752,7 +2828,6 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
         remuneration,
         engagement,
       });
-      void addFavorite("Announcement", title.trim());
       onCreated?.();
       setDone(true);
       setTimeout(() => {
@@ -2851,7 +2926,6 @@ function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onC
     setSaving(true);
     try {
       await addIllustration({ title: title.trim(), description: description.trim(), files });
-      void addFavorite("Illustration", title.trim());
       onCreated?.();
       setDone(true);
       setTimeout(() => {
@@ -2923,7 +2997,6 @@ function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onCl
     setSaving(true);
     try {
       await addIdea({ title: title.trim(), category, description: description.trim(), files });
-      void addFavorite("Idée", title.trim());
       setTitle(""); setDescription(""); setFiles([]);
       onCreated?.();
       onClose();
@@ -3004,7 +3077,6 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
         recruits: [] as unknown[],
       };
       await saveStudioProjects([project, ...existing]);
-      void addFavorite("Project", name.trim());
       setName(""); setSynopsis(""); setCoverFiles([]);
       onCreated?.();
       onClose();
@@ -3059,27 +3131,36 @@ function ProfileWorkflowModal({
   onClose,
   onDone,
 }: {
-  type: ProfileWorkflow;
+  type: Exclude<ProfileWorkflow, "patronage">;
   profileType: ProfileType;
   profileName: string;
   recipientId: string | null;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
-  const [projectTitle, setProjectTitle] = useState("Neon Ronin");
+  const [ownedProjects, setOwnedProjects] = useState<StudioProjectLite[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [role, setRole] = useState(profileType === "content" ? "Créateur de contenu" : "Dessinateur");
-  const [level, setLevel] = useState("Niveau 1");
-  const [startDate, setStartDate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (type !== "invite") return;
+    void loadOwnedStudioProjects<StudioProjectLite>()
+      .then((projects) => {
+        setOwnedProjects(projects);
+        setSelectedProjectId((current) => current || projects[0]?.id || "");
+      })
+      .catch((loadError: unknown) => {
+        setError(loadError instanceof Error ? loadError.message : "Impossible de charger tes projets.");
+      });
+  }, [type]);
+
   const title =
     type === "invite"
       ? "Inviter au projet"
-      : type === "patronage"
-        ? "Proposer un parrainage"
-        : type === "friend"
+      : type === "friend"
           ? "Ajouter en ami"
           : "S'abonner";
 
@@ -3091,13 +3172,8 @@ function ProfileWorkflowModal({
       return;
     }
     if (type === "invite") {
-      if (!projectTitle.trim()) {
-        setError("Le projet concerné est obligatoire.");
-        return;
-      }
-    } else if (type === "patronage") {
-      if (!level.trim()) {
-        setError("Le niveau de parrainage est obligatoire.");
+      if (!selectedProjectId) {
+        setError("Crée d'abord un projet avant d'envoyer une invitation.");
         return;
       }
     }
@@ -3105,31 +3181,13 @@ function ProfileWorkflowModal({
     setSubmitting(true);
     try {
       if (type === "invite") {
-        await sendProfileWorkflowDb(recipientId, {
-          kind: "collaboration_invitation",
-          status: "pending",
-          category: "project",
-          type: "invitation_collab",
-          title: `Invitation à rejoindre ${projectTitle.trim()}`,
-          content: message.trim() || `Rôle proposé : ${role}.`,
-          entityType: "project",
-          entityTitle: projectTitle.trim(),
+        await sendProjectInvitationDb({
+          projectId: selectedProjectId,
+          recipient: recipientId,
+          role,
+          message: message.trim(),
         });
         onDone("Invitation de collaboration envoyée et notification créée.");
-        return;
-      }
-      if (type === "patronage") {
-        await sendProfileWorkflowDb(recipientId, {
-          kind: "patronage_request",
-          status: "pending",
-          category: "sponsorship",
-          type: "demande_parrainage",
-          title: `Nouvelle proposition de parrainage (${level})`,
-          content: [message.trim(), startDate ? `Début souhaité : ${startDate}.` : ""].filter(Boolean).join(" "),
-          entityType: "sponsorship",
-          entityTitle: profileName,
-        });
-        onDone("Demande de parrainage envoyée et notification créée.");
         return;
       }
       if (type === "friend") {
@@ -3179,7 +3237,12 @@ function ProfileWorkflowModal({
         {type === "invite" && (
           <>
             <Field label="Projet concerné">
-              <input className="cm-input" value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} placeholder="Titre du projet" />
+              <select className="cm-input" value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>
+                {ownedProjects.length === 0 ? <option value="">Aucun projet disponible</option> : null}
+                {ownedProjects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.title}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Rôle proposé">
               <select className="cm-input" value={role} onChange={(event) => setRole(event.target.value)}>
@@ -3190,24 +3253,6 @@ function ProfileWorkflowModal({
             </Field>
             <Field label="Message d'invitation">
               <textarea className="cm-textarea" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Explique le rôle attendu, le rythme et les prochaines étapes." />
-            </Field>
-          </>
-        )}
-
-        {type === "patronage" && (
-          <>
-            <Field label="Niveau de parrainage">
-              <select className="cm-input" value={level} onChange={(event) => setLevel(event.target.value)}>
-                {["Niveau 1", "Niveau 2", "Niveau 3"].map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Date de début souhaitée">
-              <input className="cm-input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-            </Field>
-            <Field label="Message personnalisé">
-              <textarea className="cm-textarea" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ajoute les avantages, attentes ou conditions utiles." />
             </Field>
           </>
         )}

@@ -34,13 +34,7 @@ export async function listFavorites(): Promise<Favorite[]> {
 
 export async function addFavorite(kind: FavoriteKind, title: string): Promise<void> {
   if (!title.trim()) return;
-  const sb = getSupabase();
-  const userId = (await sb.auth.getSession()).data.session?.user.id;
-  if (!userId) throw new Error("Connecte-toi pour enregistrer un favori.");
-  const { error } = await sb
-    .from("user_favorites")
-    .insert({ user_id: userId, kind, title: title.trim() });
-  if (error) throw new Error(error.message);
+  await setFavorite(kind, title, true);
 }
 
 export async function removeFavorite(id: string): Promise<void> {

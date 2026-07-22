@@ -381,11 +381,43 @@ export async function loadPublicStudioProjects<T>(): Promise<T[]> {
 
 export async function loadProfileStudioProjects<T>(ownerId: string): Promise<T[]> {
   if (!ownerId) return [];
+  const sb = getSupabase();
+  const [ownedResult, membershipResult] = await Promise.all([
+    sb
+      .from("studio_projects")
+      .select("id, data")
+      .eq("owner_id", ownerId)
+      .eq("catalog_visible", true),
+    sb
+      .from("studio_project_members")
+      .select("project_id")
+      .eq("user_id", ownerId)
+      .eq("status", "active"),
+  ]);
+  if (ownedResult.error) throw new Error(ownedResult.error.message);
+  if (membershipResult.error) throw new Error(membershipResult.error.message);
+  const ownedIds = new Set((ownedResult.data ?? []).map((row) => row.id));
+  const joinedIds = (membershipResult.data ?? [])
+    .map((row) => row.project_id)
+    .filter((id) => !ownedIds.has(id));
+  const joinedResult = joinedIds.length
+    ? await sb
+        .from("studio_projects")
+        .select("id, data")
+        .in("id", joinedIds)
+        .eq("catalog_visible", true)
+    : { data: [] as Array<{ id: string; data: Record<string, unknown> }>, error: null };
+  if (joinedResult.error) throw new Error(joinedResult.error.message);
+  return [...(ownedResult.data ?? []), ...(joinedResult.data ?? [])].map((row) => row.data as T);
+}
+
+export async function loadOwnedStudioProjects<T>(): Promise<T[]> {
+  const userId = await sessionUserId();
+  if (!userId) return [];
   const { data, error } = await getSupabase()
     .from("studio_projects")
     .select("data")
-    .eq("owner_id", ownerId)
-    .eq("catalog_visible", true)
+    .eq("owner_id", userId)
     .order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => row.data as T);

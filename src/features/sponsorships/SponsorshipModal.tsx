@@ -25,7 +25,17 @@ type CreatorOption = {
   services: Service[];
 };
 
-export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SponsorshipModal({
+  open,
+  onClose,
+  initialCreatorId,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialCreatorId?: string | null;
+  onCreated?: () => void;
+}) {
   const [projectId, setProjectId] = useState("");
   const [myProjects, setMyProjects] = useState<StudioProjectOption[]>([]);
   const [query, setQuery] = useState("");
@@ -80,15 +90,18 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
           })
           .filter((creator) => creator.services.length > 0);
         setCreatorOptions(creators);
-        setCreatorId((current) =>
-          creators.some((creator) => creator.id === current) ? current : creators[0]?.id ?? "",
-        );
+        setCreatorId((current) => {
+          if (initialCreatorId && creators.some((creator) => creator.id === initialCreatorId)) {
+            return initialCreatorId;
+          }
+          return creators.some((creator) => creator.id === current) ? current : creators[0]?.id ?? "";
+        });
       })
       .catch(() => {
         setMyProjects([]);
         setCreatorOptions([]);
       });
-  }, [open]);
+  }, [initialCreatorId, open]);
 
   const creators = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -189,6 +202,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
         sponsorshipType: selectedServices.map(serviceLabel).join(", "),
         message: message.trim(),
       });
+      onCreated?.();
       close();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Le parrainage n'a pas pu être créé.");

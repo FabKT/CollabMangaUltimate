@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearReadNotifications,
+  completeNotificationAction,
+  getWorkflowRecordPayload,
   listMyNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -15,7 +17,6 @@ import {
 import {
   Bell,
   Search,
-  Settings2,
   CheckCheck,
   Trash2,
   MessageSquare,
@@ -24,7 +25,6 @@ import {
   Users,
   BookOpen,
   Sparkles,
-  Archive,
   Reply,
   ExternalLink,
   Check,
@@ -81,7 +81,6 @@ type Notification = {
   time: string;
   status: Status;
   importance: Importance;
-  archived?: boolean;
   actorId?: string; // profil de l'expéditeur (pour « Voir le profil » / ouvrir une conversation)
   recordId?: string; // workflow_record lié (demande d'ami à accepter/refuser)
   entity?: RelatedEntity;
@@ -95,13 +94,13 @@ type Notification = {
 const TABS: { id: "all" | Category; label: string }[] = [
   { id: "all", label: "Tout" },
   { id: "message", label: "Message" },
-  { id: "project", label: "Mes projet" },
+  { id: "project", label: "Mes projets" },
   { id: "sponsorship", label: "Parrainage" },
   { id: "friend", label: "Amis" },
   { id: "manga", label: "Manga" },
 ];
 
-const FILTERS = ["All", "Unread", "Read", "Important", "Archived"] as const;
+const FILTERS = ["All", "Unread", "Read", "Important"] as const;
 type FilterKey = (typeof FILTERS)[number];
 
 const CATEGORY_ICON: Record<Category, React.ComponentType<{ className?: string }>> = {
@@ -115,7 +114,7 @@ const CATEGORY_ICON: Record<Category, React.ComponentType<{ className?: string }
 
 const CATEGORY_LABEL: Record<Category, string> = {
   message: "Message",
-  project: "Mes projet",
+  project: "Mes projets",
   sponsorship: "Parrainage",
   friend: "Amis",
   manga: "Manga",
@@ -128,6 +127,8 @@ function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<"all" | Category>("all");
   const [filter, setFilter] = useState<FilterKey>("All");
   const [search, setSearch] = useState("");
+  const [newestFirst, setNewestFirst] = useState(true);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
@@ -158,32 +159,38 @@ function NotificationsPage() {
       try {
         if (n.recordId && n.category === "project" && (label.includes("accept") || label.includes("accepte"))) {
           await respondProjectInvitationDb(n.recordId, true);
+          await completeNotificationAction(n.id.replace(/^db-/, ""), "Acceptée");
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "project" && (label.includes("refus") || label.includes("declin"))) {
           await respondProjectInvitationDb(n.recordId, false);
+          await completeNotificationAction(n.id.replace(/^db-/, ""), "Refusée");
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "sponsorship" && (label.includes("accept") || label.includes("accepte"))) {
           await respondSponsorshipRequestDb(n.recordId, true);
+          await completeNotificationAction(n.id.replace(/^db-/, ""), "Acceptée");
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "sponsorship" && (label.includes("refus") || label.includes("declin"))) {
           await respondSponsorshipRequestDb(n.recordId, false);
+          await completeNotificationAction(n.id.replace(/^db-/, ""), "Refusée");
           refreshDb();
           return;
         }
         // Demande d'ami : accepter / refuser (met à jour le workflow_record).
         if (n.recordId && n.category === "friend" && (label.includes("accept") || label.includes("accepte"))) {
           await respondFriendRequestDb(n.recordId, true);
+          await completeNotificationAction(n.id.replace(/^db-/, ""), "Acceptée");
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "friend" && (label.includes("refus") || label.includes("declin") || label.includes("decline"))) {
           await respondFriendRequestDb(n.recordId, false);
+          await completeNotificationAction(n.id.replace(/^db-/, ""), "Refusée");
           refreshDb();
           return;
         }
@@ -201,10 +208,19 @@ function NotificationsPage() {
           navigate({ to: "/messages", search: { conversation } });
           return;
         }
+        if (n.recordId && n.category === "project") {
+          const payload = await getWorkflowRecordPayload(n.recordId);
+          const projectId = typeof payload?.projectId === "string" ? payload.projectId : undefined;
+          if (projectId) {
+            navigate({ to: "/studio", search: { project: projectId, chapter: undefined } });
+            return;
+          }
+        }
         // Sinon : routage par contexte (catégorie / entité liée).
         routeByContext(n, navigate);
-      } catch {
-        // Erreur réseau silencieuse : on ne bloque pas l'UI.
+      } catch (error) {
+        setFeedback(error instanceof Error ? error.message : "Cette action n'a pas pu être exécutée.");
+        window.setTimeout(() => setFeedback(null), 3200);
       }
     },
     [navigate, refreshDb],
@@ -213,19 +229,19 @@ function NotificationsPage() {
   const notifications = useMemo(() => dbNotifications.map(dbToNotification), [dbNotifications]);
 
   const filtered = useMemo(() => {
-    return notifications.filter((n) => {
+    const matches = notifications.filter((n) => {
       if (activeTab !== "all" && n.category !== activeTab) return false;
       if (filter === "Unread" && n.status !== "unread") return false;
       if (filter === "Read" && n.status !== "read") return false;
       if (filter === "Important" && n.importance !== "important" && n.importance !== "action") return false;
-      if (filter === "Archived" && !n.archived) return false;
       if (search) {
         const q = search.toLowerCase();
         if (!n.title.toLowerCase().includes(q) && !n.preview.toLowerCase().includes(q)) return false;
       }
       return true;
     });
-  }, [activeTab, filter, notifications, search]);
+    return newestFirst ? matches : [...matches].reverse();
+  }, [activeTab, filter, newestFirst, notifications, search]);
 
   const unreadCountByTab = useMemo(() => {
     const map: Record<string, number> = { all: 0 };
@@ -281,6 +297,8 @@ function NotificationsPage() {
             onSearch={setSearch}
             filter={filter}
             onFilter={setFilter}
+            newestFirst={newestFirst}
+            onToggleSort={() => setNewestFirst((value) => !value)}
           />
 
           <div className="hidden lg:block">
@@ -309,6 +327,11 @@ function NotificationsPage() {
           </div>
         </div>
       )}
+      {feedback ? (
+        <div className="fixed bottom-6 right-6 z-[80] max-w-sm rounded-[14px] border border-red-400/40 bg-[#1B1430] px-4 py-3 text-sm font-semibold text-red-200 shadow-2xl">
+          {feedback}
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -327,7 +350,7 @@ function dbToNotification(n: DbNotification): Notification {
     title: n.title,
     preview: n.content,
     description: n.content,
-    actor: n.entity_title ?? "CollabManga",
+    actor: n.actor?.display_name || n.actor?.username || "CollabManga",
     time: relativeTime(n.created_at),
     status: n.read ? "read" : "unread",
     importance: n.actions?.some((action) => action.kind === "primary" || action.kind === "danger")
@@ -432,9 +455,6 @@ function PageTitle({
         >
           Clear read
         </SecondaryButton>
-        <IconButton aria-label="Notification settings">
-          <Settings2 className="h-4 w-4" />
-        </IconButton>
       </div>
     </header>
   );
@@ -505,6 +525,8 @@ function ListPanel({
   onSearch,
   filter,
   onFilter,
+  newestFirst,
+  onToggleSort,
 }: {
   notifications: Notification[];
   selectedId: string | null;
@@ -513,6 +535,8 @@ function ListPanel({
   onSearch: (v: string) => void;
   filter: FilterKey;
   onFilter: (f: FilterKey) => void;
+  newestFirst: boolean;
+  onToggleSort: () => void;
 }) {
   return (
     <div
@@ -552,8 +576,8 @@ function ListPanel({
             );
           })}
         </div>
-        <button className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[color:var(--color-border-default)] bg-input px-3 text-[12px] font-semibold text-text-secondary hover:text-text">
-          Newest first
+        <button type="button" onClick={onToggleSort} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[color:var(--color-border-default)] bg-input px-3 text-[12px] font-semibold text-text-secondary hover:text-text">
+          {newestFirst ? "Newest first" : "Oldest first"}
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -707,6 +731,11 @@ function DetailPanel({
         <p className="mt-2 text-[14px] font-medium leading-[22px] text-text-secondary">
           {notification.description}
         </p>
+        {notification.actor !== "CollabManga" ? (
+          <p className="mt-2 text-[12px] font-semibold text-text-muted">
+            Envoyée par {notification.actor}
+          </p>
+        ) : null}
 
         {/* Middle */}
         <div className="mt-6 space-y-4">
@@ -790,7 +819,6 @@ function iconForAction(label: string) {
     return <Check className="h-4 w-4" />;
   if (l.includes("decline") || l.includes("delete") || l.includes("reject") || l.includes("remove"))
     return <X className="h-4 w-4" />;
-  if (l.includes("archive")) return <Archive className="h-4 w-4" />;
   if (l.includes("reply")) return <Reply className="h-4 w-4" />;
   if (l.includes("open") || l.includes("view") || l.includes("read"))
     return <ExternalLink className="h-4 w-4" />;

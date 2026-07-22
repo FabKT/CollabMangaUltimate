@@ -17,6 +17,7 @@ export type ProfilePreferences = {
 };
 
 const LEGACY_STORAGE_KEY = "collabmanga.profile-preferences.v1";
+let preferenceSaveQueue: Promise<void> = Promise.resolve();
 
 export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   bio: "",
@@ -82,10 +83,16 @@ export async function saveProfilePreferences(
   userId?: string | null,
 ): Promise<void> {
   if (!userId) return;
-  const sb = getSupabase();
-  const { error } = await sb.from("profile_preferences").upsert(
-    { user_id: userId, preferences: normalize(preferences), updated_at: new Date().toISOString() },
-    { onConflict: "user_id" },
-  );
-  if (error) throw new Error(error.message);
+  const next = normalize(preferences);
+  preferenceSaveQueue = preferenceSaveQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const sb = getSupabase();
+      const { error } = await sb.from("profile_preferences").upsert(
+        { user_id: userId, preferences: next, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" },
+      );
+      if (error) throw new Error(error.message);
+    });
+  return preferenceSaveQueue;
 }
