@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
+import { errorMessage } from "@/lib/error-message";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
@@ -192,7 +193,7 @@ function wait(ms: number) {
 }
 
 function errorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }
 
 function shouldRetryPulseNoteNetworkError(error: unknown) {

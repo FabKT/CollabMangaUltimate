@@ -3,6 +3,7 @@ import { Camera, Check, Upload, UserRound } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthError, AuthShell, AC, authManrope } from "@/components/auth/AuthShell";
 import { uploadImage } from "@/lib/db";
+import { errorMessage } from "@/lib/error-message";
 import { type AppLocale, useI18n } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 
@@ -34,18 +35,19 @@ function OnboardingPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!supabase) {
+    const sb = supabase;
+    if (!sb) {
       setError("Supabase is not configured.");
       setChecking(false);
       return;
     }
-    void supabase.auth.getSession().then(async ({ data }) => {
+    void sb.auth.getSession().then(async ({ data }) => {
       if (!data.session) {
         window.location.assign("/login?redirect=/onboarding");
         return;
       }
       const metadata = data.session.user.user_metadata as Record<string, unknown>;
-      const { data: profile } = await supabase
+      const { data: profile } = await sb
         .from("profiles")
         .select("username, role, secondary_role, site_locale, onboarding_completed")
         .eq("id", data.session.user.id)
@@ -121,7 +123,7 @@ function OnboardingPage() {
       if (metadataError) throw metadataError;
       window.location.assign("/hub");
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : String(reason);
+      const message = errorMessage(reason);
       setError(
         /duplicate|username/i.test(message)
           ? locale === "fr"

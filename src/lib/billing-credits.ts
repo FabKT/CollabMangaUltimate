@@ -13,6 +13,7 @@ import {
 } from "./stripe-server";
 import { recordGenerationMetric, type GenerationUsage } from "./generation-metrics";
 import { isLocalAiServerMode } from "./local-ai-mode";
+import { errorMessage } from "./error-message";
 
 /** Coût OpenAI estimé par image produite (centimes). */
 function estimatedImageCostCents() {
@@ -47,7 +48,7 @@ async function userIdFromRequest(request: Request): Promise<string | null> {
 
 /** Traduit les exceptions des fonctions SQL de crédits en message clair. */
 function creditErrorMessage(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
+  const raw = errorMessage(error, "");
   if (raw.includes("NO_ACTIVE_PERIOD"))
     return "Aucun abonnement actif : souscris un plan pour générer des images.";
   if (raw.includes("INSUFFICIENT_CREDITS"))
