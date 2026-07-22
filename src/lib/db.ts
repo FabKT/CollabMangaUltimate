@@ -65,6 +65,8 @@ export type DbIdea = {
   image_urls: string[];
   created_at: string;
   author: DbProfile | null;
+  authorBio?: string | null;
+  commentCount?: number;
 };
 
 export type DbConversation = {
@@ -295,7 +297,31 @@ export async function listIdeas(): Promise<DbIdea[]> {
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []) as DbIdea[];
+  const ideas = (data ?? []) as DbIdea[];
+  if (ideas.length === 0) return [];
+  const authorIds = [...new Set(ideas.map((idea) => idea.author_id))];
+  const ideaIds = ideas.map((idea) => idea.id);
+  const [preferencesResult, commentsResult] = await Promise.all([
+    supabase.from("profile_preferences").select("user_id, preferences").in("user_id", authorIds),
+    supabase.from("comments").select("entity_id").eq("entity_type", "idea").in("entity_id", ideaIds),
+  ]);
+  if (preferencesResult.error) throw new Error(preferencesResult.error.message);
+  if (commentsResult.error) throw new Error(commentsResult.error.message);
+  const bios = new Map(
+    (preferencesResult.data ?? []).map((row) => [
+      row.user_id,
+      typeof row.preferences?.bio === "string" ? row.preferences.bio : null,
+    ]),
+  );
+  const commentCounts = new Map<string, number>();
+  for (const comment of commentsResult.data ?? []) {
+    commentCounts.set(comment.entity_id, (commentCounts.get(comment.entity_id) ?? 0) + 1);
+  }
+  return ideas.map((idea) => ({
+    ...idea,
+    authorBio: bios.get(idea.author_id) ?? null,
+    commentCount: commentCounts.get(idea.id) ?? 0,
+  }));
 }
 
 export async function addIdea(input: {
@@ -325,6 +351,15 @@ export async function addIdea(input: {
     .single();
   if (error) throw new Error(error.message);
   return data as DbIdea;
+}
+
+export function subscribeIdeas(onChange: () => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`ideas-${crypto.randomUUID()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "ideas" }, onChange)
+    .subscribe();
+  return () => { void supabase?.removeChannel(channel); };
 }
 
 /* ---------------- messagerie ---------------- */
@@ -430,6 +465,17 @@ export function subscribeMessages(
   return () => {
     void supabase?.removeChannel(channel);
   };
+}
+
+/** Refreshes the list when a visible direct conversation changes. */
+export function subscribeConversationList(onChange: () => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`conversation-list-${crypto.randomUUID()}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "conversation_members" }, onChange)
+    .subscribe();
+  return () => { void supabase?.removeChannel(channel); };
 }
 
 /* ---------------- amis (workflow_records + notifications) ---------------- */

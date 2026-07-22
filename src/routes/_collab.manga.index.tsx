@@ -2,16 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Star, X, ChevronDown } from "lucide-react";
 import {
-  CATALOG_MANGA,
-  DEMOGRAPHICS,
-  GENRES,
-  STATUSES,
   SORTS,
   type CatalogManga,
   type Demographic,
   type SortOption,
 } from "@/lib/haven-data";
-import { loadPublicStudioProjects } from "@/lib/studio-projects";
+import { loadPublicStudioProjects, subscribeStudioProjects } from "@/lib/studio-projects";
 import { getMangaRating } from "@/lib/manga-ratings";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { MangaCard } from "@/components/haven/MangaCard";
@@ -49,7 +45,6 @@ const SUBGENRE_OPTIONS = [
   "Psychologique",
 ];
 // Langues alignées sur celles proposées dans le profil (langues du site).
-const LANGUAGES = ["FR", "ENG", "ES", "IT", "JP", "DE", "PT", "KR", "CN", "NL", "AR", "HI"];
 const RATING_VALUES = [0, 1, 2, 3, 4, 5];
 
 // correspondance sous-genre FR (filtre) → genres EN (données du catalogue)
@@ -77,9 +72,12 @@ type StudioCatalogProject = {
   synopsis: string;
   status: string;
   genres: string[];
+  subgenres?: string[];
   chapters: { status?: string }[];
   coverDataUrl?: string;
   catalogVisible?: boolean;
+  creator?: string;
+  language?: CatalogManga["language"];
 };
 
 export function CatalogPage({
@@ -102,31 +100,33 @@ export function CatalogPage({
   const [studioEntries, setStudioEntries] = useState<CatalogManga[]>([]);
 
   useEffect(() => {
-    void loadPublicStudioProjects<StudioCatalogProject>()
+    let active = true;
+    const refresh = () => void loadPublicStudioProjects<StudioCatalogProject>()
       .then(async (rows) =>
-        setStudioEntries(
-          await Promise.all(
+        Promise.all(
             rows
               .filter((p) => p.catalogVisible)
               .map(async (p) => ({
               id: p.id,
               title: p.title,
-              creator: "Toi",
+              creator: p.creator || "Créateur CollabManga",
               cover: p.coverDataUrl || "",
               demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0])
                 ? p.genres[0]
                 : "Shonen") as CatalogManga["demographic"],
-              genres: p.genres,
+              genres: [...(p.genres ?? []), ...(p.subgenres ?? [])],
               rating: await getMangaRating(p.id),
               chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,
-              language: "FR",
+              language: p.language ?? "FR",
               })),
-          ),
-        ),
+          ).then((entries) => { if (active) setStudioEntries(entries); }),
       )
       .catch(() => setStudioEntries([]));
+    refresh();
+    const unsubscribe = subscribeStudioProjects(refresh);
+    return () => { active = false; unsubscribe(); };
   }, []);
 
   const toggle = (list: string[], value: string, setter: (v: string[]) => void) => {
@@ -136,7 +136,7 @@ export function CatalogPage({
   const filtered = useMemo(() => {
     const minC = Number(minChapters) || 0;
     const maxC = Number(maxChapters) || 0;
-    let list = [...studioEntries, ...CATALOG_MANGA].filter((m) => {
+    let list = studioEntries.filter((m) => {
       if (query && !m.title.toLowerCase().includes(query.toLowerCase())) return false;
       if (languages.length && !languages.includes(m.language)) return false;
       if (demos.length && !demos.includes(m.demographic)) return false;

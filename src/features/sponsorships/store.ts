@@ -318,6 +318,32 @@ export async function deleteSponsorship(id: string) {
     throw new Error(error.message);
   }
 }
+
+export async function leaveSponsorship(id: string): Promise<void> {
+  const uid = await currentUserId();
+  if (!uid) throw new Error("Connecte-toi pour quitter ce parrainage.");
+  const previous = state;
+  const sponsorship = state.find((item) => item.id === id);
+  if (!sponsorship || sponsorship.creatorId !== uid) {
+    throw new Error("Seul le créateur de contenu associé peut quitter ce parrainage.");
+  }
+  const next: Sponsorship = {
+    ...sponsorship,
+    creatorId: undefined,
+    participants: sponsorship.participants.filter((participant) => participant.id !== uid),
+  };
+  state = state.map((item) => (item.id === id ? next : item));
+  notify();
+  const { error } = await getSupabase()
+    .from("sponsorships")
+    .update({ creator_id: null, data: next, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) {
+    state = previous;
+    notify();
+    throw new Error(error.message);
+  }
+}
 export async function upsertService(sponsorshipId: string, service: Service) {
   const sponsorship = state.find((item) => item.id === sponsorshipId);
   if (!sponsorship) return;

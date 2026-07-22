@@ -384,7 +384,7 @@ function SponsorshipPage() {
   );
 }
 
-function SponsorshipContactDialog({
+export function SponsorshipContactDialog({
   announcement,
   onOpenChange,
   onDone,

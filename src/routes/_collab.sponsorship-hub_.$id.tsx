@@ -2,8 +2,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   useSponsorship,
+  listSponsorships,
   updateSponsorship,
   deleteSponsorship,
+  leaveSponsorship,
   removeService,
   formatMoney,
   PAYMENT_LABEL,
@@ -14,6 +16,12 @@ import {
 import { StatusBadge, PlatformIcon, Divider } from "../features/sponsorships/ui";
 import { ServiceModal } from "../features/sponsorships/ServiceModal";
 import { loadStudioProjects } from "@/lib/studio-projects";
+import { currentUserId } from "@/lib/db";
+import {
+  addSponsorshipReview,
+  listSponsorshipReviews,
+  type SponsorshipReview,
+} from "@/lib/sponsorship-reviews";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/sponsorship-hub_/$id")({
@@ -42,7 +50,13 @@ function SponsorshipDetailPage() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [serviceModal, setServiceModal] = useState<{ open: boolean; initial?: Service }>({ open: false });
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [storeLoaded, setStoreLoaded] = useState(Boolean(s));
   const [actionError, setActionError] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<SponsorshipReview[]>([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,6 +66,31 @@ function SponsorshipDetailPage() {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([listSponsorships(), currentUserId()])
+      .then(([, uid]) => {
+        if (!active) return;
+        setUserId(uid);
+        setStoreLoaded(true);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setActionError(error instanceof Error ? error.message : "Le parrainage n'a pas pu être chargé.");
+        setStoreLoaded(true);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (s) setStoreLoaded(true);
+  }, [s]);
+
+  useEffect(() => {
+    if (!s?.creatorId) { setReviews([]); return; }
+    void listSponsorshipReviews(s.creatorId).then(setReviews).catch(() => setReviews([]));
+  }, [s?.creatorId]);
 
   // Résout l'id du projet Studio (pour « View project ») en associant le titre.
   const projectName = s?.project;
@@ -68,6 +107,16 @@ function SponsorshipDetailPage() {
     return () => { active = false; };
   }, [projectName, s?.projectId]);
 
+  if (!s && !storeLoaded) {
+    return (
+      <main className="min-h-dvh">
+        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-sm text-text-secondary">
+          Chargement du parrainage…
+        </div>
+      </main>
+    );
+  }
+
   if (!s) {
     return (
       <main className="min-h-dvh">
@@ -82,6 +131,29 @@ function SponsorshipDetailPage() {
 
   const servicesTotal = s.services.reduce((sum, x) => sum + x.price, 0);
   const linkedCount = s.services.filter((x) => x.deliveryLink).length;
+  const isOwner = userId === s.ownerId;
+  const isCreator = userId === s.creatorId;
+  const hasReviewed = reviews.some((review) => review.reviewerId === userId);
+
+  const submitReview = async () => {
+    if (!s.creatorId || !reviewComment.trim()) return;
+    setReviewSaving(true);
+    setActionError(null);
+    try {
+      await addSponsorshipReview({
+        sponsorshipId: s.id,
+        creatorId: s.creatorId,
+        rating: reviewRating,
+        comment: reviewComment,
+      });
+      setReviewComment("");
+      setReviews(await listSponsorshipReviews(s.creatorId));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "L'avis n'a pas pu être publié.");
+    } finally {
+      setReviewSaving(false);
+    }
+  };
 
   const setStatus = async (st: SponsorshipStatus) => {
     setActionError(null);
@@ -110,7 +182,7 @@ function SponsorshipDetailPage() {
     setMenuOpen(false);
     if (confirm(t("sponsorDetail.confirmLeave"))) {
       try {
-        await updateSponsorship(s.id, { status: "cancelled" });
+        await leaveSponsorship(s.id);
         await navigate({ to: "/sponsorship-hub" });
       } catch (error) {
         setActionError(error instanceof Error ? error.message : "Impossible de quitter ce parrainage.");
@@ -150,6 +222,14 @@ function SponsorshipDetailPage() {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+            <Link
+              to="/messages"
+              search={{ sponsorship: s.id }}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-surface/70 px-3 text-xs font-semibold text-text-secondary transition hover:border-neon/50 hover:text-neon"
+            >
+              Discussion
+            </Link>
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => { setMenuOpen((v) => !v); setStatusOpen(false); }}
@@ -187,11 +267,12 @@ function SponsorshipDetailPage() {
                 <div className="border-t border-border" />
                 <MenuItem label={t("sponsorDetail.finish")} onClick={() => void setStatus("finished")} />
                 <MenuItem label={t("sponsorDetail.cancel")} onClick={() => void setStatus("cancelled")} />
-                <MenuItem label={t("sponsorDetail.leave")} onClick={() => void onLeave()} />
-                <div className="border-t border-border" />
-                <MenuItem label={t("sponsorDetail.delete")} danger onClick={() => void onDelete()} />
+                {isCreator && <MenuItem label={t("sponsorDetail.leave")} onClick={() => void onLeave()} />}
+                {isOwner && <div className="border-t border-border" />}
+                {isOwner && <MenuItem label={t("sponsorDetail.delete")} danger onClick={() => void onDelete()} />}
               </div>
             )}
+          </div>
           </div>
         </div>
 
@@ -275,7 +356,13 @@ function SponsorshipDetailPage() {
                               {t("sponsorDetail.edit")}
                             </button>
                             <button
-                              onClick={() => confirm(t("sponsorDetail.confirmRemoveService")) && removeService(s.id, sv.id)}
+                              onClick={() => {
+                                if (!confirm(t("sponsorDetail.confirmRemoveService"))) return;
+                                setActionError(null);
+                                void removeService(s.id, sv.id).catch((error: unknown) =>
+                                  setActionError(error instanceof Error ? error.message : "La suppression du service a échoué."),
+                                );
+                              }}
                               className="rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:border-danger/50 hover:text-danger"
                               aria-label={`${t("sponsorDetail.remove")} ${sv.name}`}
                             >
@@ -402,6 +489,31 @@ function SponsorshipDetailPage() {
             </ul>
           </div>
         </section>
+
+        {s.status === "finished" && s.creatorId && !isCreator && (
+          <section className="mt-6 rounded-2xl border border-border bg-surface/70 p-5">
+            <h2 className="font-display text-base font-semibold">Votre avis sur ce partenariat</h2>
+            {hasReviewed ? (
+              <p className="mt-2 text-sm text-text-secondary">Votre avis a déjà été publié.</p>
+            ) : (
+              <div className="mt-4 grid gap-3 md:grid-cols-[160px_minmax(0,1fr)_auto] md:items-end">
+                <label className="grid gap-1.5 text-xs font-semibold text-text-secondary">
+                  Note
+                  <select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))} className="h-10 rounded-lg border border-border bg-surface-3 px-3 text-sm text-foreground">
+                    {[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value} / 5</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1.5 text-xs font-semibold text-text-secondary">
+                  Commentaire
+                  <input value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} maxLength={2000} placeholder="Décrivez votre expérience…" className="h-10 rounded-lg border border-border bg-surface-3 px-3 text-sm text-foreground outline-none focus:border-neon/50" />
+                </label>
+                <button type="button" disabled={reviewSaving || !reviewComment.trim()} onClick={() => void submitReview()} className="btn-neon h-10 rounded-lg px-4 text-sm font-semibold disabled:opacity-50">
+                  {reviewSaving ? "Publication…" : "Publier l'avis"}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       <ServiceModal

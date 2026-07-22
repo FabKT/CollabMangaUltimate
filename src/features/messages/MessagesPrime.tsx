@@ -7,6 +7,7 @@ import {
   searchProfiles,
   sendMessage,
   startConversationWith,
+  subscribeConversationList,
   subscribeMessages,
   type DbProfile,
 } from "@/lib/db";
@@ -159,7 +160,13 @@ function Avatar({
 
 /* ------------------------------ main page -------------------------------- */
 
-function MessagesPage({ initialConversationId }: { initialConversationId?: string }) {
+function MessagesPage({
+  initialConversationId,
+  initialSponsorshipId,
+}: {
+  initialConversationId?: string;
+  initialSponsorshipId?: string;
+}) {
   const navigate = useNavigate();
   const [baseTab, setBaseTab] = useState<BaseTab>("amis");
   const [activeConv, setActiveConv] = useState<string | null>(null);
@@ -247,6 +254,7 @@ function MessagesPage({ initialConversationId }: { initialConversationId?: strin
       .then(setUid)
       .catch(() => setUid(null));
     void refreshConversations();
+    return subscribeConversationList(() => { void refreshConversations(false); });
   }, []);
 
   useEffect(() => {
@@ -254,6 +262,12 @@ function MessagesPage({ initialConversationId }: { initialConversationId?: strin
     setBaseTab("amis");
     setActiveConv(initialConversationId);
   }, [initialConversationId]);
+
+  useEffect(() => {
+    if (!initialSponsorshipId) return;
+    setBaseTab("parrainages");
+    setActiveConv(initialSponsorshipId);
+  }, [initialSponsorshipId]);
 
   const activeFriend = friends.find((f) => f.id === activeConv) ?? null;
   const activeProject = projectConvs.find((project) => project.id === activeConv) ?? null;
@@ -362,16 +376,20 @@ function MessagesPage({ initialConversationId }: { initialConversationId?: strin
       try {
         const key = threadKey(baseTab === "projets" ? "project" : "sponsorship", activeConv);
         const message = await appendThreadMessage(key, content);
-        setMessages((current) => [
-          ...current,
-          {
-            id: message.id,
-            user: "Toi",
-            time: timeLabel(message.createdAt),
-            text: message.content,
-            self: true,
-          },
-        ]);
+        setMessages((current) =>
+          current.some((item) => item.id === message.id)
+            ? current
+            : [
+                ...current,
+                {
+                  id: message.id,
+                  user: "Toi",
+                  time: timeLabel(message.createdAt),
+                  text: message.content,
+                  self: true,
+                },
+              ],
+        );
         return;
       } catch (error) {
         setThreadError(error instanceof Error ? error.message : "Impossible d'envoyer le message.");

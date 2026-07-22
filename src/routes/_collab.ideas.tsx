@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect, type ReactNode } from "react";
-import { addIdea, listIdeas } from "@/lib/db";
+import { addIdea, listIdeas, subscribeIdeas } from "@/lib/db";
+import { listFavorites, setFavorite } from "@/lib/favorites";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
   Search, X, Bookmark, MessageCircle,
   Sparkles, LayoutGrid, List, Images, ChevronDown, Filter, Check,
-  RotateCcw, ImageIcon,
+  RotateCcw, ImageIcon, Plus,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_collab/ideas")({
@@ -17,12 +18,6 @@ export const Route = createFileRoute("/_collab/ideas")({
 const CATEGORIES = [
   "All", "Autre", "Système de pouvoirs", "Motivations", "Charadesign", "Worldbuilding", "Équipement",
 ];
-const GENRES = ["Action","Adventure","Fantasy","Romance","Comedy","Drama","Horror","Mystery","Sports","Slice of life","Sci-fi","Supernatural","Psychological","Historical","Other"];
-const TONES = ["Dark","Epic","Emotional","Funny","Mysterious","Heroic","Tragic","Light-hearted","Violent","Poetic","Realistic","Surreal","Other"];
-const USAGES = ["Character creation","Story arc","Chapter scene","Combat system","Villain concept","Hero motivation","World rules","Visual reference","Project inspiration","Dialogue inspiration","Other"];
-const COMPLEXITY = ["Simple idea","Developed concept","Detailed system","Advanced lore","To expand"];
-const VISIBILITY = ["Public","Private","Project-only","Friends-only"];
-
 type Prop = {
   id: string;
   title: string;
@@ -45,58 +40,11 @@ type Prop = {
   mine?: boolean;
   imageUrl?: string;
   imageUrls?: string[];
+  authorId?: string;
+  authorAvatarUrl?: string;
+  authorBio?: string;
 };
 
-const seedProps: Prop[] = [
-  { id:"p1", title:"Silent Vow, Bound Blade", category:"Charadesign", status:"Published", visibility:"Public",
-    genres:["Action","Fantasy"], tone:"Dark", usage:"Character creation", complexity:"Developed concept", format:"Sketch included",
-    author:"Aiko Tanaka", project:"Neon Ronin",
-    summary:"A wandering swordsman whose vow silences his voice until a debt of blood is repaid.",
-    description:"Silhouette built around a long tattered scarf that wraps a sealed blade. Every step forward is a step deeper into a vow he cannot break. His silence forces the story to speak through gesture, weather and the reactions of those he meets.",
-    hasImage:true, hue:150, saved:24, comments:6 },
-  { id:"p2", title:"Weight of the Second Heart", category:"Système de pouvoirs", status:"Open for discussion", visibility:"Public",
-    genres:["Supernatural","Drama"], tone:"Tragic", usage:"Combat system", complexity:"Detailed system", format:"Text only",
-    author:"Ren Sato",
-    summary:"A borrowed heart doubles the user's strength but shortens the life of whoever donated it.",
-    description:"Activation requires a willing donor. Each use burns hours from the donor's remaining lifespan. A ledger of debts becomes a central moral thread.",
-    hasImage:false, hue:200, saved:41, comments:12 },
-  { id:"p3", title:"The Glass Republic", category:"Worldbuilding", status:"Published", visibility:"Public",
-    genres:["Sci-fi","Political"] as string[], tone:"Mysterious", usage:"World rules", complexity:"Advanced lore", format:"Reference board",
-    author:"Mika Ito",
-    summary:"A city where every wall is transparent. Privacy is a currency traded on the open market.",
-    description:"Citizens purchase opacity by the hour. Wealth is measured in the ability to be unseen. Crimes committed in cheap districts are broadcast; crimes of the rich are simply not visible.",
-    hasImage:true, hue:210, saved:88, comments:31 },
-  { id:"p4", title:"Lantern that Remembers", category:"Équipement", status:"Draft", visibility:"Private",
-    genres:["Fantasy","Drama"], tone:"Poetic", usage:"Project inspiration", complexity:"Simple idea", format:"Text only",
-    author:"You", mine:true,
-    summary:"An old lantern that replays the last conversation held under its light.",
-    description:"Cannot be replayed twice. Whoever hears the recording gains a fragment of the speaker's intent — sometimes more than they should.",
-    hasImage:false, hue:40, saved:9, comments:2 },
-  { id:"p5", title:"Order of the Hollow Sun", category:"Autre", status:"Published", visibility:"Project-only",
-    genres:["Fantasy","Horror"], tone:"Epic", usage:"Villain concept", complexity:"Detailed system", format:"Image included",
-    author:"Hana Kimura", project:"Hollow Sky",
-    summary:"A monastic order convinced that daylight is a wound the world must be healed from.",
-    description:"Ranked by depth of self-inflicted blindness. Rituals conducted in mirrored halls. Peaceful in doctrine, terrifying in practice.",
-    hasImage:true, hue:20, saved:53, comments:18 },
-  { id:"p6", title:"Grief as a Sword-Grip", category:"Motivations", status:"Open for discussion", visibility:"Public",
-    genres:["Drama","Action"], tone:"Emotional", usage:"Hero motivation", complexity:"Developed concept", format:"Text only",
-    author:"Yui Nakamura",
-    summary:"A protagonist who cannot draw their weapon unless they are actively grieving.",
-    description:"Their strength is inseparable from their loss. Healing threatens the very ability that protects the people they love.",
-    hasImage:false, hue:320, saved:17, comments:4 },
-  { id:"p7", title:"The Cartographer's Beast", category:"Autre", status:"Published", visibility:"Public",
-    genres:["Adventure","Fantasy"], tone:"Mysterious", usage:"Visual reference", complexity:"Simple idea", format:"Sketch included",
-    author:"Kenji Watanabe",
-    summary:"A quiet beast that only appears in places that have never been drawn on any map.",
-    description:"Sighting one confirms your discovery. Drawing the location banishes it forever. Explorers debate whether documenting is worth the loss.",
-    hasImage:true, hue:170, saved:32, comments:9 },
-  { id:"p8", title:"Ashfall Coliseum", category:"Worldbuilding", status:"Used in project", visibility:"Public",
-    genres:["Action","Historical"], tone:"Epic", usage:"Chapter scene", complexity:"Developed concept", format:"Image included",
-    author:"Sora Fujimoto", project:"Ashen Verdict",
-    summary:"An arena beneath a slow-burning volcano. The floor is warm; the crowd is warmer.",
-    description:"Every match ends before the ash reaches ankle-deep. Losing means being buried where you fell. Winning means fighting again tomorrow.",
-    hasImage:true, hue:12, saved:64, comments:21 },
-];
 
 /* ---------------- UI atoms ---------------- */
 
@@ -252,19 +200,19 @@ function PropositionsPage() {
   const [format, setFormat] = useState("All");
   const [visibility, setVisibility] = useState("All");
   const [status, setStatus] = useState("All");
-  const [sort, setSort] = useState("Most recent");
   const [view, setView] = useState<"cards"|"list"|"moodboard">("cards");
 
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Prop | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [dbProps, setDbProps] = useState<Prop[]>([]);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   // Idées réelles (Supabase), affichées avant les exemples
   const refreshIdeas = () => {
-    listIdeas()
-      .then((rows) =>
+    setDataError(null);
+    void Promise.all([listIdeas(), listFavorites()])
+      .then(([rows, favorites]) => {
         setDbProps(
           rows.map((r) => ({
             id: r.id,
@@ -283,15 +231,25 @@ function PropositionsPage() {
             hasImage: !!r.image_url,
             hue: 150,
             saved: 0,
-            comments: 0,
+            comments: r.commentCount ?? 0,
             imageUrl: r.image_url ?? undefined,
             imageUrls: r.image_urls?.length ? r.image_urls : r.image_url ? [r.image_url] : [],
+            authorId: r.author_id,
+            authorAvatarUrl: r.author?.avatar_url ?? undefined,
+            authorBio: r.authorBio ?? undefined,
           })),
-        ),
-      )
-      .catch(() => setDbProps([]));
+        );
+        setSaved(new Set(favorites.filter((item) => item.kind === "Idée").map((item) => item.title)));
+      })
+      .catch((error) => {
+        setDbProps([]);
+        setDataError(error instanceof Error ? error.message : "Impossible de charger les idées.");
+      });
   };
-  useEffect(refreshIdeas, []);
+  useEffect(() => {
+    refreshIdeas();
+    return subscribeIdeas(refreshIdeas);
+  }, []);
 
   const activeFilters = useMemo(() => {
     const arr: { label:string; clear:()=>void }[] = [];
@@ -328,12 +286,18 @@ function PropositionsPage() {
     setComplexity("All"); setFormat("All"); setVisibility("All"); setStatus("All");
   };
 
-  const toggleSave = (id: string) => {
-    setSaved(prev => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
-      return n;
-    });
+  const toggleSave = async (idea: Prop) => {
+    const nextSaved = !saved.has(idea.title);
+    try {
+      await setFavorite("Idée", idea.title, nextSaved);
+      setSaved((current) => {
+        const next = new Set(current);
+        if (nextSaved) next.add(idea.title); else next.delete(idea.title);
+        return next;
+      });
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Impossible de modifier ce favori.");
+    }
   };
 
   return (
@@ -347,7 +311,16 @@ function PropositionsPage() {
               Explore character ideas, worldbuilding concepts, powers, equipment, motivations, and creative suggestions for manga projects.
             </p>
           </div>
+          <PrimaryBtn onClick={() => setShowCreate(true)} className="shrink-0">
+            <Plus className="h-4 w-4" /> Créer une idée
+          </PrimaryBtn>
         </header>
+
+        {dataError && (
+          <div className="mb-5 rounded-[14px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-4 py-3 text-[13px] font-semibold text-[var(--danger)]">
+            {dataError}
+          </div>
+        )}
 
         {/* Filter panel */}
         <section
@@ -427,15 +400,15 @@ function PropositionsPage() {
             ) : view === "cards" ? (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {results.map(p => (
-                  <PropCard key={p.id} p={p} saved={saved.has(p.id)} onSave={()=>toggleSave(p.id)}
+                  <PropCard key={p.id} p={p} saved={saved.has(p.title)} onSave={()=>void toggleSave(p)}
                     onOpen={()=>setOpen(p)} />
                 ))}
               </div>
             ) : view === "list" ? (
               <div className="rounded-[16px] bg-[var(--panel)] border border-[var(--border)] divide-y divide-[var(--border)]">
                 {results.map(p => (
-                  <ListRow key={p.id} p={p} saved={saved.has(p.id)}
-                    onSave={()=>toggleSave(p.id)} onOpen={()=>setOpen(p)} />
+                  <ListRow key={p.id} p={p} saved={saved.has(p.title)}
+                    onSave={()=>void toggleSave(p)} onOpen={()=>setOpen(p)} />
                 ))}
               </div>
             ) : (
@@ -452,8 +425,8 @@ function PropositionsPage() {
       {open && (
         <PropModal
           p={open}
-          saved={saved.has(open.id)}
-          onSave={()=>toggleSave(open.id)}
+          saved={saved.has(open.title)}
+          onSave={()=>void toggleSave(open)}
           onClose={()=>setOpen(null)}
         />
       )}
@@ -496,8 +469,8 @@ function PropCard({ p, saved, onSave, onOpen }: {
       <div className="pt-3 border-t border-[var(--border)]">
         {/* Ligne 1 : auteur */}
         <div className="min-w-0 flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display text-[12px] font-bold text-[var(--neon)]">
-            {p.author.slice(0, 2).toUpperCase()}
+          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display text-[12px] font-bold text-[var(--neon)]">
+            {p.authorAvatarUrl ? <img src={p.authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : p.author.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
             <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Profil</div>
@@ -645,10 +618,7 @@ function PropModal({ p, saved, onSave, onClose }: {
   const [activeImage, setActiveImage] = useState(0);
   const images = p.imageUrls?.length ? p.imageUrls : p.imageUrl ? [p.imageUrl] : [];
   const authorName = p.author === "You" ? "Votre profil" : p.author.replace(/—/g, "").trim() || "Créateur CollabManga";
-  const authorBio =
-    p.author === "You"
-      ? "Profil personnel connecté à cette idée."
-      : "Créateur CollabManga partageant des idées, références et concepts exploitables dans des projets manga.";
+  const authorBio = p.authorBio || "Ce membre n'a pas encore renseigné de biographie.";
 
   return (
     <ModalShell onClose={onClose} maxWidth="1120px" label={`${p.category}: ${p.title}`}>
@@ -696,9 +666,9 @@ function PropModal({ p, saved, onSave, onClose }: {
           <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
             Créé par
           </div>
-          <a href={`/profile/${encodeURIComponent(authorName.toLowerCase().replace(/s+/g, "-"))}`} className="mt-4 flex items-center gap-3" title={`Voir le profil de ${authorName}`} style={{ textDecoration: "none" }}>
-            <div className="h-12 w-12 rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display font-bold text-[var(--neon)]">
-              {authorName.slice(0, 2).toUpperCase()}
+          <a href={p.authorId ? `/profile/${p.authorId}` : "#"} className="mt-4 flex items-center gap-3" title={`Voir le profil de ${authorName}`} style={{ textDecoration: "none" }}>
+            <div className="h-12 w-12 overflow-hidden rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display font-bold text-[var(--neon)]">
+              {p.authorAvatarUrl ? <img src={p.authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : authorName.slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
               <div className="font-display text-[16px] font-bold truncate">{authorName}</div>
@@ -725,31 +695,17 @@ function PropModal({ p, saved, onSave, onClose }: {
 
 }
 
-/* ---------------- Legacy project attach modal ---------------- */
-
-function StepDot({ n, active, done, label }: { n:number; active:boolean; done:boolean; label:string }) {
-  return (
-    <div className="flex items-center gap-2 min-w-0">
-      <div className={`h-7 w-7 rounded-full grid place-items-center text-[12px] font-bold border ${
-        active ? "bg-[var(--neon-soft)] border-[var(--neon-border)] text-[var(--neon)]"
-        : done ? "bg-[var(--neon)] border-[var(--neon)] text-[#04111E]"
-        : "bg-[var(--card)] border-[var(--border)] text-[var(--text-muted)]"
-      }`}>{done ? <Check className="h-3.5 w-3.5"/> : n}</div>
-      <span className={`text-[12px] font-bold uppercase tracking-[0.06em] whitespace-nowrap ${active?"text-[var(--text)]":"text-[var(--text-muted)]"}`}>{label}</span>
-    </div>
-  );
-}
-
 function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()=>void }) {
   const [ideaImages, setIdeaImages] = useState<string[]>([]);
   const [ideaFiles, setIdeaFiles] = useState<File[]>([]);
+  const [activeIdeaIndex, setActiveIdeaIndex] = useState(0);
   const [ideaCategory, setIdeaCategory] = useState(CATEGORIES[1]);
   const [ideaTitle, setIdeaTitle] = useState("");
   const [ideaDescription, setIdeaDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const ideaInputId = "idea-create-images";
-  const activeIdeaImage = ideaImages[0];
+  const activeIdeaImage = ideaImages[activeIdeaIndex];
   const addIdeaFiles = (files: FileList | null) => {
     if (!files?.length) return;
     const incoming = Array.from(files).filter((file) => file.type.startsWith("image/"));
@@ -804,7 +760,7 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
           <input id={ideaInputId} type="file" accept="image/*" multiple className="hidden" onChange={(event) => addIdeaFiles(event.currentTarget.files)} />
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {ideaImages.length > 0 ? ideaImages.map((src, index) => (
-              <button key={`${src}-${index}`} type="button" onClick={() => setIdeaImages((current) => [current[index], ...current.filter((_, i) => i !== index)])} className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--card)]">
+              <button key={`${src}-${index}`} type="button" onClick={() => setActiveIdeaIndex(index)} className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border bg-[var(--card)]" style={{ borderColor: activeIdeaIndex === index ? "var(--neon)" : "var(--border)" }}>
                 <img src={src} alt="" className="h-full w-full object-cover" />
               </button>
             )) : (
@@ -836,234 +792,5 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
         <PrimaryBtn onClick={submitIdea}><Check className="h-4 w-4"/>{saving ? "Publication…" : "Ajouter l'idée"}</PrimaryBtn>
       </div>
     </ModalShell>
-  );
-
-  const [step, setStep] = useState(1);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("Character design");
-  const [summary, setSummary] = useState("");
-  const [description, setDescription] = useState("");
-  const [genre, setGenre] = useState(GENRES[0]);
-  const [tone, setTone] = useState(TONES[0]);
-  const [usage, setUsage] = useState(USAGES[0]);
-  const [complexity, setComplexity] = useState(COMPLEXITY[0]);
-  const [visibility, setVisibility] = useState(VISIBILITY[0]);
-  const [linkedProject, setLinkedProject] = useState("None");
-  const [status, setStatus] = useState("Draft");
-  const [allowComments, setAllowComments] = useState(true);
-  const [allowReuse, setAllowReuse] = useState(true);
-
-  const [errors, setErrors] = useState<Record<string,string>>({});
-
-  const steps = ["Core","Classification","Media","Details","Publish"];
-
-  const validate = () => {
-    const e: Record<string,string> = {};
-    if (!title.trim()) e.title = "Title is required.";
-    if (!summary.trim()) e.summary = "Short summary is required.";
-    if (!description.trim()) e.description = "Full description is required.";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  return (
-    <ModalShell onClose={onClose} maxWidth="960px" label="Create Proposition">
-      <div className="p-6 border-b border-[var(--border)] flex items-center justify-between gap-4">
-        <div>
-          <h3 className="font-display text-[24px] leading-[32px] font-bold">Create Proposition</h3>
-          <p className="text-[13px] text-[var(--text-muted)] mt-1">Share a creative idea with the CollabManga community.</p>
-        </div>
-        <IconBtn label="Close" onClick={onClose}><X className="h-4 w-4"/></IconBtn>
-      </div>
-
-      <div className="px-6 py-4 border-b border-[var(--border)] overflow-x-auto scrollbar-thin">
-        <div className="flex items-center gap-4 min-w-max">
-          {steps.map((s,i) => (
-            <div key={s} className="flex items-center gap-4">
-              <StepDot n={i+1} active={step===i+1} done={step>i+1} label={s}/>
-              {i < steps.length-1 && <div className="h-px w-8 bg-[var(--border)]"/>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-5">
-        {step === 1 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Field label="Proposition title" error={errors.title}>
-                <TextInput value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="e.g. A blade that grows heavier with each lie"/>
-              </Field>
-            </div>
-            <Field label="Category">
-              <Select value={category} onChange={setCategory} options={CATEGORIES.filter(c=>c!=="All")}/>
-            </Field>
-            <div/>
-            <div className="md:col-span-2">
-              <Field label="Short summary" error={errors.summary} hint="One sentence a reader can remember.">
-                <TextInput value={summary} onChange={(e)=>setSummary(e.target.value)} placeholder="A concise, evocative summary of the idea."/>
-              </Field>
-            </div>
-            <div className="md:col-span-2">
-              <Field label="Full description" error={errors.description}>
-                <TextArea value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Describe the concept in depth: how it works, why it matters, what it enables in a manga project."/>
-              </Field>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Genre"><Select value={genre} onChange={setGenre} options={GENRES}/></Field>
-            <Field label="Tone"><Select value={tone} onChange={setTone} options={TONES}/></Field>
-            <Field label="Usage"><Select value={usage} onChange={setUsage} options={USAGES}/></Field>
-            <Field label="Complexity"><Select value={complexity} onChange={setComplexity} options={COMPLEXITY}/></Field>
-            <Field label="Visibility"><Select value={visibility} onChange={setVisibility} options={VISIBILITY}/></Field>
-            <Field label="Linked project (optional)">
-              <Select value={linkedProject} onChange={setLinkedProject} options={["None","— placeholder project A —","— placeholder project B —"]}/>
-            </Field>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              ["Upload image","Drop a cover image or click to browse."],
-              ["Upload sketch","Attach a rough sketch or line art."],
-              ["Add reference","Paste a link or attach a moodboard."],
-              ["Attach from asset library","Pick from your existing assets."],
-            ].map(([t,d]) => (
-              <button key={t} type="button" className="rounded-[14px] border border-dashed border-[var(--border-strong)] bg-[var(--input-bg)] p-6 text-left hover:border-[var(--neon-border)] transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-[12px] bg-[var(--card)] border border-[var(--border)] grid place-items-center text-[var(--text-secondary)]">
-                    <ImageIcon className="h-5 w-5"/>
-                  </div>
-                  <div>
-                    <div className="text-[14px] font-bold">{t}</div>
-                    <div className="text-[13px] text-[var(--text-muted)]">{d}</div>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {step === 4 && (
-          <CategorySpecificFields category={category}/>
-        )}
-
-        {step === 5 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Status"><Select value={status} onChange={setStatus} options={["Draft","Published"]}/></Field>
-              <Field label="Visibility"><Select value={visibility} onChange={setVisibility} options={VISIBILITY}/></Field>
-            </div>
-            <Toggle label="Allow comments" checked={allowComments} onChange={setAllowComments}/>
-            <Toggle label="Allow reuse in other projects" checked={allowReuse} onChange={setAllowReuse}/>
-          </div>
-        )}
-      </div>
-
-      <div className="p-5 border-t border-[var(--border)] flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <SecondaryBtn>Save Draft</SecondaryBtn>
-        </div>
-        <div className="flex items-center gap-2">
-          {step > 1 && <SecondaryBtn onClick={()=>setStep(step-1)}>Back</SecondaryBtn>}
-          {step < 5 ? (
-            <PrimaryBtn onClick={()=>{ if (step===1 && !validate()) return; setStep(step+1); }}>
-              Continue
-            </PrimaryBtn>
-          ) : (
-            <PrimaryBtn onClick={onClose}><Check className="h-4 w-4"/>Publish Proposition</PrimaryBtn>
-          )}
-        </div>
-      </div>
-    </ModalShell>
-  );
-}
-
-function Toggle({ label, checked, onChange }: { label:string; checked:boolean; onChange:(v:boolean)=>void }) {
-  return (
-    <label className="flex items-center justify-between gap-4 rounded-[14px] bg-[var(--input-bg)] border border-[var(--border)] p-4 cursor-pointer">
-      <span className="text-[14px] font-semibold text-[var(--text)]">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={()=>onChange(!checked)}
-        className={`relative h-6 w-11 rounded-full transition-colors ${checked?"bg-[var(--neon)]":"bg-[var(--card)] border border-[var(--border)]"}`}
-      >
-        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#04111E] transition-transform ${checked?"translate-x-[22px]":"translate-x-0.5"}`}/>
-      </button>
-    </label>
-  );
-}
-
-function CategorySpecificFields({ category }: { category: string }) {
-  const groups: Record<string,[string,string][]> = {
-    "Character design": [
-      ["Visual traits","Distinct look, silhouette, colors."],
-      ["Outfit","Costume, materials, iconic accessory."],
-      ["Personality hook","One trait that drives every scene."],
-      ["Story role","Protagonist, foil, antagonist, catalyst."],
-    ],
-    "Worldbuilding": [
-      ["World rule","The one unbreakable law."],
-      ["Society / culture","How people live under it."],
-      ["Conflict potential","Where the rule cracks."],
-    ],
-    "Equipment": [
-      ["Function","What it does."],
-      ["Owner / use case","Who wields it and when."],
-      ["Limitation","Its hard cost."],
-      ["Symbolic value","What it means to the story."],
-    ],
-    "Weapon": [
-      ["Function","What it does."],
-      ["Owner / use case","Who wields it and when."],
-      ["Limitation","Its hard cost."],
-      ["Symbolic value","What it means to the story."],
-    ],
-    "Object": [
-      ["Function","What it does."],
-      ["Owner / use case","Who wields it and when."],
-      ["Limitation","Its hard cost."],
-      ["Symbolic value","What it means to the story."],
-    ],
-    "Power": [
-      ["Activation","How it triggers."],
-      ["Limitation","Its hard line."],
-      ["Cost / risk","What the user pays."],
-      ["Combat usage","How it lands in a fight."],
-    ],
-    "Power system": [
-      ["Source","Where power comes from."],
-      ["Rules","Core laws every user obeys."],
-      ["Progression","How mastery is earned."],
-      ["Weaknesses","The seam antagonists exploit."],
-      ["Consequences","What the world pays."],
-    ],
-    "Motivation": [
-      ["Goal","The concrete outcome."],
-      ["Emotional origin","The moment it was born."],
-      ["Internal conflict","The part that resists."],
-      ["Possible arc","How it resolves or shatters."],
-    ],
-  };
-  const fields = groups[category] ?? [["Custom detail","Describe this idea in your own way."]];
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {fields.map(([label, hint]) => (
-        <div key={label} className={label==="Custom detail"?"md:col-span-2":""}>
-          <Field label={label} hint={hint}>
-            {label==="Custom detail" || label==="Rules" || label==="Consequences"
-              ? <TextArea placeholder={`Describe: ${label.toLowerCase()}`}/>
-              : <TextInput placeholder={`Describe: ${label.toLowerCase()}`}/>}
-          </Field>
-        </div>
-      ))}
-    </div>
   );
 }

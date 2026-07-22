@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Play, ArrowLeft, BookOpen, Megaphone, Handshake, Users } from "lucide-react";
+import { Play, ArrowLeft, BookOpen, Megaphone, Handshake, Users, Star } from "lucide-react";
 import { loadPublicStudioProjects } from "@/lib/studio-projects";
 import { ProjectCard, DetailsModal, AnnouncementWorkflowModal, type ProjectAnnouncement } from "./_collab.announcements";
 import { projectAnnouncementFromRecruit } from "@/lib/recruit-map";
@@ -8,6 +8,8 @@ import { AnnouncementCard } from "@/components/sponsorship/AnnouncementCard";
 import { DetailDialog } from "@/components/sponsorship/DetailDialog";
 import { announcementFromOption } from "@/lib/sponsorship-map";
 import { listSponsorOptions } from "@/lib/sponsorship-options";
+import { getMangaRating } from "@/lib/manga-ratings";
+import { SponsorshipContactDialog } from "./_collab.sponsorship";
 import type { Announcement } from "@/lib/sponsorship-data";
 import { useI18n } from "@/lib/i18n";
 
@@ -25,6 +27,7 @@ type StudioReadableProject = {
   catalogVisible?: boolean;
   ownerId?: string;
   creator?: string;
+  language?: string;
   chapters: {
     id: string;
     number: number;
@@ -77,7 +80,13 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
   const [applyRecruit, setApplyRecruit] = useState<ProjectAnnouncement | null>(null);
   const [applyNotice, setApplyNotice] = useState<string | null>(null);
   const [viewSponsor, setViewSponsor] = useState<Announcement | null>(null);
+  const [contactSponsor, setContactSponsor] = useState<Announcement | null>(null);
   const [savedSponsor, setSavedSponsor] = useState<Record<string, boolean>>({});
+  const [rating, setRating] = useState(0);
+
+  useEffect(() => {
+    void getMangaRating(project.id).then(setRating).catch(() => setRating(0));
+  }, [project.id]);
 
   const published = project.chapters.filter((c) => c.status === "Published");
 
@@ -147,11 +156,19 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
           <div className="flex flex-col">
             <div className="flex flex-wrap items-center gap-2">
               <span className="chip-active">{project.status}</span>
-              <span className="chip-neutral">FR</span>
+              <span className="chip-neutral">{project.language || "FR"}</span>
             </div>
-            <h1 className="mt-3 font-display text-[28px] font-extrabold leading-[36px] md:text-[34px] md:leading-[42px]">
-              {project.title}
-            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <h1 className="font-display text-[28px] font-extrabold leading-[36px] md:text-[34px] md:leading-[42px]">
+                {project.title}
+              </h1>
+              <span className="inline-flex items-center gap-1 text-sm font-bold text-[var(--star)]">
+                <Star className="h-4 w-4 fill-current" /> {rating.toFixed(1)}
+              </span>
+            </div>
+            <p className="mt-1 text-[13px] font-semibold text-[color:var(--color-text-muted)]">
+              {t("catalog.by")} {project.creator || "Créateur CollabManga"}
+            </p>
             <p className="mt-4 max-w-3xl text-[15px] leading-[25px] text-[color:var(--color-text-secondary)]">
               {project.synopsis}
             </p>
@@ -300,11 +317,18 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
       {viewSponsor && (
         <DetailDialog
           announcement={viewSponsor}
-          hideActions
           onOpenChange={(o) => { if (!o) setViewSponsor(null); }}
-          onContact={() => {}}
+          onContact={(announcement) => {
+            setViewSponsor(null);
+            setContactSponsor(announcement);
+          }}
         />
       )}
+      <SponsorshipContactDialog
+        announcement={contactSponsor}
+        onOpenChange={(open) => { if (!open) setContactSponsor(null); }}
+        onDone={() => setContactSponsor(null)}
+      />
     </div>
   );
 }
