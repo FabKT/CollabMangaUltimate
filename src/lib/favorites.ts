@@ -1,9 +1,4 @@
-/**
- * Favoris de l'utilisateur (localStorage).
- * Chaque publication créée (illustration, annonce, idée, option de parrainage,
- * projet) y est ajoutée automatiquement ; l'onglet Favoris du profil les liste
- * par catégorie.
- */
+import { getSupabase } from "@/lib/supabase";
 
 export type FavoriteKind =
   | "Announcement"
@@ -19,45 +14,37 @@ export type Favorite = {
   createdAt: string;
 };
 
-const STORAGE_KEY = "collabmanga.favorites.v1";
-
-function canStore() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+export async function listFavorites(): Promise<Favorite[]> {
+  const sb = getSupabase();
+  const userId = (await sb.auth.getSession()).data.session?.user.id;
+  if (!userId) return [];
+  const { data, error } = await sb
+    .from("user_favorites")
+    .select("id, kind, title, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((favorite) => ({
+    id: favorite.id,
+    kind: favorite.kind as FavoriteKind,
+    title: favorite.title,
+    createdAt: favorite.created_at,
+  }));
 }
 
-export function listFavorites(): Favorite[] {
-  if (!canStore()) return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as Favorite[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function addFavorite(kind: FavoriteKind, title: string) {
+export async function addFavorite(kind: FavoriteKind, title: string): Promise<void> {
   if (!title.trim()) return;
-  const favorite: Favorite = {
-    id: `fav-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    kind,
-    title: title.trim(),
-    createdAt: new Date().toISOString(),
-  };
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([favorite, ...listFavorites()]));
-  } catch {
-    /* ignore */
-  }
+  const sb = getSupabase();
+  const userId = (await sb.auth.getSession()).data.session?.user.id;
+  if (!userId) throw new Error("Connecte-toi pour enregistrer un favori.");
+  const { error } = await sb
+    .from("user_favorites")
+    .insert({ user_id: userId, kind, title: title.trim() });
+  if (error) throw new Error(error.message);
 }
 
-export function removeFavorite(id: string) {
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(listFavorites().filter((f) => f.id !== id)),
-    );
-  } catch {
-    /* ignore */
-  }
+export async function removeFavorite(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from("user_favorites").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 }

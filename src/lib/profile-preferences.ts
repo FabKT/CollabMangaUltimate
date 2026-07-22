@@ -1,3 +1,5 @@
+import { getSupabase } from "@/lib/supabase";
+
 export type ProfilePreferences = {
   bio: string;
   languages: string[];
@@ -14,11 +16,7 @@ export type ProfilePreferences = {
   allowMessages: boolean;
 };
 
-const STORAGE_KEY = "collabmanga.profile-preferences.v1";
-
-function storageKey(userId?: string | null): string {
-  return userId ? `${STORAGE_KEY}.${userId}` : STORAGE_KEY;
-}
+const LEGACY_STORAGE_KEY = "collabmanga.profile-preferences.v1";
 
 export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   bio: "",
@@ -36,28 +34,58 @@ export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   allowMessages: true,
 };
 
-export function loadProfilePreferences(userId?: string | null): ProfilePreferences {
-  if (typeof window === "undefined") return DEFAULT_PROFILE_PREFERENCES;
+function normalize(value: unknown): ProfilePreferences {
+  const parsed = value && typeof value === "object" ? (value as Partial<ProfilePreferences>) : {};
+  return {
+    ...DEFAULT_PROFILE_PREFERENCES,
+    ...parsed,
+    languages: Array.isArray(parsed.languages)
+      ? parsed.languages
+      : DEFAULT_PROFILE_PREFERENCES.languages,
+    favoriteGenres: Array.isArray(parsed.favoriteGenres) ? parsed.favoriteGenres : [],
+    favoriteSubgenres: Array.isArray(parsed.favoriteSubgenres) ? parsed.favoriteSubgenres : [],
+  };
+}
+
+function legacyPreferences(userId: string): ProfilePreferences | null {
+  if (typeof window === "undefined") return null;
   try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(storageKey(userId)) ?? "{}",
-    ) as Partial<ProfilePreferences>;
-    return {
-      ...DEFAULT_PROFILE_PREFERENCES,
-      ...parsed,
-      languages: Array.isArray(parsed.languages)
-        ? parsed.languages
-        : DEFAULT_PROFILE_PREFERENCES.languages,
-    };
+    const raw = window.localStorage.getItem(`${LEGACY_STORAGE_KEY}.${userId}`);
+    return raw ? normalize(JSON.parse(raw)) : null;
   } catch {
-    return DEFAULT_PROFILE_PREFERENCES;
+    return null;
   }
 }
 
-export function saveProfilePreferences(
+export async function loadProfilePreferences(userId?: string | null): Promise<ProfilePreferences> {
+  if (!userId) return DEFAULT_PROFILE_PREFERENCES;
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("profile_preferences")
+    .select("preferences")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data?.preferences) return normalize(data.preferences);
+
+  const currentUserId = (await sb.auth.getSession()).data.session?.user.id;
+  const legacy = currentUserId === userId ? legacyPreferences(userId) : null;
+  if (legacy) {
+    await saveProfilePreferences(legacy, userId);
+    return legacy;
+  }
+  return DEFAULT_PROFILE_PREFERENCES;
+}
+
+export async function saveProfilePreferences(
   preferences: ProfilePreferences,
   userId?: string | null,
-): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(storageKey(userId), JSON.stringify(preferences));
+): Promise<void> {
+  if (!userId) return;
+  const sb = getSupabase();
+  const { error } = await sb.from("profile_preferences").upsert(
+    { user_id: userId, preferences: normalize(preferences), updated_at: new Date().toISOString() },
+    { onConflict: "user_id" },
+  );
+  if (error) throw new Error(error.message);
 }

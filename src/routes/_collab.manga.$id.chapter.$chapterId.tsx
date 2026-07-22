@@ -39,8 +39,8 @@ export async function loadStudioChapterView(
   id: string,
   chapterId: string,
 ): Promise<StudioChapterView | null> {
-  const { loadStudioProjects } = await import("@/lib/studio-projects");
-  const rows = await loadStudioProjects<{
+  const { loadPublicStudioProjects } = await import("@/lib/studio-projects");
+  const rows = await loadPublicStudioProjects<{
     id: string;
     title: string;
     catalogVisible?: boolean;
@@ -127,7 +127,17 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
 
   useEffect(() => {
     setPage(0);
-    setRating(getChapterRating(view.projectId, view.chapterId));
+    let cancelled = false;
+    void getChapterRating(view.projectId, view.chapterId)
+      .then((value) => {
+        if (!cancelled) setRating(value);
+      })
+      .catch(() => {
+        if (!cancelled) setRating(0);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [view.chapterId, view.projectId]);
 
   // Mode pagination : flèches clavier gauche/droite.
@@ -152,8 +162,9 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
   }, []);
 
   const rate = (n: number) => {
-    rateChapter(view.projectId, view.chapterId, n);
+    const previous = rating;
     setRating(n);
+    void rateChapter(view.projectId, view.chapterId, n).catch(() => setRating(previous));
   };
 
   const goToChapter = (chapterId: string) => {
@@ -385,4 +396,3 @@ function ChapterNotFound() {
     </div>
   );
 }
-

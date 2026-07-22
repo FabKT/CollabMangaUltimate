@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
+import { buildStylePlan } from "@/lib/ai-style-plans";
 
 /**
  * Style-transfer plan.
@@ -72,22 +73,35 @@ export function parseStyleTransferInput(data: unknown) {
 
 export function buildStyleTransferPrompt(input: StyleTransferInput): string {
   const custom = input.customStyleImages.length > 0;
+  const stylePlan = buildStylePlan({
+    styleId: input.styleId,
+    styleName: input.styleName,
+    styleDescription: input.styleDescription,
+    hasReferenceImages: custom,
+    usage: "character-transfer",
+  });
 
   return [
-    "OBJECTIVE:",
-    "Redraw the SAME character shown in the provided base image, changing ONLY the art style.",
+    "CHARACTER STYLE-TRANSFER PLAN:",
+    "Redraw the SAME character shown in Image A while changing ONLY the rendering language.",
     "",
-    "IDENTITY & COMPOSITION LOCK:",
-    "Preserve exactly the character's identity, face, hair, outfit, accessories, body proportions, pose, camera angle, framing and overall composition from the base image.",
-    "Do not change who the character is, what they wear, or how they are posed. Do not add or remove elements.",
-    "",
+    "IMAGE ROLES:",
+    "Image A is the target character image. It controls identity, face, hair, body, outfit, accessories, pose, expression, gaze, gesture, anatomy, camera, framing, crop, background and composition.",
     custom
-      ? "TARGET STYLE: match the art style of the attached style reference images — their linework, shading, color treatment and rendering."
-      : `TARGET STYLE: ${input.styleName}${
-          input.styleDescription ? ` — ${input.styleDescription}` : ""
-        }. Re-render the character's linework, shading and rendering to fully match this style.`,
+      ? "Image B and every additional attached style-library image control rendering style only. They do not control identity or content."
+      : `The target style is defined textually as ${input.styleName}.`,
     "",
-    "ONLY the rendering style changes; the character and the composition stay identical to the base image.",
+    stylePlan,
+    "",
+    "STRICT PRESERVATION:",
+    "Keep exact face identity, hairstyle structure, body proportions, clothing design, accessories and distinguishing marks. Keep exact head/body orientation, pose, hands, expression, gaze, camera perspective, scale, placement, crop and background content.",
+    "Do not beautify, redesign, age-shift, gender-shift, simplify identity, alter anatomy, invent details, remove elements, add elements or borrow depicted content from the style references.",
+    "",
+    "STYLE SUBSTITUTION:",
+    "Replace only lineart, facial/eye/hair rendering, value system, shadows, tones, hatching, texture policy, color logic and polish level. The target style must dominate without creating a hybrid with the source rendering.",
+    "",
+    "FINAL CHECK:",
+    "The result must be immediately recognizable as the exact same character image and composition as Image A, professionally redrawn in the selected style, with no unauthorized content or text.",
   ].join("\n");
 }
 

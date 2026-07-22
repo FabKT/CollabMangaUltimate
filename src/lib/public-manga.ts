@@ -1,5 +1,5 @@
 import { CATALOG_MANGA, type CatalogManga } from "@/lib/haven-data";
-import { loadStudioProjects } from "@/lib/studio-projects";
+import { supabase } from "@/lib/supabase";
 
 export type PublicChapter = {
   id: string;
@@ -30,8 +30,17 @@ type StudioProject = {
 };
 
 export async function loadPublicManga(id: string): Promise<PublicManga | null> {
-  const projects = await loadStudioProjects<StudioProject>();
-  const project = projects.find((item) => item.id === id && item.catalogVisible);
+  let project: StudioProject | undefined;
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("studio_projects")
+      .select("data")
+      .eq("id", id)
+      .eq("catalog_visible", true)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    project = data?.data as StudioProject | undefined;
+  }
   if (project) {
     const published = project.chapters.filter((chapter) => chapter.status === "Published");
     return {

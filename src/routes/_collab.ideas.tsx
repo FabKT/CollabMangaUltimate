@@ -44,6 +44,7 @@ type Prop = {
   comments: number;
   mine?: boolean;
   imageUrl?: string;
+  imageUrls?: string[];
 };
 
 const seedProps: Prop[] = [
@@ -284,6 +285,7 @@ function PropositionsPage() {
             saved: 0,
             comments: 0,
             imageUrl: r.image_url ?? undefined,
+            imageUrls: r.image_urls?.length ? r.image_urls : r.image_url ? [r.image_url] : [],
           })),
         ),
       )
@@ -640,6 +642,8 @@ function PropModal({ p, saved, onSave, onClose }: {
   p: Prop; saved: boolean; onSave: ()=>void; onClose: ()=>void;
 }) {
   const [tab, setTab] = useState<"details" | "comments">("details");
+  const [activeImage, setActiveImage] = useState(0);
+  const images = p.imageUrls?.length ? p.imageUrls : p.imageUrl ? [p.imageUrl] : [];
   const authorName = p.author === "You" ? "Votre profil" : p.author.replace(/—/g, "").trim() || "Créateur CollabManga";
   const authorBio =
     p.author === "You"
@@ -660,11 +664,27 @@ function PropModal({ p, saved, onSave, onClose }: {
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-[3fr_4fr] gap-6">
         <div className="space-y-5">
-          {p.imageUrl ? (
+          {images[activeImage] ? (
             <div className="max-h-[60vh] overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--input-bg)]">
-              <img src={p.imageUrl} alt={p.title} className="h-full w-full object-contain" />
+              <img src={images[activeImage]} alt={p.title} className="h-full w-full object-contain" />
             </div>
           ) : p.hasImage ? <Thumb hue={p.hue} category={p.category} tall/> : <NoImagePlaceholder/>}
+
+          {images.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {images.map((src, index) => (
+                <button
+                  key={src}
+                  type="button"
+                  onClick={() => setActiveImage(index)}
+                  className="h-16 w-16 shrink-0 overflow-hidden rounded-[10px] border"
+                  style={{ borderColor: index === activeImage ? "var(--neon)" : "var(--border)" }}
+                >
+                  <img src={src} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
 
         </div>
 
@@ -748,7 +768,7 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
         title: ideaTitle.trim(),
         category: ideaCategory,
         description: ideaDescription.trim(),
-        file: ideaFiles[0] ?? null,
+        files: ideaFiles,
       });
       onCreated?.();
       onClose();

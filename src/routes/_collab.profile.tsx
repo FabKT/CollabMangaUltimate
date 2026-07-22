@@ -30,7 +30,11 @@ import { addFavorite, listFavorites, type Favorite } from "@/lib/favorites";
 import { addSponsorOption, listSponsorOptions, updateSponsorOption, type SponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
-import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
+import {
+  loadProfileStudioProjects,
+  loadStudioProjects,
+  saveStudioProjects,
+} from "@/lib/studio-projects";
 import {
   DEFAULT_PROFILE_PREFERENCES,
   loadProfilePreferences,
@@ -43,7 +47,7 @@ import {
   type PublicProfileIdentity,
 } from "@/lib/profile-identity";
 
-/** Projection minimale d'un projet Studio (stocké en IndexedDB). */
+/** Projection minimale d'un projet Studio stocké dans Supabase. */
 type StudioProjectLite = {
   id: string;
   title: string;
@@ -262,15 +266,17 @@ function ProfilePage({
   }, [publicLocked, identityRefreshKey, profileId, identity.username]);
 
   const baseIdentity = liveIdentity ?? identity;
-  const effectiveIdentity = publicLocked
-    ? baseIdentity
-    : { ...baseIdentity, tagline: preferences.bio, languages: preferences.languages };
+  const effectiveIdentity = {
+    ...baseIdentity,
+    tagline: preferences.bio || baseIdentity.tagline,
+    languages: preferences.languages,
+  };
   const effectiveMainRole =
     effectiveIdentity.mainRole ??
     (profileType === "content" ? "Créateur de contenu" : "Dessinateur");
   const effectiveSecondaryRole = effectiveIdentity.secondaryRole;
 
-  // Contenus affichés (DB Supabase pour illustrations/annonces/idées ; stores locaux pour le reste).
+  // Tous les contenus affichés proviennent de Supabase.
   const [myIllustrations, setMyIllustrations] = useState<DbIllustration[]>([]);
   const [myAnnouncements, setMyAnnouncements] = useState<DbAnnouncement[]>([]);
   const [myIdeas, setMyIdeas] = useState<DbIdea[]>([]);
@@ -291,16 +297,22 @@ function ProfilePage({
         setMyIdeas([]);
       }
       if (publicLocked) {
-        // Données locales (projets/options/favoris) = celles de CET appareil → non pertinentes
-        // pour un autre utilisateur : on ne les affiche pas sur un profil visité.
-        setMyProjects([]);
-        setMyOptions([]);
+        if (uid) {
+          void loadProfileStudioProjects<StudioProjectLite>(uid)
+            .then(setMyProjects)
+            .catch(() => setMyProjects([]));
+          void listSponsorOptions(uid)
+            .then((options) => setMyOptions(options.filter((option) => option.mode === "creator")))
+            .catch(() => setMyOptions([]));
+        }
         setFavorites([]);
         return;
       }
       void loadStudioProjects<StudioProjectLite>().then(setMyProjects).catch(() => {});
-      setMyOptions(listSponsorOptions().filter((o) => o.mode === "creator"));
-      setFavorites(listFavorites());
+      void listSponsorOptions()
+        .then((options) => setMyOptions(options.filter((o) => o.mode === "creator")))
+        .catch(() => setMyOptions([]));
+      void listFavorites().then(setFavorites).catch(() => setFavorites([]));
     })();
   };
 
@@ -315,12 +327,26 @@ function ProfilePage({
   const [contacting, setContacting] = useState(false);
 
   useEffect(() => {
-    if (!publicLocked) setPreferences(loadProfilePreferences(shownUserId));
-  }, [publicLocked, shownUserId]);
+    let cancelled = false;
+    void loadProfilePreferences(shownUserId)
+      .then((value) => {
+        if (!cancelled) setPreferences(value);
+      })
+      .catch(() => {
+        if (!cancelled) setPreferences(DEFAULT_PROFILE_PREFERENCES);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shownUserId]);
 
   const updatePreferences = (next: ProfilePreferences) => {
     setPreferences(next);
-    if (!publicLocked) saveProfilePreferences(next, shownUserId);
+    if (!publicLocked) {
+      void saveProfilePreferences(next, shownUserId).catch((error: unknown) => {
+        setFeedback(error instanceof Error ? error.message : "Le profil n'a pas pu être enregistré.");
+      });
+    }
   };
 
   const showFeedback = (message: string) => {
@@ -337,7 +363,7 @@ function ProfilePage({
     }
   };
 
-  const available = publicLocked ? true : preferences.available;
+  const available = preferences.available;
 
   const openConversation = async () => {
     if (contacting) return;
@@ -1337,7 +1363,7 @@ function SponsorshipCard({
             {opt.description || "Service de parrainage."}
           </p>
         </div>
-        <IconButton label="Save" onClick={() => addFavorite("Sponsorship option", opt.format)}><Check size={16} /></IconButton>
+        <IconButton label="Save" onClick={() => void addFavorite("Sponsorship option", opt.format)}><Check size={16} /></IconButton>
       </div>
 
       <div className="mt-4">
@@ -1542,7 +1568,7 @@ function IllustrationCard({
         {mode === "own" ? (
           <IconButton label="Details" onClick={onDetails}><Eye size={16} /></IconButton>
         ) : (
-          <IconButton label="Save" onClick={() => addFavorite("Illustration", title)}><Check size={16} /></IconButton>
+          <IconButton label="Save" onClick={() => void addFavorite("Illustration", title)}><Check size={16} /></IconButton>
         )}
       </div>
     </Card>
@@ -2576,7 +2602,20 @@ function AddSponsorshipModal({
   onCreated?: () => void;
 }) {
   const isEdit = editTitle !== null;
-  const existing = isEdit ? listSponsorOptions().find((option) => option.mode === "creator" && option.format === editTitle) : undefined;
+  const [existing, setExisting] = useState<SponsorOption | undefined>();
+  useEffect(() => {
+    if (!open || !isEdit) {
+      setExisting(undefined);
+      return;
+    }
+    void listSponsorOptions()
+      .then((options) =>
+        setExisting(
+          options.find((option) => option.mode === "creator" && option.format === editTitle),
+        ),
+      )
+      .catch(() => setExisting(undefined));
+  }, [editTitle, isEdit, open]);
   return (
     <ServiceFormModal
       open={open}
@@ -2585,26 +2624,28 @@ function AddSponsorshipModal({
       submitLabel={isEdit ? "Enregistrer" : "Confirmer"}
       initial={existing}
       onSubmit={(values) => {
-        const next = {
-          mode: "creator",
-          format: values.format,
-          platforms: values.platforms,
-          videoType: values.videoType,
-          duration: values.duration,
-          paymentMode: values.paymentMode,
-          price: values.price,
-          quantity: values.quantity,
-          description: values.description,
-          ownerName,
-          chaptersMin: values.chaptersMin,
-          chaptersMax: values.chaptersMax,
-          language: values.language,
-        } as const;
-        if (existing) updateSponsorOption(existing.id, next);
-        else addSponsorOption(next);
-        addFavorite("Sponsorship option", values.format);
-        onCreated?.();
-        onClose();
+        void (async () => {
+          const next = {
+            mode: "creator",
+            format: values.format,
+            platforms: values.platforms,
+            videoType: values.videoType,
+            duration: values.duration,
+            paymentMode: values.paymentMode,
+            price: values.price,
+            quantity: values.quantity,
+            description: values.description,
+            ownerName,
+            chaptersMin: values.chaptersMin,
+            chaptersMax: values.chaptersMax,
+            language: values.language,
+          } as const;
+          if (existing) await updateSponsorOption(existing.id, next);
+          else await addSponsorOption(next);
+          await addFavorite("Sponsorship option", values.format);
+          onCreated?.();
+          onClose();
+        })();
       }}
     />
   );
@@ -2618,6 +2659,8 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
   const [statusSought, setStatusSought] = useState("Scénariste");
   const [genres, setGenres] = useState<string[]>([]);
   const [subgenres, setSubgenres] = useState<string[]>([]);
+  const [remuneration, setRemuneration] = useState(false);
+  const [engagement, setEngagement] = useState<"Long terme" | "Ponctuel">("Long terme");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -2639,8 +2682,10 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
         status_sought: statusSought,
         genres,
         subgenres,
+        remuneration,
+        engagement,
       });
-      addFavorite("Announcement", title.trim());
+      void addFavorite("Announcement", title.trim());
       onCreated?.();
       setDone(true);
       setTimeout(() => {
@@ -2681,8 +2726,8 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
           <textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
         <ChoiceRow label="Statut recherché" options={[...PROFILE_ROLES]} defaultValue="Scénariste" onChange={(s) => setStatusSought(s[0] ?? "")} />
-        <ToggleRow label="Rémunération" />
-        <ChoiceRow label="Engagement" options={["Long terme", "Ponctuel"]} defaultValue="Long terme" />
+        <ToggleRow label="Rémunération" checked={remuneration} onChange={setRemuneration} />
+        <ChoiceRow label="Engagement" options={["Long terme", "Ponctuel"]} defaultValue="Long terme" onChange={(values) => setEngagement(values[0] === "Ponctuel" ? "Ponctuel" : "Long terme")} />
         <div>
           <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Type de projet favori</div>
           <div className="space-y-4">
@@ -2738,11 +2783,8 @@ function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onC
     }
     setSaving(true);
     try {
-      // une entrée par image importée
-      for (const file of files) {
-        await addIllustration({ title: title.trim(), description: description.trim(), file });
-      }
-      addFavorite("Illustration", title.trim());
+      await addIllustration({ title: title.trim(), description: description.trim(), files });
+      void addFavorite("Illustration", title.trim());
       onCreated?.();
       setDone(true);
       setTimeout(() => {
@@ -2813,8 +2855,8 @@ function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onCl
     if (!description.trim()) { setError("Ajoute une description."); return; }
     setSaving(true);
     try {
-      await addIdea({ title: title.trim(), category, description: description.trim(), file: files[0] ?? null });
-      addFavorite("Idée", title.trim());
+      await addIdea({ title: title.trim(), category, description: description.trim(), files });
+      void addFavorite("Idée", title.trim());
       setTitle(""); setDescription(""); setFiles([]);
       onCreated?.();
       onClose();
@@ -2878,7 +2920,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
       const existing = await loadStudioProjects<Record<string, unknown>>();
       const coverUrl = coverFiles[0] ? await compressCoverImage(coverFiles[0]) : undefined;
       const project = {
-        id: `prj-${Date.now()}`,
+        id: `prj-${crypto.randomUUID()}`,
         title: name.trim(),
         synopsis: synopsis.trim() || "Synopsis à compléter.",
         coverUrl,
@@ -2895,7 +2937,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
         recruits: [] as unknown[],
       };
       await saveStudioProjects([project, ...existing]);
-      addFavorite("Project", name.trim());
+      void addFavorite("Project", name.trim());
       setName(""); setSynopsis(""); setCoverFiles([]);
       onCreated?.();
       onClose();

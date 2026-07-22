@@ -21,6 +21,7 @@ export type DbIllustration = {
   title: string;
   description: string;
   image_url: string;
+  image_urls: string[];
   created_at: string;
   author: DbProfile | null;
 };
@@ -37,6 +38,8 @@ export type DbAnnouncement = {
   genres: string[];
   subgenres: string[];
   project_title: string | null;
+  remuneration: boolean;
+  engagement: "Long terme" | "Ponctuel";
   created_at: string;
   author: DbProfile | null;
 };
@@ -48,6 +51,7 @@ export type DbIdea = {
   category: string;
   description: string;
   image_url: string | null;
+  image_urls: string[];
   created_at: string;
   author: DbProfile | null;
 };
@@ -128,14 +132,28 @@ export async function listIllustrations(): Promise<DbIllustration[]> {
   return (data ?? []) as DbIllustration[];
 }
 
-export async function addIllustration(input: { title: string; description: string; file: File }) {
+export async function addIllustration(input: {
+  title: string;
+  description: string;
+  file?: File;
+  files?: File[];
+}) {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour publier une illustration.");
-  const image_url = await uploadImage(input.file, "illustrations");
+  const files = input.files?.length ? input.files : input.file ? [input.file] : [];
+  if (files.length === 0) throw new Error("Ajoute au moins une image.");
+  const image_urls = await Promise.all(files.map((file) => uploadImage(file, "illustrations")));
+  const image_url = image_urls[0];
   const { data, error } = await sb
     .from("illustrations")
-    .insert({ author_id: uid, title: input.title, description: input.description, image_url })
+    .insert({
+      author_id: uid,
+      title: input.title,
+      description: input.description,
+      image_url,
+      image_urls,
+    })
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .single();
   if (error) throw new Error(error.message);
@@ -164,6 +182,8 @@ export async function addAnnouncement(input: {
   genres: string[];
   subgenres: string[];
   project_title?: string;
+  remuneration?: boolean;
+  engagement?: "Long terme" | "Ponctuel";
 }) {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
@@ -194,11 +214,14 @@ export async function addIdea(input: {
   category: string;
   description: string;
   file?: File | null;
+  files?: File[];
 }) {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour publier une proposition.");
-  const image_url = input.file ? await uploadImage(input.file, "ideas") : null;
+  const files = input.files?.length ? input.files : input.file ? [input.file] : [];
+  const image_urls = await Promise.all(files.map((file) => uploadImage(file, "ideas")));
+  const image_url = image_urls[0] ?? null;
   const { data, error } = await sb
     .from("ideas")
     .insert({
@@ -207,6 +230,7 @@ export async function addIdea(input: {
       category: input.category,
       description: input.description,
       image_url,
+      image_urls,
     })
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .single();
@@ -361,6 +385,147 @@ export type DbFriendRequest = {
   initiator: DbProfile | null;
   recipient: DbProfile | null;
 };
+
+export async function sendProjectInvitationDb(input: {
+  projectId: string;
+  recipient: string;
+  role: string;
+  message?: string;
+}): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour inviter un collaborateur.");
+
+  const { data: matches, error: resolveError } = await sb.rpc(
+    "resolve_profile_for_project_invitation",
+    { identifier: input.recipient.trim() },
+  );
+  if (resolveError) throw new Error(resolveError.message);
+  const recipient = (matches?.[0] ?? null) as DbProfile | null;
+  if (!recipient) throw new Error("Aucun compte ne correspond à ce pseudo ou cet e-mail.");
+  if (recipient.id === uid) throw new Error("Tu fais déjà partie de ce projet.");
+
+  const { data: project, error: projectError } = await sb
+    .from("studio_projects")
+    .select("id, title, owner_id")
+    .eq("id", input.projectId)
+    .single();
+  if (projectError) throw new Error(projectError.message);
+  if (project.owner_id !== uid) throw new Error("Seul le propriétaire peut envoyer cette invitation.");
+
+  const { data: existing } = await sb
+    .from("studio_project_members")
+    .select("status")
+    .eq("project_id", input.projectId)
+    .eq("user_id", recipient.id)
+    .maybeSingle();
+  if (existing?.status === "active") throw new Error("Cette personne fait déjà partie du projet.");
+  if (existing?.status === "invited") throw new Error("Une invitation est déjà en attente.");
+
+  const { error: memberError } = await sb.from("studio_project_members").upsert(
+    {
+      project_id: input.projectId,
+      user_id: recipient.id,
+      access_level: "collaborateur",
+      role: input.role,
+      status: "invited",
+      invited_by: uid,
+    },
+    { onConflict: "project_id,user_id" },
+  );
+  if (memberError) throw new Error(memberError.message);
+
+  const { data: me } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", uid)
+    .single();
+  const senderName = me?.display_name || me?.username || "Un membre";
+  const { data: record, error: recordError } = await sb
+    .from("workflow_records")
+    .insert({
+      kind: "collaboration_invitation",
+      status: "pending",
+      initiator_id: uid,
+      recipient_id: recipient.id,
+      title: `Invitation collaboration - ${project.title}`,
+      entity_type: "project",
+      entity_title: project.title,
+      payload: { projectId: input.projectId, role: input.role, message: input.message || "" },
+    })
+    .select("id")
+    .single();
+  if (recordError) throw new Error(recordError.message);
+
+  const { error: notificationError } = await sb.from("notifications").insert({
+    record_id: record.id,
+    recipient_id: recipient.id,
+    actor_id: uid,
+    category: "project",
+    type: "invitation_collab",
+    title: `${senderName} t'invite à collaborer sur ${project.title}`,
+    content: input.message || "Invitation à rejoindre un projet manga.",
+    entity_type: "project",
+    entity_title: project.title,
+    entity_subtitle: `Rôle proposé : ${input.role}`,
+    entity_status: "En attente",
+    actions: [
+      { label: "Accepter", kind: "primary" },
+      { label: "Refuser", kind: "danger" },
+    ],
+    secondary_actions: [{ label: "Voir le projet", kind: "secondary" }],
+    meta: [{ label: "Rôle proposé", value: input.role }],
+  });
+  if (notificationError) throw new Error(notificationError.message);
+}
+
+export async function respondProjectInvitationDb(recordId: string, accept: boolean): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour répondre à l'invitation.");
+  const { data: record, error } = await sb
+    .from("workflow_records")
+    .select("initiator_id, recipient_id, payload, entity_title")
+    .eq("id", recordId)
+    .eq("kind", "collaboration_invitation")
+    .eq("recipient_id", uid)
+    .single();
+  if (error) throw new Error(error.message);
+  const projectId = (record.payload as { projectId?: unknown } | null)?.projectId;
+  if (typeof projectId !== "string") throw new Error("Cette invitation ne contient aucun projet valide.");
+
+  const { error: memberError } = await sb
+    .from("studio_project_members")
+    .update({ status: accept ? "active" : "declined" })
+    .eq("project_id", projectId)
+    .eq("user_id", uid);
+  if (memberError) throw new Error(memberError.message);
+  const { error: workflowError } = await sb
+    .from("workflow_records")
+    .update({ status: accept ? "accepted" : "declined", updated_at: new Date().toISOString() })
+    .eq("id", recordId);
+  if (workflowError) throw new Error(workflowError.message);
+
+  const { data: me } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", uid)
+    .single();
+  const memberName = me?.display_name || me?.username || "Un membre";
+  await sb.from("notifications").insert({
+    record_id: recordId,
+    recipient_id: record.initiator_id,
+    actor_id: uid,
+    category: "project",
+    type: accept ? "invitation_collab_acceptee" : "invitation_collab_refusee",
+    title: accept
+      ? `${memberName} a rejoint ${record.entity_title}`
+      : `${memberName} a refusé l'invitation à ${record.entity_title}`,
+    content: accept ? "Le collaborateur a maintenant accès au projet." : "",
+    entity_type: "project",
+    entity_title: record.entity_title,
+  });
+}
 
 /** Envoie une vraie demande d'ami (record + notification au destinataire). */
 export async function sendFriendRequestDb(recipientId: string): Promise<void> {
@@ -566,6 +731,11 @@ export type DbNotification = {
   content: string;
   entity_type: string | null;
   entity_title: string | null;
+  entity_subtitle: string | null;
+  entity_status: string | null;
+  actions: { label: string; kind: string }[] | null;
+  secondary_actions: { label: string; kind: string }[] | null;
+  meta: { label: string; value: string }[] | null;
   read: boolean;
   created_at: string;
 };
@@ -587,7 +757,28 @@ export async function listMyNotifications(): Promise<DbNotification[]> {
 
 export async function markNotificationRead(id: string, read = true): Promise<void> {
   const sb = getSupabase();
-  await sb.from("notifications").update({ read }).eq("id", id);
+  const { error } = await sb.from("notifications").update({ read }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return;
+  const { error } = await sb.from("notifications").update({ read: true }).eq("recipient_id", uid);
+  if (error) throw new Error(error.message);
+}
+
+export async function clearReadNotifications(): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return;
+  const { error } = await sb
+    .from("notifications")
+    .delete()
+    .eq("recipient_id", uid)
+    .eq("read", true);
+  if (error) throw new Error(error.message);
 }
 
 /* ---------------- commentaires ---------------- */

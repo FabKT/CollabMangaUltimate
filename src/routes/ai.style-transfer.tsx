@@ -6,9 +6,14 @@ import { MANGA_STYLES } from "@/lib/manga-styles";
 import { loadCustomMangaStyles, type CustomMangaStyle } from "@/lib/custom-manga-styles";
 import { CustomStyleModal } from "@/components/cma/CustomStyleModal";
 import type { StyleTransferResult } from "@/server-functions/style-transfer-image";
-import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
+import {
+  hasPendingGeneration,
+  resumeDurableGeneration,
+  runDurableGeneration,
+} from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { recordGeneratedImage } from "@/lib/manga-history";
+import { isLocalAiClientMode } from "@/lib/local-ai-mode";
 import {
   Wand2,
   Upload,
@@ -88,6 +93,14 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+async function imageSourceToDataUrl(src?: string) {
+  if (!src) return undefined;
+  if (src.startsWith("data:")) return src;
+  const response = await fetch(src);
+  if (!response.ok) throw new Error("Unable to load the selected style reference.");
+  return fileToDataUrl(new File([await response.blob()], "style-reference.png"));
+}
+
 function StyleTransferPage() {
   const [mode, setMode] = useState<TransferMode>("personnage");
   const [targetStyleId, setTargetStyleId] = useState<string>(MANGA_STYLES[0].id);
@@ -127,16 +140,19 @@ function StyleTransferPage() {
 
   useEffect(() => {
     if (!hasPendingGeneration("style-transfer")) return;
-    const pendingMode = window.localStorage.getItem("collabmanga.ai-job.style-transfer.mode") === "planche"
-      ? "planche"
-      : "personnage";
+    const pendingMode =
+      window.localStorage.getItem("collabmanga.ai-job.style-transfer.mode") === "planche"
+        ? "planche"
+        : "personnage";
     setIsGenerating(true);
-    void resumeDurableGeneration<StyleTransferResult>("style-transfer").then((generated) => {
-      if (generated) {
-        setResults((current) => ({ ...current, [pendingMode]: generated }));
-        window.localStorage.removeItem("collabmanga.ai-job.style-transfer.mode");
-      }
-    }).catch((err) => setError(err instanceof Error ? err.message : "Style transfer failed."))
+    void resumeDurableGeneration<StyleTransferResult>("style-transfer")
+      .then((generated) => {
+        if (generated) {
+          setResults((current) => ({ ...current, [pendingMode]: generated }));
+          window.localStorage.removeItem("collabmanga.ai-job.style-transfer.mode");
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Style transfer failed."))
       .finally(() => setIsGenerating(false));
   }, []);
 
@@ -175,6 +191,13 @@ function StyleTransferPage() {
     setError(null);
     setIsGenerating(true);
     try {
+      const presetStyleReferences =
+        isLocalAiClientMode && activeStyle
+          ? [await imageSourceToDataUrl(activeStyle.face)].filter((image): image is string =>
+              Boolean(image),
+            )
+          : [];
+      const styleReferenceImages = activeCustomStyle?.images ?? presetStyleReferences;
       window.localStorage.setItem("collabmanga.ai-job.style-transfer.mode", mode);
       const generated = await runDurableGeneration<StyleTransferResult>(
         "style-transfer",
@@ -184,7 +207,7 @@ function StyleTransferPage() {
           styleId: targetStyleId,
           styleName: activeCustomStyle?.name ?? activeStyle?.name ?? "",
           styleDescription: isCustom ? "" : (activeStyle?.description ?? ""),
-          customStyleImages: activeCustomStyle?.images ?? [],
+          customStyleImages: styleReferenceImages,
         },
       );
       setResult(generated);
@@ -200,8 +223,18 @@ function StyleTransferPage() {
           prompt: "",
           selectedCharacterIds: [],
           references: [
-            { id: `${mode}-source`, name: "Image source", imageDataUrl: baseImage, role: "Inspiration" as const },
-            ...(activeCustomStyle?.images ?? []).map((imageDataUrl, index) => ({ id: `${targetStyleId}-${index}`, name: `${activeCustomStyle?.name ?? "Style"} ${index + 1}`, imageDataUrl, role: "Style" as const })),
+            {
+              id: `${mode}-source`,
+              name: "Image source",
+              imageDataUrl: baseImage,
+              role: "Inspiration" as const,
+            },
+            ...styleReferenceImages.map((imageDataUrl, index) => ({
+              id: `${targetStyleId}-${index}`,
+              name: `${activeCustomStyle?.name ?? activeStyle?.name ?? "Style"} ${index + 1}`,
+              imageDataUrl,
+              role: "Style" as const,
+            })),
           ],
           aspectRatio: generated.size === "1536x1024" ? "3:2" : "2:3",
           source: "Transfert de style",
@@ -258,7 +291,9 @@ function StyleTransferPage() {
               key={id}
               onClick={() => switchMode(id)}
               className={`inline-flex h-[38px] items-center gap-2 rounded-[10px] px-4 text-[13px] font-bold transition ${
-                active ? "bg-accent-soft text-accent" : "text-text-secondary hover:text-text-primary"
+                active
+                  ? "bg-accent-soft text-accent"
+                  : "text-text-secondary hover:text-text-primary"
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -312,10 +347,20 @@ function StyleTransferPage() {
               }`}
             >
               <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
-                <img src={style.images[0]} alt={style.name} className="h-full w-full object-cover" />
-                {style.id === targetStyleId && <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground"><Check className="h-3 w-3" /></span>}
+                <img
+                  src={style.images[0]}
+                  alt={style.name}
+                  className="h-full w-full object-cover"
+                />
+                {style.id === targetStyleId && (
+                  <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground">
+                    <Check className="h-3 w-3" />
+                  </span>
+                )}
               </div>
-              <span className="truncate text-center text-[12px] font-bold text-text-primary">{style.name}</span>
+              <span className="truncate text-center text-[12px] font-bold text-text-primary">
+                {style.name}
+              </span>
             </button>
           ))}
           <button
@@ -323,8 +368,12 @@ function StyleTransferPage() {
             onClick={() => setCreateStyleOpen(true)}
             className="flex w-[112px] shrink-0 flex-col gap-2 rounded-[14px] border border-dashed border-border-strong bg-surface-3 p-2 transition hover:border-accent"
           >
-            <span className="grid aspect-square w-full place-items-center rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary"><Plus className="h-6 w-6" /></span>
-            <span className="truncate text-center text-[12px] font-bold text-text-primary">Créer un style</span>
+            <span className="grid aspect-square w-full place-items-center rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary">
+              <Plus className="h-6 w-6" />
+            </span>
+            <span className="truncate text-center text-[12px] font-bold text-text-primary">
+              Créer un style
+            </span>
           </button>
         </div>
       </section>

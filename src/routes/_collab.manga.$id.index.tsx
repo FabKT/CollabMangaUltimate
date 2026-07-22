@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Play, ArrowLeft, BookOpen, Megaphone, Handshake, Users } from "lucide-react";
-import { loadStudioProjects } from "@/lib/studio-projects";
+import { loadPublicStudioProjects } from "@/lib/studio-projects";
 import { ProjectCard, DetailsModal, AnnouncementWorkflowModal, type ProjectAnnouncement } from "./_collab.announcements";
 import { projectAnnouncementFromRecruit } from "@/lib/recruit-map";
 import { AnnouncementCard } from "@/components/sponsorship/AnnouncementCard";
@@ -50,7 +50,7 @@ function MangaDetailSwitch() {
   const [studio, setStudio] = useState<StudioReadableProject | null | "loading">("loading");
 
   useEffect(() => {
-    void loadStudioProjects<StudioReadableProject>()
+    void loadPublicStudioProjects<StudioReadableProject>()
       .then((rows) => setStudio(rows.find((p) => p.id === id && p.catalogVisible) ?? null))
       .catch(() => setStudio(null));
   }, [id]);
@@ -93,10 +93,18 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
   );
 
   // Annonces de parrainage du projet → rendu identique à la page Sponsoring.
-  const sponsors: Announcement[] = useMemo(
-    () => listSponsorOptions().filter((o) => o.mode === "project" && o.ownerName === project.title).map(announcementFromOption),
-    [project.title],
-  );
+  const [sponsors, setSponsors] = useState<Announcement[]>([]);
+  useEffect(() => {
+    void listSponsorOptions()
+      .then((options) =>
+        setSponsors(
+          options
+            .filter((option) => option.mode === "project" && option.ownerName === project.title)
+            .map(announcementFromOption),
+        ),
+      )
+      .catch(() => setSponsors([]));
+  }, [project.title]);
 
   // Le créateur apparaît toujours (à défaut de collaborateurs enregistrés).
   const collaborators = (project.collaborators && project.collaborators.length > 0)

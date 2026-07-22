@@ -246,7 +246,7 @@ type Art = {
   id: string; title: string; artist: string; role: string; style: string; type: string;
   skills: string[]; availability: "Available now" | "Open to projects" | "Limited" | "Not available";
   ratio: Ratio; seed: number; views: number; saves: number;
-  imageUrl?: string; description?: string; authorId?: string;
+  imageUrl?: string; imageUrls?: string[]; description?: string; authorId?: string;
 };
 
 const ART_TITLES = [
@@ -305,6 +305,7 @@ function IllustrationsPage() {
             views: 0,
             saves: 0,
             imageUrl: r.image_url,
+            imageUrls: r.image_urls?.length ? r.image_urls : [r.image_url],
             description: r.description,
             authorId: r.author_id,
           })),
@@ -566,6 +567,8 @@ function DetailModal({
   onPortfolio: () => void; saved: boolean; onSave: () => void; onOpenArt?: (a: Art) => void;
 }) {
   const [tab, setTab] = useState<"profile" | "comments">("profile");
+  const [activeImage, setActiveImage] = useState(0);
+  const images = art.imageUrls?.length ? art.imageUrls : art.imageUrl ? [art.imageUrl] : [];
 
   return (
     <ModalShell onClose={onClose} width={1180}>
@@ -573,8 +576,8 @@ function DetailModal({
         {/* Left: viewer */}
         <div style={{ background: C.stage, padding: 24, display: "flex", flexDirection: "column", gap: 16, position: "relative", minHeight: 520 }}>
           <div style={{ position: "absolute", top: 16, left: 16, display: "flex", gap: 8, zIndex: 2 }}>
-            <IconBtn title="Previous"><ChevronLeft size={16} /></IconBtn>
-            <IconBtn title="Next"><ChevronRight size={16} /></IconBtn>
+            <IconBtn title="Previous" onClick={() => setActiveImage((index) => (index - 1 + images.length) % Math.max(images.length, 1))}><ChevronLeft size={16} /></IconBtn>
+            <IconBtn title="Next" onClick={() => setActiveImage((index) => (index + 1) % Math.max(images.length, 1))}><ChevronRight size={16} /></IconBtn>
           </div>
           <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 8, zIndex: 2 }}>
             <IconBtn title="Zoom out"><ZoomOut size={16} /></IconBtn>
@@ -582,13 +585,22 @@ function DetailModal({
           </div>
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
             <div style={{ width: "100%", maxWidth: 560 }}>
-              {art.imageUrl ? (
-                <img src={art.imageUrl} alt={art.title} style={{ width: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: 14 }} />
+              {images[activeImage] ? (
+                <img src={images[activeImage]} alt={art.title} style={{ width: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: 14 }} />
               ) : (
                 <ArtworkPlaceholder seed={art.seed} ratio={art.ratio} />
               )}
             </div>
           </div>
+          {images.length > 1 && (
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", justifyContent: "center" }}>
+              {images.map((src, index) => (
+                <button key={src} type="button" onClick={() => setActiveImage(index)} style={{ width: 56, height: 56, flex: "0 0 auto", overflow: "hidden", borderRadius: 10, border: `1px solid ${index === activeImage ? C.neon : C.border}`, background: C.input }}>
+                  <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right: info scroll */}
@@ -807,7 +819,7 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
     setError(null);
     setPublishing(true);
     try {
-      await addIllustration({ title: title.trim(), description: description.trim(), file: images[0].file });
+      await addIllustration({ title: title.trim(), description: description.trim(), files: images.map((image) => image.file) });
       onPublished?.();
       onClose();
     } catch (err) {

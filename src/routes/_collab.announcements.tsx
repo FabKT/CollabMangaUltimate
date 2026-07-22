@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listAnnouncements } from "@/lib/db";
 import { loadStudioProjects } from "@/lib/studio-projects";
 import { projectAnnouncementFromRecruit, type StudioRecruitLike } from "@/lib/recruit-map";
-import { supabase } from "@/lib/supabase";
 import { addInterested, listInterested } from "@/lib/announcement-interest";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { localizeLabel, useI18n } from "@/lib/i18n";
@@ -559,8 +558,8 @@ function AnnouncementsPage() {
               status: "Open",
               language: r.language,
               experience: "—",
-              remuneration: false,
-              engagement: "Long terme",
+              remuneration: r.remuneration,
+              engagement: r.engagement,
               requiredSkills: r.subgenres.slice(0, 3),
               fullDescription: r.description,
               requirements: "",
@@ -577,8 +576,8 @@ function AnnouncementsPage() {
               avatarInitials: author.slice(0, 2).toUpperCase(),
               description: r.hook || r.description.slice(0, 160),
               roleOffered: r.status_sought || "—",
-              remuneration: false,
-              engagement: "Long terme",
+              remuneration: r.remuneration,
+              engagement: r.engagement,
               mainSkill: r.status_sought || "—",
               genre: r.genres[0] ?? "—",
               availability: "À définir",
@@ -1563,9 +1562,16 @@ export function DetailsModal({
         "Portfolio a demander avant invitation, mais la disponibilite est claire.",
       ];
   // Intéressés réels (ceux qui ont répondu) pour les annonces de projet.
-  const interested = isProject
-    ? listInterested(item.id).map((p) => p.name)
-    : ["Kurogane Requiem", "Emberline", "Orbital Silence"];
+  const [interested, setInterested] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isProject) {
+      setInterested(["Kurogane Requiem", "Emberline", "Orbital Silence"]);
+      return;
+    }
+    void listInterested(item.id)
+      .then((people) => setInterested(people.map((person) => person.name)))
+      .catch(() => setInterested([]));
+  }, [isProject, item.id]);
 
   return (
     <ModalShell onClose={onClose} maxWidth={1280} label="Announcement details">
@@ -1884,22 +1890,7 @@ export function AnnouncementWorkflowModal({
   const [role, setRole] = useState(item.kind === "project" ? item.roleNeeded : item.roleOffered);
   const [duration, setDuration] = useState("14 jours");
   const [level, setLevel] = useState("Standard");
-  const [meName, setMeName] = useState("Vous");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => {
-      const meta = data.session?.user.user_metadata as
-        Record<string, string | undefined> | undefined;
-      const name =
-        meta?.display_name ||
-        meta?.full_name ||
-        meta?.username ||
-        data.session?.user.email?.split("@")[0];
-      if (name) setMeName(name);
-    });
-  }, []);
 
   const title =
     action === "apply"
@@ -1908,7 +1899,7 @@ export function AnnouncementWorkflowModal({
         ? "Inviter au projet"
         : "Sponsoriser l'annonce";
 
-  const submit = () => {
+  const submit = async () => {
     setError("");
     if (action === "apply") {
       if (!message.trim()) {
@@ -1923,7 +1914,7 @@ export function AnnouncementWorkflowModal({
         recipient: owner,
       });
       // Répondre à une annonce de projet → on rejoint la liste des intéressés (§3).
-      if (item.kind === "project") addInterested(item.id, meName);
+      if (item.kind === "project") await addInterested(item.id);
       onDone("Réponse envoyée.");
       return;
     }

@@ -11,6 +11,8 @@ import {
 import { ServiceModal } from "./ServiceModal";
 import { sendSponsorshipContact } from "@/lib/user-workflows";
 import { loadStudioProjects } from "@/lib/studio-projects";
+import { listProfiles } from "@/lib/db";
+import { listSponsorOptions } from "@/lib/sponsorship-options";
 
 type StudioProjectOption = { id: string; title: string };
 
@@ -23,60 +25,12 @@ type CreatorOption = {
   services: Service[];
 };
 
-const creatorOptions: CreatorOption[] = [
-  {
-    id: "u3",
-    name: "PanelPulse",
-    initials: "PP",
-    meta: "48k followers - YouTube, TikTok, Instagram",
-    bio: "Reviews hebdomadaires et mise en avant de projets manga indépendants.",
-    services: [
-      service("pp-1", "Dedicated review video", "Review", "10+ min", ["YouTube"], 1, 420, "one_time"),
-      service("pp-2", "Launch-week short bundle", "Presentation", "30-60 s", ["TikTok", "Instagram"], 3, 260, "one_time"),
-    ],
-  },
-  {
-    id: "u9",
-    name: "Midori Talks",
-    initials: "MT",
-    meta: "12k followers - YouTube, Twitch",
-    bio: "Essais vidéo sur le shojo classique, le josei moderne et les sorties indé.",
-    services: [
-      service("mt-1", "Long-form analysis", "Deep analysis", "10+ min", ["YouTube"], 1, 350, "one_time"),
-      service("mt-2", "Stream mention", "Sponsored mention", "0-30 s", ["Other"], 4, 180, "one_time"),
-    ],
-  },
-  {
-    id: "u10",
-    name: "Manga Relay",
-    initials: "MR",
-    meta: "31k followers - TikTok, Twitter/X",
-    bio: "Formats courts, hooks de lancement et posts communautaires pour nouveaux chapitres.",
-    services: [
-      service("mr-1", "Short dedicated video", "Presentation", "0-30 s", ["TikTok"], 2, 180, "one_time"),
-      service("mr-2", "Community post pack", "Sponsored mention", "0-30 s", ["Twitter/X", "Instagram"], 3, 140, "one_time"),
-    ],
-  },
-];
-
-function service(
-  id: string,
-  name: string,
-  format: string,
-  duration: string,
-  platforms: Platform[],
-  quantity: number,
-  price: number,
-  paymentType: PaymentType,
-): Service {
-  return { id, name, format, duration, platforms, quantity, price, paymentType };
-}
-
 export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [project, setProject] = useState("");
   const [myProjects, setMyProjects] = useState<StudioProjectOption[]>([]);
   const [query, setQuery] = useState("");
-  const [creatorId, setCreatorId] = useState(creatorOptions[0]?.id ?? "");
+  const [creatorOptions, setCreatorOptions] = useState<CreatorOption[]>([]);
+  const [creatorId, setCreatorId] = useState("");
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [customServices, setCustomServices] = useState<Service[]>([]);
   const [currency] = useState("EUR");
@@ -87,12 +41,53 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
 
   useEffect(() => {
     if (!open) return;
-    void loadStudioProjects<StudioProjectOption>()
-      .then((rows) => {
-        setMyProjects(rows);
-        setProject((current) => current || rows[0]?.title || "");
+    void Promise.all([loadStudioProjects<StudioProjectOption>(), listProfiles(200), listSponsorOptions()])
+      .then(([projects, profiles, options]) => {
+        setMyProjects(projects);
+        setProject((current) => current || projects[0]?.title || "");
+        const creators = profiles
+          .filter((profile) => {
+            const role = (profile.role ?? "").toLocaleLowerCase();
+            return role.includes("contenu") || role.includes("content");
+          })
+          .map((profile) => {
+            const name = profile.display_name || profile.username;
+            const creatorServices = options
+              .filter((option) => option.mode === "creator" && option.ownerId === profile.id)
+              .map((option): Service => ({
+                id: option.id,
+                name: option.format,
+                format: option.videoType || option.format,
+                duration: option.duration,
+                platforms: option.platforms.filter((platform): platform is Platform =>
+                  ["TikTok", "YouTube", "Instagram", "Twitter/X", "Other"].includes(platform),
+                ),
+                quantity: option.quantity,
+                price: Math.max(0, Number(option.price) || 0),
+                paymentType: option.paymentMode.toLocaleLowerCase().includes("abonnement")
+                  ? ("subscription" as PaymentType)
+                  : ("one_time" as PaymentType),
+                notes: option.description,
+              }));
+            return {
+              id: profile.id,
+              name,
+              initials: name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+              meta: profile.role || "Créateur de contenu",
+              bio: "Profil CollabManga",
+              services: creatorServices,
+            };
+          })
+          .filter((creator) => creator.services.length > 0);
+        setCreatorOptions(creators);
+        setCreatorId((current) =>
+          creators.some((creator) => creator.id === current) ? current : creators[0]?.id ?? "",
+        );
       })
-      .catch(() => setMyProjects([]));
+      .catch(() => {
+        setMyProjects([]);
+        setCreatorOptions([]);
+      });
   }, [open]);
 
   const creators = useMemo(() => {
@@ -131,7 +126,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
     );
   };
 
-  const submit = () => {
+  const submit = async () => {
     setError("");
     if (!project.trim()) {
       setError("Sélectionne ou renseigne le projet concerné.");
@@ -158,36 +153,30 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
     const customIds = new Set(customServices.map((s) => s.id));
     const serviceLabel = (s: Service) => (customIds.has(s.id) ? `${s.name} (option supplémentaire)` : s.name);
 
-    createSponsorship({
-      name: `${project.trim()} - ${selectedCreator.name}`,
-      project: project.trim(),
-      creator: selectedCreator.name,
-      totalPrice: total,
-      currency,
-      status: "pending",
-      paymentType: selectedServices[0]?.paymentType ?? "one_time",
-      notes: messageTitle.trim() ? `${messageTitle.trim()} — ${message.trim()}` : message.trim(),
-      conditions: "En attente de validation par le créateur de contenu.",
-      services: selectedServices,
-      participants: [
-        {
-          id: selectedCreator.id,
-          name: selectedCreator.name,
-          role: "creator",
-          meta: selectedCreator.meta,
-          initials: selectedCreator.initials,
-        },
-        {
-          id: "project-owner",
-          name: "Current project owner",
-          role: "owner",
-          meta: project.trim(),
-          initials: "PO",
-        },
-      ],
-    });
+    try {
+      await createSponsorship({
+        name: `${project.trim()} - ${selectedCreator.name}`,
+        project: project.trim(),
+        creator: selectedCreator.name,
+        totalPrice: total,
+        currency,
+        status: "pending",
+        paymentType: selectedServices[0]?.paymentType ?? "one_time",
+        notes: messageTitle.trim() ? `${messageTitle.trim()} — ${message.trim()}` : message.trim(),
+        conditions: "En attente de validation par le créateur de contenu.",
+        services: selectedServices,
+        participants: [
+          {
+            id: selectedCreator.id,
+            name: selectedCreator.name,
+            role: "creator",
+            meta: selectedCreator.meta,
+            initials: selectedCreator.initials,
+          },
+        ],
+      });
 
-    sendSponsorshipContact({
+      sendSponsorshipContact({
       announcementTitle: messageTitle.trim() || `Demande de parrainage - ${project.trim()}`,
       announcementMode: "creator",
       owner: selectedCreator.name,
@@ -195,9 +184,11 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
       budgetOrPrice: formatMoney(total, currency),
       sponsorshipType: selectedServices.map(serviceLabel).join(", "),
       message: message.trim(),
-    });
-
-    close();
+      });
+      close();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Le parrainage n'a pas pu être créé.");
+    }
   };
 
   return (

@@ -1,13 +1,15 @@
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
+import { buildStylePlan } from "@/lib/ai-style-plans";
+import { isLocalAiServerMode } from "@/lib/local-ai-mode";
 
 /**
  * Character-card generation plan.
  *
  * Builds the optimized prompt for a full character "card": in a single 3:2
- * image the same character is shown front / profile / back, plus six
- * head-and-shoulders expressions. For now the plan focuses on the card
- * DISPOSITION; precise per-style rendering details will be layered in later.
+ * image the same character is shown front / back / profile, plus five
+ * head-and-shoulders expressions. The selected style plan is shared with the
+ * other style-conversion workspaces.
  *
  * The image itself is produced by the shared PulseNote backend. This module
  * owns the prompt engineering and forwards it; PulseNote must expose a
@@ -92,6 +94,12 @@ export function parseCharacterImageInput(data: unknown) {
  * THE PLAN — builds the character-card prompt (disposition-focused for now).
  */
 export function buildCharacterCardPrompt(input: CharacterImageInput): string {
+  const normalizedStyleId = input.styleId.toLowerCase();
+  const styleReferenceIsImageB =
+    normalizedStyleId === "current" ||
+    normalizedStyleId === "classic" ||
+    normalizedStyleId === "retro90" ||
+    normalizedStyleId.includes("90");
   const references =
     input.references
       .filter((reference) => reference.name || reference.description)
@@ -103,42 +111,64 @@ export function buildCharacterCardPrompt(input: CharacterImageInput): string {
       )
       .join("\n") || "  - none provided";
 
+  const stylePlan = buildStylePlan({
+    styleId: input.styleId,
+    styleName: input.styleName,
+    styleDescription: input.styleDescription,
+    hasReferenceImages: Boolean(input.styleImageDataUrl || input.styleReferenceImages.length),
+    usage: "character-card",
+  });
+
   return [
-    "OBJECTIVE:",
-    'Generate ONE character reference sheet (a "character card") as a single landscape 3:2 image, on a clean plain near-white background.',
+    "CHARACTER CARD GENERATION PLAN:",
+    "Generate ONE professional character sheet as a single horizontal 3:2 image on a clean white or near-white background.",
     "",
-    "CHARACTER DESCRIPTION (from the user, authoritative for identity):",
+    "IMAGE ROLES AND SOURCE ISOLATION:",
+    "Image A is the mandatory character identity reference. It alone defines who the character is: face, recognizable eye shape, hairstyle, age impression, build, outfit, accessories, silhouette and distinguishing features.",
+    styleReferenceIsImageB
+      ? "Image B and any additional style-library images define target rendering mechanisms only. They must not transfer their depicted person, pose, clothing, scene, text or composition."
+      : "Image B, when attached, defines character-card structure only. It must not transfer its depicted character or style.",
+    styleReferenceIsImageB
+      ? "Image C, when attached, defines character-card structure only. It must not transfer its depicted character or style."
+      : "Image C and any additional style-library images define target rendering mechanisms only. They must not transfer their depicted person, pose, clothing, scene, text or composition.",
+    "Extra references may refine explicitly declared identity or outfit facts, but must never replace Image A.",
+    "User instructions override defaults only where explicit. Preserve all unrelated identity facts.",
+    "",
+    "USER INSTRUCTIONS:",
     input.prompt || "Use Image A as the authoritative character identity reference.",
     "",
-    `TARGET STYLE: ${input.styleName}${input.styleDescription ? ` — ${input.styleDescription}` : ""}.`,
-    "Image A is the mandatory character identity reference.",
-    "Image B, when attached, is the character-card structure reference.",
-    "Style reference images define the target rendering style.",
+    stylePlan,
     "",
-    "OUTFIT / REFERENCES:",
+    "EXTRA REFERENCE INVENTORY:",
     references,
     "",
-    "MANDATORY CARD DISPOSITION:",
-    "The single image MUST show the SAME character with a strictly consistent design (identical hair, face, outfit, colors, proportions, and accessories) in every figure.",
+    "MANDATORY CARD STRUCTURE:",
+    "Follow Image C strictly when supplied. Otherwise use this default layout without adding labels or annotations:",
+    "- one horizontal 3:2 canvas with generous clean margins and a subtle horizontal separation between rows;",
+    "- upper row: three evenly spaced full-body views at the same scale, fully visible from head to feet;",
+    "- lower row: five evenly spaced head-and-shoulders portraits, large enough for clear facial comparison.",
     "",
-    "TOP BAND — three full-body turnaround views, evenly spaced, same scale, standing in a neutral relaxed A-pose:",
-    "  1) FRONT view (de face)",
-    "  2) SIDE PROFILE view (de profil)",
-    "  3) BACK view (de dos)",
+    "UPPER ROW - EXACT ORDER:",
+    "1) FRONT view on the left: full outfit and facial identity readable; neutral reference stance.",
+    "2) BACK view in the center: exact hairstyle, outfit and accessories reconstructed from behind; same proportions and scale.",
+    "3) STRICT SIDE/PROFILE view on the right: true profile of face, nose, chin, hair silhouette and outfit; do not turn toward the camera.",
     "",
-    "BOTTOM BAND — six head-and-shoulders portraits of the SAME character, evenly spaced in a readable row, one distinct expression each, in this order:",
-    "  1) very happy (très heureux)",
-    "  2) angry (en colère)",
-    "  3) sad (triste)",
-    "  4) pleased / content (content)",
-    "  5) arrogant (arrogant)",
-    "  6) neutral (neutre)",
+    "LOWER ROW - EXACT ORDER:",
+    "1) content / lightly pleased: restrained soft smile;",
+    "2) very happy: clearly cheerful open smile;",
+    "3) neutral: calm and composed;",
+    "4) angry: tense brows, sharper gaze and firm mouth;",
+    "5) sad: softened eyes, subdued mouth and restrained emotional weight.",
     "",
-    "COMPOSITION RULES:",
-    "- Clean gutters between every figure; nothing overlapping, nothing cut off by the frame.",
-    "- Consistent lighting, line weight and identity across all figures.",
-    "- Plain near-white background, model-sheet presentation, no decorative scenery, no text labels.",
-    "- Landscape 3:2 orientation, all figures fitting comfortably inside the frame.",
+    "IDENTITY AND ORTHOGRAPHIC LOCK:",
+    "Every view is the same person. Keep facial ratios, hairstyle construction, age, gender presentation, body build, outfit, colors/values, accessories and asymmetrical details stable. Expressions may deform expression muscles only, never identity.",
+    "Infer hidden back/profile details conservatively from Image A and supporting references. Do not invent decorative features. Keep hands readable and anatomy coherent.",
+    "",
+    "TEXT AND CLEANLINESS LOCK:",
+    "Do not add title, labels, captions, measurements, notes, logos, decorative typography, extra views, props or scenery unless explicitly requested. Nothing may overlap or be cropped by the canvas.",
+    "",
+    "FINAL CHECK:",
+    "Confirm horizontal 3:2 format, exact 3+5 view count and order, one locked identity, one locked outfit, true back/profile reconstruction, target-style dominance, clean background and no unauthorized text.",
   ].join("\n");
 }
 
@@ -155,6 +185,18 @@ export async function requestPulseNoteCharacterImage(
   }
 
   const finalPrompt = buildCharacterCardPrompt(input);
+  const localPlanEnabled = isLocalAiServerMode();
+  const styleLibraryReferences = localPlanEnabled
+    ? input.styleReferenceImages
+        .filter((imageDataUrl) => Boolean(imageDataUrl && imageDataUrl !== input.styleImageDataUrl))
+        .map((imageDataUrl, index) => ({
+          id: `style-library-${index + 1}`,
+          name: `${input.styleName} style reference ${index + 1}`,
+          imageDataUrl,
+          description:
+            "Target rendering style evidence only. Do not copy identity, pose, outfit, scene, text or composition.",
+        }))
+    : [];
 
   const response = await fetch(`${backendUrl}/api/character/generate`, {
     method: "POST",
@@ -166,7 +208,7 @@ export async function requestPulseNoteCharacterImage(
     body: JSON.stringify({
       project: "manga-forge",
       task: "character_card_generation",
-      prompt: input.prompt,
+      prompt: localPlanEnabled ? finalPrompt : input.prompt,
       size: CHARACTER_IMAGE_SIZE,
       aspectRatio: "3:2",
       identityImageDataUrl: input.identityImageDataUrl,
@@ -177,7 +219,7 @@ export async function requestPulseNoteCharacterImage(
       styleImageDataUrl: input.styleImageDataUrl,
       styleReferenceImages: input.styleReferenceImages,
       structureImageDataUrl: input.structureImageDataUrl,
-      references: input.references,
+      references: [...input.references, ...styleLibraryReferences],
     }),
     signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
   });

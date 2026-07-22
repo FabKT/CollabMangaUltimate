@@ -14,12 +14,27 @@ import {
 import { StatusBadge, PlatformIcon, Divider } from "../features/sponsorships/ui";
 import { ServiceModal } from "../features/sponsorships/ServiceModal";
 import { loadStudioProjects } from "@/lib/studio-projects";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/sponsorship-hub_/$id")({
   component: SponsorshipDetailPage,
 });
 
+const STATUS_KEY: Record<SponsorshipStatus, TranslationKey> = {
+  activated: "sponsorStatus.activated",
+  pending: "sponsorStatus.pending",
+  finished: "sponsorStatus.finished",
+  cancelled: "sponsorStatus.cancelled",
+};
+function roleKey(r: string): TranslationKey {
+  return r === "creator" ? "sponsorRole.creator" : r === "owner" ? "sponsorRole.project" : r === "manager" ? "sponsorRole.manager" : "sponsorRole.collaborator";
+}
+function paymentKey(type: string): TranslationKey {
+  return type === "subscription" ? "payment.subscription" : "payment.oneTime";
+}
+
 function SponsorshipDetailPage() {
+  const { t } = useI18n();
   const { id } = Route.useParams();
   const s = useSponsorship(id);
   const navigate = useNavigate();
@@ -52,9 +67,9 @@ function SponsorshipDetailPage() {
     return (
       <main className="min-h-dvh">
         <div className="mx-auto max-w-4xl px-4 py-16 text-center">
-          <h1 className="font-display text-2xl font-semibold">Sponsorship not found</h1>
-          <p className="mt-2 text-sm text-text-secondary">It may have been deleted or the link is incorrect.</p>
-          <Link to="/sponsorship-hub" className="btn-neon mt-6 inline-block rounded-lg px-4 py-2 text-sm font-semibold">Back to sponsorships</Link>
+          <h1 className="font-display text-2xl font-semibold">{t("sponsorDetail.notFound")}</h1>
+          <p className="mt-2 text-sm text-text-secondary">{t("sponsorDetail.notFoundText")}</p>
+          <Link to="/sponsorship-hub" className="btn-neon mt-6 inline-block rounded-lg px-4 py-2 text-sm font-semibold">{t("sponsorDetail.back")}</Link>
         </div>
       </main>
     );
@@ -65,7 +80,7 @@ function SponsorshipDetailPage() {
 
   const setStatus = (st: SponsorshipStatus) => { updateSponsorship(s.id, { status: st }); setMenuOpen(false); setStatusOpen(false); };
   const onDelete = () => {
-    if (confirm(`Delete "${s.name}"? This cannot be undone.`)) {
+    if (confirm(t("sponsorDetail.confirmDelete"))) {
       deleteSponsorship(s.id);
       navigate({ to: "/sponsorship-hub" });
     }
@@ -74,7 +89,7 @@ function SponsorshipDetailPage() {
   // revient à la liste. Distinct de « Cancel » qui reste sur la fiche.
   const onLeave = () => {
     setMenuOpen(false);
-    if (confirm(`Leave "${s.name}"? You will be removed from this collaboration.`)) {
+    if (confirm(t("sponsorDetail.confirmLeave"))) {
       updateSponsorship(s.id, { status: "cancelled" });
       navigate({ to: "/sponsorship-hub" });
     }
@@ -90,7 +105,7 @@ function SponsorshipDetailPage() {
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
           <Link
             to="/sponsorship-hub"
-            aria-label="Back to sponsorships"
+            aria-label={t("sponsorDetail.back")}
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface/70 text-text-secondary transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-neon"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -101,9 +116,9 @@ function SponsorshipDetailPage() {
               <StatusBadge status={s.status} />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
-              <span>Project · <span className="text-text-secondary">{s.project}</span></span>
+              <span>{t("sponsorHub.project")} · <span className="text-text-secondary">{s.project}</span></span>
               <span className="hidden h-1 w-1 rounded-full bg-text-muted sm:inline-block" />
-              <span>Creator · <span className="text-text-secondary">{s.creator}</span></span>
+              <span>{t("sponsorHub.creator")} · <span className="text-text-secondary">{s.creator}</span></span>
             </div>
           </div>
 
@@ -112,7 +127,7 @@ function SponsorshipDetailPage() {
               onClick={() => { setMenuOpen((v) => !v); setStatusOpen(false); }}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
-              aria-label="More actions"
+              aria-label={t("sponsorDetail.moreActions")}
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface/70 text-text-secondary transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-neon"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
@@ -121,7 +136,7 @@ function SponsorshipDetailPage() {
               <div role="menu" className="absolute right-0 z-[90] mt-2 w-60 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-2xl">
                 <div className="relative">
                   <MenuItem
-                    label="Change status"
+                    label={t("sponsorDetail.changeStatus")}
                     chevron
                     onClick={() => setStatusOpen((v) => !v)}
                   />
@@ -135,18 +150,18 @@ function SponsorshipDetailPage() {
                           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition hover:bg-surface-3 ${s.status === st ? "text-neon" : "text-text-secondary"}`}
                         >
                           <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_META[st].color }} />
-                          {STATUS_META[st].label}
+                          {t(STATUS_KEY[st])}
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
                 <div className="border-t border-border" />
-                <MenuItem label="Finish sponsorship" onClick={() => setStatus("finished")} />
-                <MenuItem label="Cancel sponsorship" onClick={() => setStatus("cancelled")} />
-                <MenuItem label="Leave sponsorship" onClick={onLeave} />
+                <MenuItem label={t("sponsorDetail.finish")} onClick={() => setStatus("finished")} />
+                <MenuItem label={t("sponsorDetail.cancel")} onClick={() => setStatus("cancelled")} />
+                <MenuItem label={t("sponsorDetail.leave")} onClick={onLeave} />
                 <div className="border-t border-border" />
-                <MenuItem label="Delete sponsorship" danger onClick={onDelete} />
+                <MenuItem label={t("sponsorDetail.delete")} danger onClick={onDelete} />
               </div>
             )}
           </div>
@@ -154,25 +169,25 @@ function SponsorshipDetailPage() {
 
         {/* Summary strip */}
         <section className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-border bg-surface/70 p-2 sm:grid-cols-6">
-          <Summary label="Total price" value={formatMoney(s.totalPrice, s.currency)} highlight />
+          <Summary label={t("sponsorDetail.totalPrice")} value={formatMoney(s.totalPrice, s.currency)} highlight />
           {/* Abonnement : montant versé chaque mois (le total = mensuel × durée). */}
           <Summary
-            label="Paiement mensuel"
+            label={t("sponsorDetail.monthlyPayment")}
             value={s.paymentType === "subscription" ? formatMoney(servicesTotal, s.currency) : "—"}
           />
-          <Summary label="Project" value={s.project} />
-          <Summary label="Creator" value={s.creator} />
-          <Summary label="Payment" value={PAYMENT_LABEL[s.paymentType]} />
-          <Summary label="Deadline" value={s.deadline ?? "—"} />
+          <Summary label={t("sponsorHub.project")} value={s.project} />
+          <Summary label={t("sponsorHub.creator")} value={s.creator} />
+          <Summary label={t("sponsorDetail.payment")} value={t(paymentKey(s.paymentType))} />
+          <Summary label={t("sponsorDetail.deadline")} value={s.deadline ?? "—"} />
         </section>
 
         {/* Services */}
         <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-surface/70">
           <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
             <div className="min-w-0">
-              <h2 className="font-display text-base font-semibold">Services</h2>
+              <h2 className="font-display text-base font-semibold">{t("sponsorDetail.services")}</h2>
               <p className="mt-0.5 text-xs text-text-muted">
-                {s.services.length} services · {linkedCount}/{s.services.length} delivery links added
+                {s.services.length} {t("sponsorHub.services")} · {linkedCount}/{s.services.length} {t("sponsorDetail.linksAdded")}
               </p>
             </div>
             <button
@@ -180,14 +195,14 @@ function SponsorshipDetailPage() {
               className="btn-neon inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold sm:text-sm"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-              Add service
+              {t("sponsorDetail.addService")}
             </button>
           </div>
 
           {s.services.length === 0 ? (
             <div className="px-5 py-10 text-center">
-              <p className="text-sm text-text-secondary">No services yet.</p>
-              <button onClick={() => setServiceModal({ open: true })} className="btn-neon mt-4 rounded-lg px-3 py-2 text-xs font-semibold">Add first service</button>
+              <p className="text-sm text-text-secondary">{t("sponsorDetail.noServices")}</p>
+              <button onClick={() => setServiceModal({ open: true })} className="btn-neon mt-4 rounded-lg px-3 py-2 text-xs font-semibold">{t("sponsorDetail.addFirstService")}</button>
             </div>
           ) : (
             <>
@@ -196,13 +211,13 @@ function SponsorshipDetailPage() {
                 <table className="w-full text-sm">
                   <thead className="text-[11px] uppercase tracking-wide text-text-muted">
                     <tr className="border-b border-border">
-                      <th className="px-5 py-3 text-left font-semibold">Service</th>
-                      <th className="px-3 py-3 text-left font-semibold">Platforms</th>
-                      <th className="px-3 py-3 text-left font-semibold">Qty</th>
-                      <th className="px-3 py-3 text-left font-semibold">Price</th>
-                      <th className="px-3 py-3 text-left font-semibold">Payment</th>
-                      <th className="px-3 py-3 text-left font-semibold">Delivery</th>
-                      <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                      <th className="px-5 py-3 text-left font-semibold">{t("sponsorDetail.colService")}</th>
+                      <th className="px-3 py-3 text-left font-semibold">{t("sponsorDetail.colPlatforms")}</th>
+                      <th className="px-3 py-3 text-left font-semibold">{t("sponsorDetail.colQty")}</th>
+                      <th className="px-3 py-3 text-left font-semibold">{t("sponsorDetail.colPrice")}</th>
+                      <th className="px-3 py-3 text-left font-semibold">{t("sponsorDetail.payment")}</th>
+                      <th className="px-3 py-3 text-left font-semibold">{t("sponsorDetail.colDelivery")}</th>
+                      <th className="px-5 py-3 text-right font-semibold">{t("sponsorDetail.colActions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -227,16 +242,16 @@ function SponsorshipDetailPage() {
                             <button
                               onClick={() => setServiceModal({ open: true, initial: sv })}
                               className="rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-xs font-semibold text-text-secondary transition hover:border-neon/50 hover:text-neon"
-                              aria-label={`Edit ${sv.name}`}
+                              aria-label={`${t("sponsorDetail.edit")} ${sv.name}`}
                             >
-                              Edit
+                              {t("sponsorDetail.edit")}
                             </button>
                             <button
-                              onClick={() => confirm(`Remove "${sv.name}"?`) && removeService(s.id, sv.id)}
+                              onClick={() => confirm(t("sponsorDetail.confirmRemoveService")) && removeService(s.id, sv.id)}
                               className="rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:border-danger/50 hover:text-danger"
-                              aria-label={`Remove ${sv.name}`}
+                              aria-label={`${t("sponsorDetail.remove")} ${sv.name}`}
                             >
-                              Remove
+                              {t("sponsorDetail.remove")}
                             </button>
                           </div>
                         </td>
@@ -267,13 +282,13 @@ function SponsorshipDetailPage() {
                         onClick={() => setServiceModal({ open: true, initial: sv })}
                         className="flex-1 rounded-md border border-border bg-surface-3 py-2 text-xs font-semibold text-text-secondary hover:border-neon/50 hover:text-neon"
                       >
-                        Edit
+                        {t("sponsorDetail.edit")}
                       </button>
                       <button
-                        onClick={() => confirm(`Remove "${sv.name}"?`) && removeService(s.id, sv.id)}
+                        onClick={() => confirm(t("sponsorDetail.confirmRemoveService")) && removeService(s.id, sv.id)}
                         className="flex-1 rounded-md border border-border bg-surface-3 py-2 text-xs font-semibold text-text-muted hover:border-danger/50 hover:text-danger"
                       >
-                        Remove
+                        {t("sponsorDetail.remove")}
                       </button>
                     </div>
                   </li>
@@ -287,24 +302,24 @@ function SponsorshipDetailPage() {
         <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-border bg-surface/70">
             <div className="border-b border-border px-4 py-3 sm:px-5">
-              <h2 className="font-display text-base font-semibold">Delivery conditions</h2>
-              <p className="mt-0.5 text-xs text-text-muted">Requirements, deliverables, deadlines, and notes.</p>
+              <h2 className="font-display text-base font-semibold">{t("sponsorDetail.deliveryConditions")}</h2>
+              <p className="mt-0.5 text-xs text-text-muted">{t("sponsorDetail.deliveryConditionsSub")}</p>
             </div>
             <div className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5">
-              <Info label="Deadline" value={s.deadline ?? "—"} />
-              <Info label="Payment type" value={PAYMENT_LABEL[s.paymentType]} />
-              <Info label="Currency" value={s.currency} />
-              <Info label="Created" value={s.createdAt} />
+              <Info label={t("sponsorDetail.deadline")} value={s.deadline ?? "—"} />
+              <Info label={t("sponsorDetail.paymentType")} value={t(paymentKey(s.paymentType))} />
+              <Info label={t("sponsorDetail.currency")} value={s.currency} />
+              <Info label={t("sponsorDetail.created")} value={s.createdAt} />
               <div className="sm:col-span-2">
-                <div className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">Conditions</div>
+                <div className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">{t("sponsorDetail.conditions")}</div>
                 <p className="text-sm leading-relaxed text-text-secondary">
-                  {s.conditions ?? "No conditions provided. Add deliverables, deadlines, publication rules, or cancellation terms."}
+                  {s.conditions ?? t("sponsorDetail.noConditions")}
                 </p>
               </div>
               {s.notes && (
                 <div className="sm:col-span-2">
                   <Divider />
-                  <div className="mt-3 text-[11px] uppercase tracking-wide text-text-muted">Internal notes</div>
+                  <div className="mt-3 text-[11px] uppercase tracking-wide text-text-muted">{t("sponsorDetail.internalNotes")}</div>
                   <p className="mt-1 text-sm leading-relaxed text-text-secondary">{s.notes}</p>
                 </div>
               )}
@@ -314,12 +329,12 @@ function SponsorshipDetailPage() {
           <div className="rounded-2xl border border-border bg-surface/70">
             <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
               <div>
-                <h2 className="font-display text-base font-semibold">Participants &amp; linked entities</h2>
-                <p className="mt-0.5 text-xs text-text-muted">People and entities linked to this sponsorship.</p>
+                <h2 className="font-display text-base font-semibold">{t("sponsorDetail.participants")}</h2>
+                <p className="mt-0.5 text-xs text-text-muted">{t("sponsorDetail.participantsSub")}</p>
               </div>
             </div>
             <ul className="divide-y divide-border">
-              {s.participants.length === 0 && <li className="px-5 py-6 text-sm text-text-muted">No participants linked.</li>}
+              {s.participants.length === 0 && <li className="px-5 py-6 text-sm text-text-muted">{t("sponsorDetail.noParticipants")}</li>}
               {s.participants.map((p) => (
                 <li key={p.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-5">
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-surface-3 font-display text-sm font-bold text-neon">
@@ -328,7 +343,7 @@ function SponsorshipDetailPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium text-foreground">{p.name}</span>
-                      <span className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">{roleLabel(p.role)}</span>
+                      <span className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">{t(roleKey(p.role))}</span>
                     </div>
                     {p.meta && <div className="mt-0.5 truncate text-xs text-text-muted">{p.meta}</div>}
                   </div>
@@ -337,7 +352,7 @@ function SponsorshipDetailPage() {
                       onClick={openProject}
                       className="shrink-0 rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-xs font-semibold text-text-secondary hover:border-neon/50 hover:text-neon"
                     >
-                      View project
+                      {t("sponsorDetail.viewProject")}
                     </button>
                   ) : (
                     <Link
@@ -345,7 +360,7 @@ function SponsorshipDetailPage() {
                       params={{ profileId: p.id }}
                       className="shrink-0 rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-xs font-semibold text-text-secondary hover:border-neon/50 hover:text-neon"
                     >
-                      View profile
+                      {t("sponsorDetail.viewProfile")}
                     </Link>
                   )}
                 </li>
@@ -363,10 +378,6 @@ function SponsorshipDetailPage() {
       />
     </main>
   );
-}
-
-function roleLabel(r: string) {
-  return r === "creator" ? "Creator" : r === "owner" ? "Project" : r === "manager" ? "Manager" : "Collaborator";
 }
 
 function MenuItem({ label, onClick, danger, chevron }: { label: string; onClick: () => void; danger?: boolean; chevron?: boolean }) {
@@ -401,19 +412,21 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function PaymentBadge({ type }: { type: keyof typeof PAYMENT_LABEL }) {
+  const { t } = useI18n();
   return (
     <span className="inline-flex items-center rounded-md bg-surface-3 px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
-      {PAYMENT_LABEL[type]}
+      {t(paymentKey(type))}
     </span>
   );
 }
 
 function DeliveryCell({ link }: { link?: string }) {
-  if (!link) return <span className="inline-flex items-center gap-1.5 text-xs text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-text-muted" />No link yet</span>;
+  const { t } = useI18n();
+  if (!link) return <span className="inline-flex items-center gap-1.5 text-xs text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-text-muted" />{t("sponsorDetail.noLink")}</span>;
   return (
     <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-neon hover:text-neon-hover focus-visible:outline-2 focus-visible:outline-neon">
       <span className="h-1.5 w-1.5 rounded-full bg-neon" />
-      Open link
+      {t("sponsorDetail.openLink")}
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
     </a>
   );

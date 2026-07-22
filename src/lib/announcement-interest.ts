@@ -1,44 +1,34 @@
-/**
- * Personnes « intéressées » par une annonce de recrutement (localStorage).
- * Quand un utilisateur répond à une annonce de projet (Apply), il est ajouté ici,
- * et apparaît dans l'onglet « Intéressés » du popup de détail.
- */
+import { getSupabase } from "@/lib/supabase";
 
-export type InterestedPerson = { name: string; at: string };
+export type InterestedPerson = { id: string; name: string; at: string };
 
-const KEY = "collabmanga.announcementInterest.v1";
-
-function canStore() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+export async function listInterested(announcementId: string): Promise<InterestedPerson[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("announcement_interests")
+    .select(
+      "user_id, created_at, profile:profiles!announcement_interests_user_id_fkey(username, display_name)",
+    )
+    .eq("announcement_id", announcementId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => {
+    const profile = row.profile as unknown as { username: string; display_name: string | null } | null;
+    return {
+      id: row.user_id,
+      name: profile?.display_name || profile?.username || "Membre",
+      at: row.created_at,
+    };
+  });
 }
 
-function readAll(): Record<string, InterestedPerson[]> {
-  if (!canStore()) return {};
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Record<string, InterestedPerson[]>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeAll(data: Record<string, InterestedPerson[]>) {
-  if (!canStore()) return;
-  try {
-    window.localStorage.setItem(KEY, JSON.stringify(data));
-  } catch {
-    /* quota */
-  }
-}
-
-export function listInterested(announcementId: string): InterestedPerson[] {
-  return readAll()[announcementId] ?? [];
-}
-
-export function addInterested(announcementId: string, name: string) {
-  const all = readAll();
-  const list = all[announcementId] ?? [];
-  if (list.some((p) => p.name === name)) return; // déjà intéressé
-  all[announcementId] = [{ name, at: new Date().toISOString() }, ...list];
-  writeAll(all);
+export async function addInterested(announcementId: string): Promise<void> {
+  const sb = getSupabase();
+  const userId = (await sb.auth.getSession()).data.session?.user.id;
+  if (!userId) throw new Error("Connecte-toi pour répondre à cette annonce.");
+  const { error } = await sb.from("announcement_interests").upsert(
+    { announcement_id: announcementId, user_id: userId },
+    { onConflict: "announcement_id,user_id", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(error.message);
 }

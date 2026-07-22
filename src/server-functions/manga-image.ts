@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
 import { errorMessage } from "@/lib/error-message";
+import { LOCAL_MANGA_PAGE_PLAN } from "@/lib/ai-style-plans";
+import { isLocalAiServerMode } from "@/lib/local-ai-mode";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
@@ -323,11 +325,20 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
   }
 
   const size = imageSizeForAspectRatio(data.aspectRatio);
+  const requestData = isLocalAiServerMode()
+    ? {
+        ...data,
+        prompt: `${LOCAL_MANGA_PAGE_PLAN}\n\nUSER SCENE REQUEST - HIGHEST PRIORITY:\n${data.prompt}`,
+        editPrompt: data.editPrompt
+          ? `${LOCAL_MANGA_PAGE_PLAN}\n\nUSER EDIT REQUEST - HIGHEST PRIORITY:\n${data.editPrompt}`
+          : data.editPrompt,
+      }
+    : data;
   const body = JSON.stringify({
     project: "manga-forge",
     task: "manga_page_generation",
     size,
-    ...data,
+    ...requestData,
   });
   let lastError: unknown;
 
@@ -365,7 +376,7 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
 
       return {
         imageUrl,
-        finalPrompt: payload.finalPrompt ?? data.prompt,
+        finalPrompt: payload.finalPrompt ?? requestData.prompt,
         taskType: payload.taskType ?? "storyboard_page_creation",
         model: payload.model ?? "gpt-image-2",
         size: payload.size ?? size,

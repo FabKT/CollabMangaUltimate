@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS, type CatalogManga, type HeroSlide, type NewDrop } from "@/lib/haven-data";
 import { MangaCard } from "@/components/haven/MangaCard";
-import { loadStudioProjects } from "@/lib/studio-projects";
+import { loadPublicStudioProjects } from "@/lib/studio-projects";
 import { getMangaRating } from "@/lib/manga-ratings";
 import { useI18n } from "@/lib/i18n";
 
@@ -31,24 +31,26 @@ type StudioCatalogProject = {
 function useVisibleStudioEntries(): CatalogManga[] {
   const [entries, setEntries] = useState<CatalogManga[]>([]);
   useEffect(() => {
-    void loadStudioProjects<StudioCatalogProject>()
-      .then((rows) =>
+    void loadPublicStudioProjects<StudioCatalogProject>()
+      .then(async (rows) =>
         setEntries(
-          rows
-            .filter((p) => p.catalogVisible)
-            .map((p) => ({
+          await Promise.all(
+            rows
+              .filter((p) => p.catalogVisible)
+              .map(async (p) => ({
               id: p.id,
               title: p.title,
               creator: "Toi",
               cover: p.coverDataUrl || "",
               demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
-              rating: getMangaRating(p.id),
+              rating: await getMangaRating(p.id),
               chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,
               language: "FR",
-            })),
+              })),
+          ),
         ),
       )
       .catch(() => setEntries([]));
@@ -60,7 +62,7 @@ function useVisibleStudioEntries(): CatalogManga[] {
 function useVisibleStudioChapters(): NewDrop[] {
   const [drops, setDrops] = useState<NewDrop[]>([]);
   useEffect(() => {
-    void loadStudioProjects<StudioCatalogProject>()
+    void loadPublicStudioProjects<StudioCatalogProject>()
       .then((rows) => {
         const list: NewDrop[] = [];
         for (const p of rows) {

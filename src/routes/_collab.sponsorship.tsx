@@ -27,7 +27,9 @@ function SponsorshipPage() {
   const [userAnnouncements, setUserAnnouncements] = useState<Announcement[]>([]);
 
   useEffect(() => {
-    setUserAnnouncements(listSponsorOptions().map(announcementFromOption));
+    void listSponsorOptions()
+      .then((options) => setUserAnnouncements(options.map(announcementFromOption)))
+      .catch(() => setUserAnnouncements([]));
   }, []);
   const [filters, setFilters] = useState<SponsorFilters>(emptyFilters);
 

@@ -11,7 +11,7 @@ import {
   type Demographic,
   type SortOption,
 } from "@/lib/haven-data";
-import { loadStudioProjects } from "@/lib/studio-projects";
+import { loadPublicStudioProjects } from "@/lib/studio-projects";
 import { getMangaRating } from "@/lib/manga-ratings";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { MangaCard } from "@/components/haven/MangaCard";
@@ -102,12 +102,13 @@ export function CatalogPage({
   const [studioEntries, setStudioEntries] = useState<CatalogManga[]>([]);
 
   useEffect(() => {
-    void loadStudioProjects<StudioCatalogProject>()
-      .then((rows) =>
+    void loadPublicStudioProjects<StudioCatalogProject>()
+      .then(async (rows) =>
         setStudioEntries(
-          rows
-            .filter((p) => p.catalogVisible)
-            .map((p) => ({
+          await Promise.all(
+            rows
+              .filter((p) => p.catalogVisible)
+              .map(async (p) => ({
               id: p.id,
               title: p.title,
               creator: "Toi",
@@ -116,12 +117,13 @@ export function CatalogPage({
                 ? p.genres[0]
                 : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
-              rating: getMangaRating(p.id),
+              rating: await getMangaRating(p.id),
               chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,
               language: "FR",
-            })),
+              })),
+          ),
         ),
       )
       .catch(() => setStudioEntries([]));

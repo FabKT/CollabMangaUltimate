@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { StyleTransferResult } from "@/server-functions/style-transfer-image";
 import type { GenerationUsage } from "@/lib/generation-metrics";
+import { buildStylePlan } from "@/lib/ai-style-plans";
 
 /**
  * Manga PAGE style-transfer plan (« planche »).
@@ -67,6 +68,13 @@ export function parsePlancheTransferInput(data: unknown) {
  */
 export function buildPlancheTransferPrompt(input: PlancheTransferInput): string {
   const hasStyleRef = input.customStyleImages.length > 0;
+  const stylePlan = buildStylePlan({
+    styleId: input.styleId,
+    styleName: input.styleName,
+    styleDescription: input.styleDescription,
+    hasReferenceImages: hasStyleRef,
+    usage: "page-transfer",
+  });
   const styleClause = hasStyleRef
     ? "Image B is provided as the attached style reference image(s). Use it as the PRIMARY STYLE REFERENCE."
     : `No separate style reference image is attached. Image B (the PRIMARY STYLE REFERENCE) is defined textually as the target style: "${input.styleName}"${
@@ -124,6 +132,8 @@ Image A defines, and must strictly preserve:
 Image B is the PRIMARY STYLE REFERENCE.
 Image B defines the visual rendering style that must be applied to Image A.
 ${styleClause}
+
+${stylePlan}
 
 Image B defines:
 - the lineart style;

@@ -1,7 +1,16 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { STATUS_META, type SponsorshipStatus } from "./store";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
+
+const STATUS_KEY: Record<SponsorshipStatus, TranslationKey> = {
+  activated: "sponsorStatus.activated",
+  pending: "sponsorStatus.pending",
+  finished: "sponsorStatus.finished",
+  cancelled: "sponsorStatus.cancelled",
+};
 
 export function StatusBadge({ status, size = "sm" }: { status: SponsorshipStatus; size?: "sm" | "md" }) {
+  const { t } = useI18n();
   const m = STATUS_META[status];
   const py = size === "md" ? "py-1" : "py-0.5";
   return (
@@ -10,7 +19,7 @@ export function StatusBadge({ status, size = "sm" }: { status: SponsorshipStatus
       style={{ background: m.bg, color: m.color, boxShadow: `inset 0 0 0 1px ${m.ring}` }}
     >
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: m.color }} aria-hidden />
-      {m.label}
+      {t(STATUS_KEY[status])}
     </span>
   );
 }

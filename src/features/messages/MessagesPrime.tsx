@@ -11,9 +11,14 @@ import {
   type DbProfile,
 } from "@/lib/db";
 import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
-import { getSnapshot } from "@/features/sponsorships/store";
+import { listSponsorships } from "@/features/sponsorships/store";
 import { SponsorshipModal } from "@/features/sponsorships/SponsorshipModal";
-import { appendThreadMessage, listThreadMessages, threadKey } from "@/lib/local-threads";
+import {
+  appendThreadMessage,
+  listThreadMessages,
+  subscribeThreadMessages,
+  threadKey,
+} from "@/lib/local-threads";
 import {
   Plus,
   Search,
@@ -190,16 +195,20 @@ function MessagesPage({ initialConversationId }: { initialConversationId?: strin
         ),
       )
       .catch(() => setProjectConvs([]));
-    setSponsorConvs(
-      getSnapshot().map((s) => ({
-        id: s.id,
-        name: s.name,
-        chip: s.creator,
-        preview: s.project,
-        time: "",
-        unread: 0,
-      })),
-    );
+    void listSponsorships()
+      .then((rows) =>
+        setSponsorConvs(
+          rows.map((s) => ({
+            id: s.id,
+            name: s.name,
+            chip: s.creator,
+            preview: s.project,
+            time: "",
+            unread: 0,
+          })),
+        ),
+      )
+      .catch(() => setSponsorConvs([]));
   };
   useEffect(refreshLinked, []);
 
@@ -269,19 +278,50 @@ function MessagesPage({ initialConversationId }: { initialConversationId?: strin
   // Chargement + abonnement Realtime du fil actif.
   useEffect(() => {
     if (activeConv && (baseTab === "projets" || baseTab === "parrainages")) {
-      // Fils locaux liés à un projet / parrainage.
       const key = threadKey(baseTab === "projets" ? "project" : "sponsorship", activeConv);
-      setMessages(
-        listThreadMessages(key).map((m) => ({
-          id: m.id,
-          user: m.author,
-          time: timeLabel(m.createdAt),
-          text: m.content,
-          self: m.author === "Toi",
-        })),
-      );
+      let cancelled = false;
+      void listThreadMessages(key)
+        .then((rows) => {
+          if (cancelled) return;
+          setMessages(
+            rows.map((m) => ({
+              id: m.id,
+              user: m.authorId === uid ? "Toi" : m.author,
+              time: timeLabel(m.createdAt),
+              text: m.content,
+              self: m.authorId === uid,
+            })),
+          );
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setMessages([]);
+            setThreadError(
+              error instanceof Error ? error.message : "Impossible de charger les messages.",
+            );
+          }
+        });
+      const unsubscribe = subscribeThreadMessages(key, (m) => {
+        setMessages((current) =>
+          current.some((item) => item.id === m.id)
+            ? current
+            : [
+                ...current,
+                {
+                  id: m.id,
+                  user: m.authorId === uid ? "Toi" : m.author,
+                  time: timeLabel(m.createdAt),
+                  text: m.content,
+                  self: m.authorId === uid,
+                },
+              ],
+        );
+      });
       setThreadError(null);
-      return;
+      return () => {
+        cancelled = true;
+        unsubscribe();
+      };
     }
     if (!activeConv || baseTab !== "amis") {
       setMessages([]);
@@ -321,7 +361,7 @@ function MessagesPage({ initialConversationId }: { initialConversationId?: strin
     if (baseTab === "projets" || baseTab === "parrainages") {
       try {
         const key = threadKey(baseTab === "projets" ? "project" : "sponsorship", activeConv);
-        const message = appendThreadMessage(key, "Toi", content);
+        const message = await appendThreadMessage(key, content);
         setMessages((current) => [
           ...current,
           {
@@ -483,7 +523,7 @@ function QuickProjectModal({
     setSaving(true);
     try {
       const existing = await loadStudioProjects<Record<string, unknown>>();
-      const id = `prj-${Date.now()}`;
+      const id = `prj-${crypto.randomUUID()}`;
       const saved = await saveStudioProjects([
         {
           id,

@@ -4,7 +4,11 @@ import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { CharacterImageResult } from "@/server-functions/character-image";
-import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
+import {
+  hasPendingGeneration,
+  resumeDurableGeneration,
+  runDurableGeneration,
+} from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { recordGeneratedImage } from "@/lib/manga-history";
 import { MANGA_STYLES, type MangaStyle } from "@/lib/manga-styles";
@@ -108,9 +112,11 @@ function CharacterCreatePage() {
   useEffect(() => {
     if (!hasPendingGeneration("character-create")) return;
     setIsGenerating(true);
-    void resumeDurableGeneration<CharacterImageResult>("character-create").then((generated) => {
-      if (generated) setResult(generated);
-    }).catch((err) => setError(err instanceof Error ? err.message : "Character generation failed."))
+    void resumeDurableGeneration<CharacterImageResult>("character-create")
+      .then((generated) => {
+        if (generated) setResult(generated);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Character generation failed."))
       .finally(() => setIsGenerating(false));
   }, []);
 
@@ -144,7 +150,7 @@ function CharacterCreatePage() {
     const imageFiles = Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) return;
     const imported = await Promise.all(
-      imageFiles.slice(0, 6).map(async (file) => ({
+      imageFiles.map(async (file) => ({
         id: createId("ref"),
         name: file.name.replace(/\.[^.]+$/, "") || "Référence",
         imageDataUrl: await fileToDataUrl(file),
@@ -165,7 +171,9 @@ function CharacterCreatePage() {
     try {
       const selectedStyle = activeStyle ?? STYLES[0];
       const [defaultStyleImageDataUrl, structureImageDataUrl] = await Promise.all([
-        activeCustomStyle ? Promise.resolve(activeCustomStyle.images[0]) : imageSourceToDataUrl(selectedStyle.face),
+        activeCustomStyle
+          ? Promise.resolve(activeCustomStyle.images[0])
+          : imageSourceToDataUrl(selectedStyle.face),
         imageSourceToDataUrl(selectedStyle.card),
       ]);
       const generated = await runDurableGeneration<CharacterImageResult>(
@@ -177,7 +185,9 @@ function CharacterCreatePage() {
           identityReferenceName: identityReference.name,
           styleId,
           styleName: activeCustomStyle?.name ?? selectedStyle.name,
-          styleDescription: activeCustomStyle ? "Style personnalisé défini par la bibliothèque d'images." : selectedStyle.description,
+          styleDescription: activeCustomStyle
+            ? "Style personnalisé défini par la bibliothèque d'images."
+            : selectedStyle.description,
           styleImageDataUrl: defaultStyleImageDataUrl,
           styleReferenceImages: activeCustomStyle?.images ?? [],
           structureImageDataUrl,
@@ -196,12 +206,38 @@ function CharacterCreatePage() {
           prompt: "",
           selectedCharacterIds: [],
           references: [
-            { ...identityReference, imageDataUrl: identityReference.imageDataUrl, role: "Inspiration" as const },
+            {
+              ...identityReference,
+              imageDataUrl: identityReference.imageDataUrl,
+              role: "Inspiration" as const,
+            },
             ...references
               .filter((reference) => reference.imageDataUrl)
-              .map((reference) => ({ ...reference, imageDataUrl: reference.imageDataUrl!, role: "Inspiration" as const })),
-            ...(defaultStyleImageDataUrl ? [{ id: `${styleId}-style`, name: "Style", imageDataUrl: defaultStyleImageDataUrl, role: "Style" as const }] : []),
-            ...(structureImageDataUrl ? [{ id: `${styleId}-structure`, name: "Structure", imageDataUrl: structureImageDataUrl, role: "Storyboard" as const }] : []),
+              .map((reference) => ({
+                ...reference,
+                imageDataUrl: reference.imageDataUrl!,
+                role: "Inspiration" as const,
+              })),
+            ...(defaultStyleImageDataUrl
+              ? [
+                  {
+                    id: `${styleId}-style`,
+                    name: "Style",
+                    imageDataUrl: defaultStyleImageDataUrl,
+                    role: "Style" as const,
+                  },
+                ]
+              : []),
+            ...(structureImageDataUrl
+              ? [
+                  {
+                    id: `${styleId}-structure`,
+                    name: "Structure",
+                    imageDataUrl: structureImageDataUrl,
+                    role: "Storyboard" as const,
+                  },
+                ]
+              : []),
           ],
           aspectRatio: "3:2",
           source: "Creation de personnage",
@@ -259,7 +295,9 @@ function CharacterCreatePage() {
           <div className="scroll-dark min-h-[280px] flex-1 overflow-y-auto p-4">
             {tab === "style" && (
               <div className="flex flex-col gap-3">
-                <p className="text-[12px] leading-5 text-text-secondary">Choisis le style de rendu.</p>
+                <p className="text-[12px] leading-5 text-text-secondary">
+                  Choisis le style de rendu.
+                </p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {STYLES.map((style) => {
                     const selected = style.id === styleId;
@@ -298,14 +336,26 @@ function CharacterCreatePage() {
                         key={style.id}
                         onClick={() => setStyleId(style.id)}
                         className={`flex flex-col gap-2 rounded-[14px] border p-2 transition ${
-                          selected ? "border-accent-border bg-accent-soft/30" : "border-border bg-surface-3 hover:border-accent"
+                          selected
+                            ? "border-accent-border bg-accent-soft/30"
+                            : "border-border bg-surface-3 hover:border-accent"
                         }`}
                       >
                         <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
-                          <img src={style.images[0]} alt={style.name} className="h-full w-full object-cover" />
-                          {selected && <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground"><Check className="h-3 w-3" /></span>}
+                          <img
+                            src={style.images[0]}
+                            alt={style.name}
+                            className="h-full w-full object-cover"
+                          />
+                          {selected && (
+                            <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground">
+                              <Check className="h-3 w-3" />
+                            </span>
+                          )}
                         </div>
-                        <span className="truncate text-center text-[12px] font-bold text-text-primary">{style.name}</span>
+                        <span className="truncate text-center text-[12px] font-bold text-text-primary">
+                          {style.name}
+                        </span>
                       </button>
                     );
                   })}
@@ -314,8 +364,12 @@ function CharacterCreatePage() {
                     onClick={() => setCreateStyleOpen(true)}
                     className="flex flex-col gap-2 rounded-[14px] border border-dashed border-border-strong bg-surface-3 p-2 transition hover:border-accent"
                   >
-                    <span className="grid aspect-square w-full place-items-center rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary"><Plus className="h-6 w-6" /></span>
-                    <span className="truncate text-center text-[12px] font-bold text-text-primary">Créer un style</span>
+                    <span className="grid aspect-square w-full place-items-center rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary">
+                      <Plus className="h-6 w-6" />
+                    </span>
+                    <span className="truncate text-center text-[12px] font-bold text-text-primary">
+                      Créer un style
+                    </span>
                   </button>
                 </div>
               </div>
@@ -554,7 +608,9 @@ function ReferencesTab({
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <p className="text-[13px] font-bold text-text-primary">Image d'identite</p>
-            <p className="mt-0.5 text-[11px] text-text-muted">Obligatoire pour generer une carte.</p>
+            <p className="mt-0.5 text-[11px] text-text-muted">
+              Obligatoire pour generer une carte.
+            </p>
           </div>
           {identityReference && (
             <button

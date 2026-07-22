@@ -1,16 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  clearWorkflowState,
-  loadWorkflowState,
-  markAllWorkflowNotificationsRead,
-  setWorkflowNotificationRead,
-  subscribeWorkflowState,
-  type WorkflowNotification,
-} from "@/lib/user-workflows";
-import {
+  clearReadNotifications,
   listMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
   respondFriendRequestDb,
+  respondProjectInvitationDb,
   startConversationWith,
   type DbNotification,
 } from "@/lib/db";
@@ -132,15 +128,8 @@ function NotificationsPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  const [workflowNotifications, setWorkflowNotifications] = useState<WorkflowNotification[]>([]);
   const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const refresh = () => setWorkflowNotifications(loadWorkflowState().notifications);
-    refresh();
-    return subscribeWorkflowState(refresh);
-  }, []);
 
   // Notifications réelles (Supabase) : demandes d'ami, messages reçus…
   const refreshDb = useCallback(() => {
@@ -153,6 +142,16 @@ function NotificationsPage() {
     async (n: Notification, a: ActionSpec) => {
       const label = a.label.toLowerCase();
       try {
+        if (n.recordId && n.category === "project" && (label.includes("accept") || label.includes("accepte"))) {
+          await respondProjectInvitationDb(n.recordId, true);
+          refreshDb();
+          return;
+        }
+        if (n.recordId && n.category === "project" && (label.includes("refus") || label.includes("declin"))) {
+          await respondProjectInvitationDb(n.recordId, false);
+          refreshDb();
+          return;
+        }
         // Demande d'ami : accepter / refuser (met à jour le workflow_record).
         if (n.recordId && (label.includes("accept") || label.includes("accepte"))) {
           await respondFriendRequestDb(n.recordId, true);
@@ -187,10 +186,7 @@ function NotificationsPage() {
     [navigate, refreshDb],
   );
 
-  const notifications = useMemo(
-    () => [...dbNotifications.map(dbToNotification), ...workflowNotifications.map(workflowToNotification)],
-    [dbNotifications, workflowNotifications],
-  );
+  const notifications = useMemo(() => dbNotifications.map(dbToNotification), [dbNotifications]);
 
   const filtered = useMemo(() => {
     return notifications.filter((n) => {
@@ -223,7 +219,16 @@ function NotificationsPage() {
   return (
     <main className="min-h-screen bg-bg text-text">
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-4 py-6 md:px-6 md:py-8 lg:px-8">
-        <PageTitle />
+        <PageTitle
+          onMarkAll={async () => {
+            await markAllNotificationsRead();
+            refreshDb();
+          }}
+          onClearRead={async () => {
+            await clearReadNotifications();
+            refreshDb();
+          }}
+        />
 
         <div className="mt-6 md:mt-8">
           <TabBar
@@ -243,8 +248,9 @@ function NotificationsPage() {
             selectedId={selected?.id ?? null}
             onSelect={(id) => {
               setSelectedId(id);
-              setWorkflowNotificationRead(id, true);
-              setWorkflowNotifications(loadWorkflowState().notifications);
+              if (id.startsWith("db-")) {
+                void markNotificationRead(id.slice(3), true).then(refreshDb);
+              }
               setMobileDetailOpen(true);
             }}
             search={search}
@@ -300,14 +306,31 @@ function dbToNotification(n: DbNotification): Notification {
     actor: n.entity_title ?? "CollabManga",
     time: relativeTime(n.created_at),
     status: n.read ? "read" : "unread",
-    importance: n.category === "friend" ? "action" : "normal",
+    importance: n.actions?.some((action) => action.kind === "primary" || action.kind === "danger")
+      ? "action"
+      : "normal",
     actorId: n.actor_id ?? undefined,
     recordId: n.record_id ?? undefined,
     entity: n.entity_title
-      ? { kind: category === "message" ? "conversation" : "profile", title: n.entity_title, subtitle: n.entity_type ?? "", status: n.read ? "Lu" : "Nouveau" }
+      ? {
+          kind:
+            category === "message"
+              ? "conversation"
+              : category === "project"
+                ? "project"
+                : category === "sponsorship"
+                  ? "sponsorship"
+                  : "profile",
+          title: n.entity_title,
+          subtitle: n.entity_subtitle || n.entity_type || "",
+          status: n.entity_status || (n.read ? "Lu" : "Nouveau"),
+        }
       : undefined,
+    meta: n.meta ?? undefined,
     actions:
-      n.category === "friend" && n.type === "demande_ami"
+      n.actions?.length
+        ? (n.actions as ActionSpec[])
+        : n.category === "friend" && n.type === "demande_ami"
         ? [
             { label: "Accepter", kind: "primary" },
             { label: "Refuser", kind: "danger" },
@@ -317,8 +340,9 @@ function dbToNotification(n: DbNotification): Notification {
           : n.actor_id
             ? [{ label: "Voir le profil", kind: "secondary" }]
             : [],
-    secondaryActions:
-      n.category === "friend" && n.type === "demande_ami" && n.actor_id
+    secondaryActions: n.secondary_actions?.length
+      ? (n.secondary_actions as ActionSpec[])
+      : n.category === "friend" && n.type === "demande_ami" && n.actor_id
         ? [{ label: "Voir le profil", kind: "secondary" }]
         : undefined,
   };
@@ -340,41 +364,6 @@ function routeByContext(n: Notification, navigate: ReturnType<typeof useNavigate
   }
 }
 
-function workflowToNotification(n: WorkflowNotification): Notification {
-  return {
-    id: n.id,
-    category: n.category,
-    typeLabel: n.type,
-    title: n.title,
-    preview: n.content,
-    description: n.content,
-    actor: n.actor,
-    time: relativeTime(n.createdAt),
-    status: n.read ? "read" : "unread",
-    importance: n.actions.some((action) => action.kind === "primary" || action.kind === "danger")
-      ? "action"
-      : "normal",
-    entity: workflowEntity(n),
-    meta: n.meta,
-    actions: n.actions,
-    secondaryActions: n.secondaryActions,
-  };
-}
-
-function workflowEntity(n: WorkflowNotification): RelatedEntity {
-  const base = {
-    title: n.entityTitle,
-    subtitle: n.entitySubtitle || n.entityType,
-    status: n.entityStatus || "Nouveau",
-  };
-  if (n.entityType === "profile") return { kind: "profile", ...base };
-  if (n.entityType === "note") return { kind: "note", ...base };
-  if (n.category === "sponsorship") return { kind: "sponsorship", ...base };
-  if (n.entityType === "chapter") return { kind: "chapter", ...base };
-  if (n.entityType === "manga") return { kind: "manga", ...base };
-  return { kind: "project", ...base };
-}
-
 function relativeTime(iso: string) {
   const elapsed = Math.max(0, Date.now() - new Date(iso).getTime());
   const minutes = Math.floor(elapsed / 60000);
@@ -386,7 +375,13 @@ function relativeTime(iso: string) {
   return `${days} d`;
 }
 
-function PageTitle() {
+function PageTitle({
+  onMarkAll,
+  onClearRead,
+}: {
+  onMarkAll: () => Promise<void>;
+  onClearRead: () => Promise<void>;
+}) {
   return (
     <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="max-w-2xl">
@@ -403,17 +398,13 @@ function PageTitle() {
       <div className="flex flex-wrap items-center gap-2">
         <SecondaryButton
           icon={<CheckCheck className="h-4 w-4" />}
-          onClick={() => {
-            markAllWorkflowNotificationsRead();
-          }}
+          onClick={() => void onMarkAll()}
         >
           Mark all as read
         </SecondaryButton>
         <SecondaryButton
           icon={<Trash2 className="h-4 w-4" />}
-          onClick={() => {
-            clearWorkflowState();
-          }}
+          onClick={() => void onClearRead()}
         >
           Clear read
         </SecondaryButton>

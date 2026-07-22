@@ -1,3 +1,5 @@
+import { getSupabase } from "@/lib/supabase";
+
 export type WorkflowCategory = "project" | "sponsorship" | "friend" | "manga" | "system";
 
 export type WorkflowRecordKind =
@@ -69,8 +71,6 @@ type CreateRecordInput = Omit<WorkflowRecord, "id" | "createdAt"> & {
   notification?: Omit<WorkflowNotification, "id" | "recordId" | "createdAt" | "read">;
 };
 
-const STORE_KEY = "collabmanga.userWorkflows.v1";
-const EVENT_NAME = "collabmanga:user-workflows";
 const CURRENT_USER = "Current user";
 
 const nowIso = () => new Date().toISOString();
@@ -80,29 +80,8 @@ function emptyState(): WorkflowState {
   return { records: [], notifications: [] };
 }
 
-function canUseStorage() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
-
 function readState(): WorkflowState {
-  if (!canUseStorage()) return emptyState();
-  try {
-    const raw = window.localStorage.getItem(STORE_KEY);
-    if (!raw) return emptyState();
-    const parsed = JSON.parse(raw) as Partial<WorkflowState>;
-    return {
-      records: Array.isArray(parsed.records) ? parsed.records : [],
-      notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
-    };
-  } catch {
-    return emptyState();
-  }
-}
-
-function writeState(state: WorkflowState) {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(STORE_KEY, JSON.stringify(state));
-  window.dispatchEvent(new CustomEvent(EVENT_NAME));
+  return emptyState();
 }
 
 export function loadWorkflowState(): WorkflowState {
@@ -110,20 +89,58 @@ export function loadWorkflowState(): WorkflowState {
 }
 
 export function subscribeWorkflowState(listener: () => void) {
-  if (typeof window === "undefined") return () => {};
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === STORE_KEY) listener();
-  };
-  window.addEventListener(EVENT_NAME, listener);
-  window.addEventListener("storage", onStorage);
-  return () => {
-    window.removeEventListener(EVENT_NAME, listener);
-    window.removeEventListener("storage", onStorage);
-  };
+  void listener;
+  return () => {};
+}
+
+async function persistWorkflowRecord(input: CreateRecordInput) {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) return;
+  let recipientId: string | null = null;
+  if (input.recipient && input.recipient !== CURRENT_USER) {
+    const { data } = await sb.rpc("resolve_profile_for_project_invitation", {
+      identifier: input.recipient,
+    });
+    recipientId = data?.[0]?.id ?? null;
+  }
+  const { data: record, error } = await sb
+    .from("workflow_records")
+    .insert({
+      kind: input.kind,
+      status: input.status,
+      initiator_id: uid,
+      recipient_id: recipientId,
+      title: input.title,
+      entity_type: input.entityType,
+      entity_title: input.entityTitle,
+      payload: input.payload,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  if (!input.notification || !recipientId || recipientId === uid) return;
+  const notification = input.notification;
+  const { error: notificationError } = await sb.from("notifications").insert({
+    record_id: record.id,
+    recipient_id: recipientId,
+    actor_id: uid,
+    category: notification.category,
+    type: notification.type,
+    title: notification.title,
+    content: notification.content,
+    entity_type: notification.entityType,
+    entity_title: notification.entityTitle,
+    entity_subtitle: notification.entitySubtitle,
+    entity_status: notification.entityStatus,
+    actions: notification.actions,
+    secondary_actions: notification.secondaryActions,
+    meta: notification.meta,
+  });
+  if (notificationError) throw new Error(notificationError.message);
 }
 
 export function createWorkflowRecord(input: CreateRecordInput): WorkflowRecord {
-  const state = readState();
   const record: WorkflowRecord = {
     id: newId("wf"),
     createdAt: nowIso(),
@@ -136,34 +153,17 @@ export function createWorkflowRecord(input: CreateRecordInput): WorkflowRecord {
     entityTitle: input.entityTitle,
     payload: input.payload,
   };
-  const notifications = [...state.notifications];
-  if (input.notification) {
-    notifications.unshift({
-      ...input.notification,
-      id: newId("notif"),
-      recordId: record.id,
-      createdAt: record.createdAt,
-      read: false,
-    });
-  }
-  writeState({ records: [record, ...state.records], notifications });
+  void persistWorkflowRecord(input).catch(() => {});
   return record;
 }
 
 export function setWorkflowNotificationRead(id: string, read = true) {
-  const state = readState();
-  writeState({
-    ...state,
-    notifications: state.notifications.map((n) => (n.id === id ? { ...n, read } : n)),
-  });
+  void id;
+  void read;
 }
 
 export function markAllWorkflowNotificationsRead() {
-  const state = readState();
-  writeState({
-    ...state,
-    notifications: state.notifications.map((n) => ({ ...n, read: true })),
-  });
+  return;
 }
 
 export function sendCollaborationInvitation(input: {
@@ -641,7 +641,7 @@ export function createProjectWorkflow(input: {
 
 /** Vide entièrement le store local (records + notifications). */
 export function clearWorkflowState() {
-  writeState(emptyState());
+  return;
 }
 
 /**

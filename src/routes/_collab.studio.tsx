@@ -15,15 +15,15 @@ import { announcementFromStudioSponsorship } from "@/lib/sponsorship-map";
 import { projectAnnouncementFromRecruit } from "@/lib/recruit-map";
 import { DetailsModal as RecruitDetailsModal } from "./_collab.announcements";
 import {
-  createAnnouncementWorkflow,
-  createProjectNote,
-  createProjectWorkflow,
-  removeCollaborator,
-  sendCollaborationInvitation,
-  updateCollaboratorRole,
-} from "@/lib/user-workflows";
-import { loadStudioProjects, saveStudioProjects } from "@/lib/studio-projects";
-import { addAnnouncement } from "@/lib/db";
+  deleteStudioProject,
+  leaveStudioProject,
+  loadStudioProjects,
+  removeStudioProjectMember,
+  saveStudioProjects,
+  transferStudioProjectOwnership,
+  updateStudioProjectMember,
+} from "@/lib/studio-projects";
+import { addAnnouncement, sendProjectInvitationDb } from "@/lib/db";
 import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/studio")({
@@ -659,7 +659,6 @@ function ProjectWorkspace({
           defaultDate={noteDate}
           onAdd={(note) => {
             updateProject((p) => ({ ...p, notes: [note, ...p.notes], updated: "À l'instant" }));
-            createProjectNote({ projectTitle: project.title, content: note.content || note.title });
             setModal(null);
             onWorkflow("Note ajoutée.");
           }}
@@ -671,7 +670,7 @@ function ProjectWorkspace({
           onAdd={(sponsorship) => {
             updateProject((p) => ({ ...p, sponsorships: [sponsorship, ...p.sponsorships], updated: "À l'instant" }));
             // Annonce créée par un projet → visible dans « Trouver un projet ».
-            addSponsorOption({
+            void addSponsorOption({
               mode: "project",
               format: sponsorship.title,
               platforms: sponsorship.platform.split(", ").filter(Boolean),
@@ -682,12 +681,8 @@ function ProjectWorkspace({
               quantity: sponsorship.quantity,
               description: sponsorship.description,
               ownerName: project.title,
-            });
-            createAnnouncementWorkflow({
-              title: sponsorship.title,
-              category: "Parrainage",
-              description: sponsorship.description,
-              projectTitle: project.title,
+            }).catch((error: unknown) => {
+              onWorkflow(error instanceof Error ? error.message : "L'annonce n'a pas pu être publiée.");
             });
             setModal(null);
             onWorkflow("Annonce de parrainage publiée.");
@@ -709,14 +704,10 @@ function ProjectWorkspace({
               genres: project.genres,
               subgenres: project.subgenres ?? [],
               project_title: project.title,
+              remuneration: recruit.remunerated,
+              engagement: recruit.commitment === "Ponctuel" ? "Ponctuel" : "Long terme",
             }).catch(() => {
               onWorkflow("Annonce enregistrée dans le projet et disponible localement, mais sa publication en ligne a échoué.");
-            });
-            createAnnouncementWorkflow({
-              title: recruit.title,
-              category: "Recrutement",
-              description: recruit.description,
-              projectTitle: project.title,
             });
             setModal(null);
             onWorkflow("Annonce de recrutement publiée.");
@@ -1641,7 +1632,9 @@ function CollaborateursTab({
     if (me === "collaborateur") return deny("un collaborateur ne peut pas promouvoir.");
     if (target.level === "collaborateur") {
       setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "editeur" } : c)));
-      updateCollaboratorRole({ collaborator: target.name, projectTitle: project.title, role: LEVEL_LABEL.editeur });
+      void updateStudioProjectMember(project.id, target.id, "editeur").catch((error: unknown) =>
+        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié."),
+      );
       onWorkflow?.(`${target.name} est maintenant éditeur.`);
       return;
     }
@@ -1653,7 +1646,9 @@ function CollaborateursTab({
           c.id === target.id ? { ...c, level: "chef" } : c.level === "chef" ? { ...c, level: "editeur" } : c,
         ),
       );
-      updateCollaboratorRole({ collaborator: target.name, projectTitle: project.title, role: LEVEL_LABEL.chef });
+      void transferStudioProjectOwnership(project.id, target.id).catch((error: unknown) =>
+        onWorkflow?.(error instanceof Error ? error.message : "Le projet n'a pas pu être transféré."),
+      );
       onWorkflow?.(`${target.name} est maintenant le chef du projet — tu deviens éditeur.`);
       return;
     }
@@ -1666,7 +1661,9 @@ function CollaborateursTab({
     if (me !== "chef") return deny("seul le chef peut rétrograder.");
     if (target.level === "editeur") {
       setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "collaborateur" } : c)));
-      updateCollaboratorRole({ collaborator: target.name, projectTitle: project.title, role: LEVEL_LABEL.collaborateur });
+      void updateStudioProjectMember(project.id, target.id, "collaborateur").catch((error: unknown) =>
+        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié."),
+      );
       onWorkflow?.(`${target.name} est maintenant collaborateur.`);
       return;
     }
@@ -1680,7 +1677,9 @@ function CollaborateursTab({
     if (me === "collaborateur") return deny("un collaborateur ne peut exclure personne.");
     if (me === "editeur" && target.level === "editeur") return deny("un éditeur ne peut pas exclure un autre éditeur.");
     setCollabs((list) => list.filter((c) => c.id !== target.id));
-    removeCollaborator({ collaborator: target.name, projectTitle: project.title });
+    void removeStudioProjectMember(project.id, target.id).catch((error: unknown) =>
+      onWorkflow?.(error instanceof Error ? error.message : "Le collaborateur n'a pas pu être retiré."),
+    );
     onWorkflow?.(`${target.name} a été exclu du projet.`);
   };
 
@@ -1700,7 +1699,7 @@ function CollaborateursTab({
           <div key={c.id} className="relative flex items-center gap-3 rounded-[18px] border border-[var(--border-default)] bg-[var(--elevated)] p-4 shadow-[var(--shadow-card)]">
             <Link
               to="/profile/$profileId"
-              params={{ profileId: c.name === "Vous" ? "moi" : c.name.toLowerCase().replace(/\s+/g, "-") }}
+              params={{ profileId: c.name === "Vous" ? "moi" : c.id }}
               className="flex min-w-0 flex-1 items-center gap-3"
               title={`Voir le profil de ${c.name}`}
             >
@@ -1742,7 +1741,7 @@ function CollaborateursTab({
       </div>
       {inviteOpen && (
         <InviteCollaboratorModal
-          projectTitle={project.title}
+          projectId={project.id}
           existingRecipients={collabs.map((collaborator) => collaborator.name)}
           onClose={() => setInviteOpen(false)}
           onDone={(message) => {
@@ -1756,12 +1755,12 @@ function CollaborateursTab({
 }
 
 function InviteCollaboratorModal({
-  projectTitle,
+  projectId,
   existingRecipients,
   onClose,
   onDone,
 }: {
-  projectTitle: string;
+  projectId: string;
   existingRecipients: string[];
   onClose: () => void;
   onDone: (message: string) => void;
@@ -1770,8 +1769,9 @@ function InviteCollaboratorModal({
   const [role, setRole] = useState<string[]>(["Dessinateur"]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     if (!recipient.trim()) {
       setError("Indique un email ou un pseudo.");
       return;
@@ -1780,20 +1780,28 @@ function InviteCollaboratorModal({
       setError("Cette personne fait déjà partie du projet.");
       return;
     }
-    sendCollaborationInvitation({
-      recipient: recipient.trim(),
-      projectTitle,
-      role: role[0] || "Dessinateur",
-      message: message.trim() || undefined,
-    });
-    onDone(`Invitation envoyée à ${recipient.trim()}. Elle rejoindra le projet après acceptation.`);
+    setSaving(true);
+    setError("");
+    try {
+      await sendProjectInvitationDb({
+        projectId,
+        recipient: recipient.trim(),
+        role: role[0] || "Dessinateur",
+        message: message.trim() || undefined,
+      });
+      onDone(`Invitation envoyée à ${recipient.trim()}. Elle rejoindra le projet après acceptation.`);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "L'invitation n'a pas pu être envoyée.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <StudioModal
       title="Inviter un collaborateur"
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={UserPlus} onClick={submit}>Envoyer l'invitation</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={UserPlus} onClick={() => { if (!saving) void submit(); }}>{saving ? "Envoi…" : "Envoyer l'invitation"}</PrimaryButton></>}
     >
       <div className="flex flex-col gap-5">
         <ModalField label="Email ou pseudo"><TextInput value={recipient} onChange={setRecipient} placeholder="collaborateur@email.com ou @username" /></ModalField>
@@ -1947,7 +1955,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
       return;
     }
     const project: Project = {
-      id: `prj-${Date.now()}`,
+      id: `prj-${crypto.randomUUID()}`,
       title: title.trim(),
       synopsis: synopsis.trim() || "Synopsis à compléter.",
       status: "Draft",
@@ -1975,7 +1983,6 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
       collaborators: defaultCollaborators(),
       coverDataUrl,
     };
-    createProjectWorkflow({ title: project.title, synopsis: project.synopsis, genres: project.genres });
     onCreate(project);
   };
 
@@ -2982,10 +2989,14 @@ function CollabMangaPage() {
   useEffect(() => {
     if (!loaded) return;
     const timer = window.setTimeout(() => {
-      void saveStudioProjects(projects).then((saved) => {
-        if (!saved) setFeedback("L'enregistrement local des projets a échoué.");
-      });
-    }, 180);
+      void saveStudioProjects(projects)
+        .then((saved) => {
+          if (!saved) setFeedback("Connecte-toi pour enregistrer les projets.");
+        })
+        .catch((error: unknown) => {
+          setFeedback(error instanceof Error ? error.message : "La sauvegarde du projet a échoué.");
+        });
+    }, 800);
     return () => window.clearTimeout(timer);
   }, [projects, loaded]);
 
@@ -3021,12 +3032,18 @@ function CollabMangaPage() {
 
   const deleteProject = (id: string) => {
     setProjects((current) => current.filter((p) => p.id !== id));
+    void deleteStudioProject(id).catch((error: unknown) => {
+      showFeedback(error instanceof Error ? error.message : "La suppression du projet a échoué.");
+    });
     void navigate({ search: { project: undefined, chapter: undefined } });
     showFeedback("Projet supprimé.");
   };
 
   const leaveProject = (id: string) => {
     setProjects((current) => current.filter((project) => project.id !== id));
+    void leaveStudioProject(id).catch((error: unknown) => {
+      showFeedback(error instanceof Error ? error.message : "Impossible de quitter le projet.");
+    });
     void navigate({ search: { project: undefined, chapter: undefined } });
     showFeedback("Tu as quitté le projet.");
   };
@@ -3078,7 +3095,6 @@ function CollabMangaPage() {
                   updated: "À l'instant",
                 };
               });
-              if (!noteId) createProjectNote({ projectTitle: project.title, content: note.content || note.title });
               return id;
             }}
             onChapterChange={(updater) =>
