@@ -922,7 +922,8 @@ export async function getProfileByUsername(
     let { data, error } = await supabase.from("profiles").select(cols).eq("id", clean).maybeSingle();
     if (error) {
       const fallback = await supabase.from("profiles").select(fallbackCols).eq("id", clean).maybeSingle();
-      data = fallback.data;
+      if (fallback.error) throw new Error(fallback.error.message);
+      data = fallback.data ? { ...fallback.data, banner_url: null } : null;
     }
     if (data) return data as DbProfile & { role?: string | null; secondary_role?: string | null };
   }
@@ -939,7 +940,8 @@ export async function getProfileByUsername(
       .ilike("username", clean)
       .limit(1)
       .maybeSingle();
-    data = fallback.data;
+    if (fallback.error) throw new Error(fallback.error.message);
+    data = fallback.data ? { ...fallback.data, banner_url: null } : null;
   }
   return (
     (data as (DbProfile & { role?: string | null; secondary_role?: string | null }) | null) ?? null

@@ -157,13 +157,11 @@ function OwnProfilePage() {
 }
 
 export function PublicProfilePage({
-  identity,
   profileId,
 }: {
-  identity: PublicProfileIdentity;
-  profileId?: string;
+  profileId: string;
 }) {
-  return <ProfilePage initialMode="public" initialProfileType={identity.profileType} identity={identity} profileId={profileId} />;
+  return <ProfilePage initialMode="public" profileId={profileId} />;
 }
 
 function ProfilePage({
@@ -184,6 +182,9 @@ function ProfilePage({
   const [tab, setTab] = useState("overview");
   // Identité réelle affichée (utilisateur connecté en mode own, profil visité en mode public).
   const [liveIdentity, setLiveIdentity] = useState<PublicProfileIdentity | null>(null);
+  const [publicProfileStatus, setPublicProfileStatus] = useState<
+    "loading" | "ready" | "not-found" | "error"
+  >(publicLocked ? "loading" : "ready");
   const [identityRefreshKey, setIdentityRefreshKey] = useState(0);
   // Id Supabase du profil affiché (le mien en own ; celui visité en public).
   const [shownUserId, setShownUserId] = useState<string | null>(null);
@@ -216,8 +217,14 @@ function ProfilePage({
     let cancelled = false;
     void (async () => {
       try {
-        if (!supabase) return;
+        if (!supabase) {
+          if (publicLocked && !cancelled) setPublicProfileStatus("error");
+          return;
+        }
         if (publicLocked) {
+          setPublicProfileStatus("loading");
+          setLiveIdentity(null);
+          setShownUserId(null);
           // Profil d'un AUTRE utilisateur : on le résout par pseudo.
           const slug = profileId ?? identity.username;
           const other = slug ? await getProfileByUsername(slug) : null;
@@ -225,9 +232,11 @@ function ProfilePage({
           if (other) {
             setShownUserId(other.id);
             setLiveIdentity(identityFromProfile(other));
+            setPublicProfileStatus("ready");
             setProfileType(other.role === "Créateur de contenu" ? "content" : "creator");
           } else {
-            setShownUserId(null); // profil introuvable en base → contenu vide
+            setShownUserId(null);
+            setPublicProfileStatus("not-found");
           }
           return;
         }
@@ -247,7 +256,7 @@ function ProfilePage({
             .select("username, display_name, avatar_url, role, secondary_role")
             .eq("id", user.id)
             .maybeSingle();
-          profileRow = fallback.data;
+          profileRow = fallback.data ? { ...fallback.data, banner_url: null } : null;
         }
         if (profileRow) {
           setLiveIdentity(identityFromProfile(profileRow));
@@ -277,7 +286,7 @@ function ProfilePage({
           } : current);
         }
       } catch {
-        /* identité par défaut conservée */
+        if (publicLocked && !cancelled) setPublicProfileStatus("error");
       }
     })();
     return () => {
@@ -424,6 +433,41 @@ function ProfilePage({
     if (mode === "own") base.push({ id: "friends", label: "Amis" }, { id: "favorites", label: "Favoris" }, { id: "account", label: "Account" });
     return base;
   }, [profileType, mode]);
+
+  if (publicLocked && publicProfileStatus !== "ready") {
+    const isLoading = publicProfileStatus === "loading";
+    const title = isLoading
+      ? "Chargement du profil..."
+      : publicProfileStatus === "not-found"
+        ? "Profil introuvable"
+        : "Impossible de charger ce profil";
+    const message = isLoading
+      ? "Les informations de ce membre sont chargées depuis Supabase."
+      : publicProfileStatus === "not-found"
+        ? "Ce compte n'existe pas ou n'est plus disponible."
+        : "La connexion à Supabase a échoué. Réessaie dans un instant.";
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050B1D] px-4 text-[#F7FAFF]">
+        <div className="w-full max-w-md text-center">
+          {isLoading ? (
+            <div className="mx-auto mb-5 h-9 w-9 animate-spin rounded-full border-2 border-[#39FF88]/30 border-t-[#39FF88]" />
+          ) : null}
+          <h1 className="font-display text-2xl font-bold">{title}</h1>
+          <p className="mt-3 text-sm text-[#B8C4E5]">{message}</p>
+          {!isLoading ? (
+            <button
+              type="button"
+              onClick={() => setIdentityRefreshKey((value) => value + 1)}
+              className="mt-6 rounded-lg bg-[#39FF88] px-5 py-2.5 text-sm font-bold text-[#04180d]"
+            >
+              Réessayer
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#050B1D", color: "#F7FAFF" }}>

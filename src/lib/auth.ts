@@ -4,8 +4,9 @@ import { supabase } from "./supabase";
 
 /**
  * Session Supabase côté client.
- * - `useSession()` : session courante + rafraîchissement automatique
- *   (login/logout dans n'importe quel onglet).
+ * - `useSession()` : session courante + rafraîchissement automatique.
+ *   Chaque onglet possède sa propre session Supabase afin que plusieurs
+ *   comptes puissent être utilisés sans s'écraser mutuellement.
  * - À l'inscription, le trigger DB `handle_new_user` crée la ligne `profiles`
  *   à partir de `user_metadata.username` / `display_name`.
  */
@@ -32,7 +33,7 @@ export function useSession() {
 }
 
 export async function signOut() {
-  await supabase?.auth.signOut();
+  await supabase?.auth.signOut({ scope: "local" });
 }
 
 /** Traduit les erreurs Supabase Auth les plus courantes. */

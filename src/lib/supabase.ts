@@ -20,10 +20,36 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | un
 let client: SupabaseClient | null = null;
 
 if (supabaseUrl && supabaseKey) {
+  const storage =
+    typeof window === "undefined"
+      ? undefined
+      : {
+          getItem(key: string) {
+            const tabSession = window.sessionStorage.getItem(key);
+            if (tabSession !== null) return tabSession;
+
+            // Migrate the previous browser-wide session once. All subsequent
+            // authentication changes remain isolated to this tab.
+            const sharedSession = window.localStorage.getItem(key);
+            if (sharedSession !== null) {
+              window.sessionStorage.setItem(key, sharedSession);
+              window.localStorage.removeItem(key);
+            }
+            return sharedSession;
+          },
+          setItem(key: string, value: string) {
+            window.sessionStorage.setItem(key, value);
+          },
+          removeItem(key: string) {
+            window.sessionStorage.removeItem(key);
+          },
+        };
+
   client = createClient(supabaseUrl, supabaseKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      storage,
     },
   });
 }
