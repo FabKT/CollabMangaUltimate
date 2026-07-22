@@ -514,7 +514,8 @@ export function sendAnnouncementSponsoring(input: {
   });
 }
 
-export function sendSponsorshipContact(input: {
+export async function sendSponsorshipContact(input: {
+  sponsorshipId?: string;
   announcementTitle: string;
   announcementMode: "creator" | "project";
   owner: string;
@@ -526,7 +527,7 @@ export function sendSponsorshipContact(input: {
 }) {
   const actor = input.initiator ?? CURRENT_USER;
   const isProjectAnnouncement = input.announcementMode === "project";
-  return createWorkflowRecord({
+  const workflow: CreateRecordInput = {
     kind: "sponsorship_contact",
     status: "pending",
     initiator: actor,
@@ -560,7 +561,8 @@ export function sendSponsorshipContact(input: {
         { label: isProjectAnnouncement ? "Projet" : "Profil lié", value: input.linked },
       ],
     },
-  });
+  };
+  await persistWorkflowRecord(workflow);
 }
 
 export function createAnnouncementWorkflow(input: {

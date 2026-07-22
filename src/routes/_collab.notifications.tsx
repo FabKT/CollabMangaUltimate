@@ -6,8 +6,10 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   respondFriendRequestDb,
+  respondSponsorshipRequestDb,
   respondProjectInvitationDb,
   startConversationWith,
+  subscribeMyNotifications,
   type DbNotification,
 } from "@/lib/db";
 import {
@@ -136,6 +138,18 @@ function NotificationsPage() {
     void listMyNotifications().then(setDbNotifications).catch(() => setDbNotifications([]));
   }, []);
   useEffect(() => refreshDb(), [refreshDb]);
+  useEffect(() => {
+    let unsubscribe = () => {};
+    let cancelled = false;
+    void subscribeMyNotifications(refreshDb).then((cleanup) => {
+      if (cancelled) cleanup();
+      else unsubscribe = cleanup;
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [refreshDb]);
 
   // Routage des boutons d'action vers la vraie navigation / les workflows Supabase.
   const runAction = useCallback(
@@ -152,13 +166,23 @@ function NotificationsPage() {
           refreshDb();
           return;
         }
+        if (n.recordId && n.category === "sponsorship" && (label.includes("accept") || label.includes("accepte"))) {
+          await respondSponsorshipRequestDb(n.recordId, true);
+          refreshDb();
+          return;
+        }
+        if (n.recordId && n.category === "sponsorship" && (label.includes("refus") || label.includes("declin"))) {
+          await respondSponsorshipRequestDb(n.recordId, false);
+          refreshDb();
+          return;
+        }
         // Demande d'ami : accepter / refuser (met à jour le workflow_record).
-        if (n.recordId && (label.includes("accept") || label.includes("accepte"))) {
+        if (n.recordId && n.category === "friend" && (label.includes("accept") || label.includes("accepte"))) {
           await respondFriendRequestDb(n.recordId, true);
           refreshDb();
           return;
         }
-        if (n.recordId && (label.includes("refus") || label.includes("declin") || label.includes("decline"))) {
+        if (n.recordId && n.category === "friend" && (label.includes("refus") || label.includes("declin") || label.includes("decline"))) {
           await respondFriendRequestDb(n.recordId, false);
           refreshDb();
           return;
@@ -713,7 +737,7 @@ function DetailPanel({
             <PreviewCard
               icon={<MessageSquare className="h-4 w-4" />}
               label="Message preview"
-              body="This is a placeholder preview of the message content. Open the conversation to view the full thread."
+              body={notification.preview || notification.description}
             />
           )}
           {notification.category === "sponsorship" &&

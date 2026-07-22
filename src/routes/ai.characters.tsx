@@ -117,7 +117,7 @@ function CharacterStudio() {
     void resumeDurableGeneration<CharacterImageResult>("characters-card")
       .then((payload) => {
         if (!payload) return;
-        const cardUrl = payload.imageDataUrl || payload.imageUrl;
+        const cardUrl = payload.imageUrl;
         if (!cardUrl) return;
         setCharacters((current) => current.map((character) =>
           character.id === targetId
@@ -271,7 +271,7 @@ function CharacterStudio() {
           })),
         },
       );
-      const cardUrl = payload.imageDataUrl || payload.imageUrl;
+      const cardUrl = payload.imageUrl;
       if (!cardUrl) throw new Error("Le backend n'a renvoyé aucune carte.");
       void recordGeneratedImage({
         source: "Bibliotheque de personnages",

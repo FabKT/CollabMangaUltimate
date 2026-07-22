@@ -48,3 +48,26 @@ export async function removeFavorite(id: string): Promise<void> {
   const { error } = await sb.from("user_favorites").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+export async function setFavorite(
+  kind: FavoriteKind,
+  title: string,
+  saved: boolean,
+): Promise<void> {
+  const sb = getSupabase();
+  const userId = (await sb.auth.getSession()).data.session?.user.id;
+  if (!userId) throw new Error("Connecte-toi pour modifier tes favoris.");
+  const query = sb
+    .from("user_favorites")
+    .delete()
+    .eq("user_id", userId)
+    .eq("kind", kind)
+    .eq("title", title.trim());
+  const { error: deleteError } = await query;
+  if (deleteError) throw new Error(deleteError.message);
+  if (!saved) return;
+  const { error: insertError } = await sb
+    .from("user_favorites")
+    .insert({ user_id: userId, kind, title: title.trim() });
+  if (insertError) throw new Error(insertError.message);
+}

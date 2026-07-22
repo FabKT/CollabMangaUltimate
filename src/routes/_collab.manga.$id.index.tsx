@@ -22,6 +22,8 @@ type StudioReadableProject = {
   subgenres?: string[];
   coverDataUrl?: string;
   catalogVisible?: boolean;
+  ownerId?: string;
+  creator?: string;
   chapters: {
     id: string;
     number: number;
@@ -106,10 +108,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
       .catch(() => setSponsors([]));
   }, [project.title]);
 
-  // Le créateur apparaît toujours (à défaut de collaborateurs enregistrés).
-  const collaborators = (project.collaborators && project.collaborators.length > 0)
-    ? project.collaborators
-    : [{ id: "co-owner", name: "Vous", role: "Créateur", level: "chef" }];
+  const collaborators = project.collaborators ?? [];
 
   const TABS: { id: MangaTab; label: string; icon: typeof BookOpen; count: number }[] = [
     { id: "chapters", label: "Chapitres", icon: BookOpen, count: published.length },
@@ -268,7 +267,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
                 <Link
                   key={c.id}
                   to="/profile/$profileId"
-                  params={{ profileId: c.name === "Vous" ? "moi" : c.name.toLowerCase().replace(/\s+/g, "-") }}
+                  params={{ profileId: c.id }}
                   className="flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors hover:border-[color:var(--color-neon,#39ff88)]"
                   style={{ borderColor: "var(--color-border-default)", background: "var(--color-card, rgba(255,255,255,0.02))" }}
                 >

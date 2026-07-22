@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Star } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Announcement } from "@/lib/sponsorship-data";
 import {
   btnPrimary,
@@ -11,24 +11,7 @@ import {
   AvailabilityChip,
   Thumb,
 } from "./ui";
-
-const CREATOR_REVIEWS = [
-  {
-    name: "Studio Ronin",
-    rating: 5,
-    comment: "Livrable propre, timing respecte et integration naturelle dans la video.",
-  },
-  {
-    name: "Moonline Press",
-    rating: 4,
-    comment: "Bonne comprehension du projet et retour detaille sur les points forts du manga.",
-  },
-  {
-    name: "Hollow Sun Team",
-    rating: 5,
-    comment: "Campagne efficace, communication claire et audience pertinente.",
-  },
-];
+import { listSponsorshipReviews, type SponsorshipReview } from "@/lib/sponsorship-reviews";
 
 function SectionCard({
   title,
@@ -67,14 +50,27 @@ export function DetailDialog({
   onOpenChange,
   onContact,
   hideActions = false,
+  saved = false,
+  onToggleSave,
 }: {
   announcement: Announcement | null;
   onOpenChange: (open: boolean) => void;
   onContact: (announcement: Announcement) => void;
   /** Masque les boutons Apply/Contact + Save (vue lecture seule, ex. depuis un projet). */
   hideActions?: boolean;
+  saved?: boolean;
+  onToggleSave?: () => void;
 }) {
   const a = announcement;
+  const [reviews, setReviews] = useState<SponsorshipReview[]>([]);
+
+  useEffect(() => {
+    if (!a?.ownerId || a.mode !== "creator") {
+      setReviews([]);
+      return;
+    }
+    void listSponsorshipReviews(a.ownerId).then(setReviews).catch(() => setReviews([]));
+  }, [a?.ownerId, a?.mode]);
 
   return (
     <Dialog open={!!a} onOpenChange={onOpenChange}>
@@ -133,7 +129,9 @@ export function DetailDialog({
                     <button type="button" className={btnPrimary} onClick={() => onContact(a)}>
                       {a.mode === "project" ? "Apply" : "Contact"}
                     </button>
-                    <button type="button" className={btnSecondary}>Save</button>
+                    <button type="button" className={btnSecondary} onClick={onToggleSave}>
+                      {saved ? "Enregistré" : "Save"}
+                    </button>
                   </div>
                 )}
               </SectionCard>
@@ -141,10 +139,13 @@ export function DetailDialog({
               {a.mode === "creator" && (
                 <SectionCard title="Avis des partenariats">
                   <div className="space-y-3">
-                    {CREATOR_REVIEWS.map((review) => (
-                      <div key={review.name} className="rounded-[14px] border border-[rgba(133,154,206,0.18)] bg-cm-panel p-4">
+                    {reviews.length === 0 && (
+                      <p className="font-manrope text-[13px] text-cm-muted">Aucun avis pour le moment.</p>
+                    )}
+                    {reviews.map((review) => (
+                      <div key={review.id} className="rounded-[14px] border border-[rgba(133,154,206,0.18)] bg-cm-panel p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-manrope text-[12px] font-bold text-cm-text">{review.name}</p>
+                          <p className="font-manrope text-[12px] font-bold text-cm-text">{review.reviewerName}</p>
                           <RatingStars value={review.rating} />
                         </div>
                         <p className="mt-2 font-manrope text-[13px] font-medium leading-[20px] text-cm-text2">

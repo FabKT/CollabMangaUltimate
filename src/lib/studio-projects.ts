@@ -27,6 +27,15 @@ type StudioMemberRow = {
   } | null;
 };
 
+type PublicProjectRow = StudioProjectRow & { title: string };
+
+type PublicProfileRow = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  role: string | null;
+};
+
 const LEGACY_DB_NAME = "collabmanga-studio";
 const LEGACY_DB_VERSION = 1;
 const LEGACY_STORE = "projects";
@@ -197,7 +206,13 @@ async function saveRemoteProjects(projects: StudioProjectLike[], userId: string)
   const owners = new Map((existingResult.data ?? []).map((row) => [row.id, row.owner_id]));
 
   for (const project of projects) {
-    const persisted = (await persistEmbeddedImages(project, userId, project.id)) as StudioProjectLike;
+    // Collaborators are derived from membership rows and may contain the session label "Vous".
+    const { collaborators: _collaborators, ...projectWithoutCollaborators } = project;
+    const persisted = (await persistEmbeddedImages(
+      projectWithoutCollaborators,
+      userId,
+      project.id,
+    )) as StudioProjectLike;
     const payload = JSON.stringify(persisted);
     const cacheKey = `${userId}:${project.id}`;
     if (lastSavedPayload.get(cacheKey) === payload) continue;
@@ -265,11 +280,59 @@ export async function loadPublicStudioProjects<T>(): Promise<T[]> {
   const sb = getSupabase();
   const { data, error } = await sb
     .from("studio_projects")
-    .select("data")
+    .select("id, owner_id, title, data")
     .eq("catalog_visible", true)
     .order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => row.data as T);
+  const rows = (data ?? []) as PublicProjectRow[];
+  if (rows.length === 0) return [];
+
+  const projectIds = rows.map((row) => row.id);
+  const ownerIds = [...new Set(rows.map((row) => row.owner_id))];
+  const [membersResult, ownersResult] = await Promise.all([
+    sb
+      .from("studio_project_members")
+      .select(
+        "project_id, user_id, access_level, role, status, profile:profiles!studio_project_members_user_id_fkey(username, display_name, role)",
+      )
+      .in("project_id", projectIds)
+      .eq("status", "active"),
+    sb.from("profiles").select("id, username, display_name, role").in("id", ownerIds),
+  ]);
+  if (membersResult.error) throw new Error(membersResult.error.message);
+  if (ownersResult.error) throw new Error(ownersResult.error.message);
+
+  const owners = new Map(
+    ((ownersResult.data ?? []) as PublicProfileRow[]).map((profile) => [profile.id, profile]),
+  );
+  const members = (membersResult.data ?? []) as unknown as StudioMemberRow[];
+
+  return rows.map((row) => {
+    const collaborators = members
+      .filter((member) => member.project_id === row.id)
+      .map((member) => ({
+        id: member.user_id,
+        name: member.profile?.display_name || member.profile?.username || "Collaborateur",
+        role: member.role || member.profile?.role || "Collaborateur",
+        level: member.access_level,
+      }));
+    const owner = owners.get(row.owner_id);
+    if (!collaborators.some((member) => member.id === row.owner_id)) {
+      collaborators.unshift({
+        id: row.owner_id,
+        name: owner?.display_name || owner?.username || "Créateur",
+        role: owner?.role || "Créateur",
+        level: "chef",
+      });
+    }
+    return {
+      ...row.data,
+      id: row.id,
+      ownerId: row.owner_id,
+      creator: owner?.display_name || owner?.username || "Créateur CollabManga",
+      collaborators,
+    } as T;
+  });
 }
 
 export async function loadProfileStudioProjects<T>(ownerId: string): Promise<T[]> {
@@ -288,7 +351,7 @@ export async function loadProfileStudioProjects<T>(ownerId: string): Promise<T[]
 export async function saveStudioProjects<T>(projects: T[]): Promise<boolean> {
   const userId = await sessionUserId();
   if (!userId) return false;
-  return saveRemoteProjects(projects.filter(isProject), userId);
+  return saveRemoteProjects(projects.filter(isProject) as StudioProjectLike[], userId);
 }
 
 export async function deleteStudioProject(projectId: string): Promise<void> {

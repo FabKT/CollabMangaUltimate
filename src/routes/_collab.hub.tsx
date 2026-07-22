@@ -9,7 +9,7 @@ import {
   ArrowRight,
   BookOpen,
 } from "lucide-react";
-import { HERO_FALLBACK_IMAGE, CATALOG_MANGA, NEW_DROPS, type CatalogManga, type HeroSlide, type NewDrop } from "@/lib/haven-data";
+import { HERO_FALLBACK_IMAGE, type CatalogManga, type HeroSlide, type NewDrop } from "@/lib/haven-data";
 import { MangaCard } from "@/components/haven/MangaCard";
 import { loadPublicStudioProjects } from "@/lib/studio-projects";
 import { getMangaRating } from "@/lib/manga-ratings";
@@ -25,6 +25,7 @@ type StudioCatalogProject = {
   chapters: StudioCatalogChapter[];
   coverDataUrl?: string;
   catalogVisible?: boolean;
+  creator?: string;
 };
 
 /** Projets Studio rendus visibles → affichés sur la page d'accueil. */
@@ -40,7 +41,7 @@ function useVisibleStudioEntries(): CatalogManga[] {
               .map(async (p) => ({
               id: p.id,
               title: p.title,
-              creator: "Toi",
+              creator: p.creator || "Créateur CollabManga",
               cover: p.coverDataUrl || "",
               demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
@@ -294,8 +295,8 @@ function HomePage() {
   const { t } = useI18n();
   const studioEntries = useVisibleStudioEntries();
   const studioDrops = useVisibleStudioChapters();
-  const all = [...studioEntries, ...CATALOG_MANGA];
-  const newDrops = [...studioDrops, ...NEW_DROPS];
+  const all = studioEntries;
+  const newDrops = studioDrops;
   // Tant qu'aucun avis n'existe, la vedette = les premiers projets ajoutés
   // (le store liste les plus récents en premier → on inverse pour l'ancienneté).
   const hasRatings = all.some((m) => m.rating > 0);
@@ -419,7 +420,7 @@ function HomePage() {
               </div>
             </div>
             <div className="hidden gap-3 md:grid md:grid-cols-3">
-              {CATALOG_MANGA.slice(0, 3).map((m, idx) => (
+              {all.slice(0, 3).map((m, idx) => (
                 <img
                   key={m.id}
                   src={m.cover}

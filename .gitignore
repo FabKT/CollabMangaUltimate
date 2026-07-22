@@ -41,3 +41,4 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+supabase/.temp/

@@ -34,19 +34,24 @@ export async function loadPublicManga(id: string): Promise<PublicManga | null> {
   if (supabase) {
     const { data, error } = await supabase
       .from("studio_projects")
-      .select("data")
+      .select("data, owner:profiles!studio_projects_owner_id_fkey(display_name, username)")
       .eq("id", id)
       .eq("catalog_visible", true)
       .maybeSingle();
     if (error) throw new Error(error.message);
     project = data?.data as StudioProject | undefined;
+    if (project && data?.owner) {
+      const owner = data.owner as unknown as { display_name: string | null; username: string };
+      (project as StudioProject & { creator?: string }).creator =
+        owner.display_name || owner.username;
+    }
   }
   if (project) {
     const published = project.chapters.filter((chapter) => chapter.status === "Published");
     return {
       id: project.id,
       title: project.title,
-      creator: "CollabManga creator",
+      creator: (project as StudioProject & { creator?: string }).creator || "Créateur CollabManga",
       cover: project.coverDataUrl ?? "",
       demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(project.genres[0])
         ? project.genres[0]

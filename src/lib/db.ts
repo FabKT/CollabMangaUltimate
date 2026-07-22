@@ -16,6 +16,16 @@ export type DbProfile = {
   role?: string | null;
 };
 
+export type DbDiscoverProfile = DbProfile & {
+  preferences?: {
+    bio?: string;
+    languages?: string[];
+    available?: boolean;
+    favoriteGenres?: string[];
+    favoriteSubgenres?: string[];
+  } | null;
+};
+
 export type DbIllustration = {
   id: string;
   author_id: string;
@@ -198,6 +208,64 @@ export async function addAnnouncement(input: {
   return data as DbAnnouncement;
 }
 
+/** Records a recruitment application and notifies the real announcement/project owner. */
+export async function sendAnnouncementApplicationDb(input: {
+  announcementId: string;
+  recipientId: string;
+  title: string;
+  projectTitle?: string;
+  message: string;
+}): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour répondre à cette annonce.");
+  if (!input.recipientId) throw new Error("Le propriétaire de cette annonce est introuvable.");
+  if (uid === input.recipientId) throw new Error("Tu ne peux pas répondre à ta propre annonce.");
+
+  const { data: me, error: profileError } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", uid)
+    .single();
+  if (profileError) throw new Error(profileError.message);
+  const senderName = me?.display_name || me?.username || "Un membre";
+  const { data: record, error: recordError } = await sb
+    .from("workflow_records")
+    .insert({
+      kind: "proposal",
+      status: "pending",
+      initiator_id: uid,
+      recipient_id: input.recipientId,
+      title: `Candidature - ${input.title}`,
+      entity_type: "announcement",
+      entity_title: input.title,
+      payload: {
+        announcementId: input.announcementId,
+        projectTitle: input.projectTitle || null,
+        message: input.message.trim(),
+      },
+    })
+    .select("id")
+    .single();
+  if (recordError) throw new Error(recordError.message);
+
+  const { error: notificationError } = await sb.from("notifications").insert({
+    record_id: record.id,
+    recipient_id: input.recipientId,
+    actor_id: uid,
+    category: "project",
+    type: "candidature_annonce",
+    title: `${senderName} a répondu à ton annonce`,
+    content: input.message.trim().slice(0, 500),
+    entity_type: "announcement",
+    entity_title: input.title,
+    entity_subtitle: input.projectTitle || "Annonce de recrutement",
+    entity_status: "En attente",
+    actions: [{ label: "Voir le profil", kind: "secondary" }],
+  });
+  if (notificationError) throw new Error(notificationError.message);
+}
+
 /* ---------------- idées / propositions ---------------- */
 
 export async function listIdeas(): Promise<DbIdea[]> {
@@ -317,37 +385,6 @@ export async function sendMessage(
     .single();
   if (error) throw new Error(error.message);
 
-  // Notification pour les autres membres de la conversation (best-effort :
-  // l'envoi du message n'échoue jamais à cause d'une notification).
-  try {
-    const { data: members } = await sb
-      .from("conversation_members")
-      .select("profile_id")
-      .eq("conversation_id", conversationId)
-      .neq("profile_id", uid);
-    const { data: me } = await sb
-      .from("profiles")
-      .select("display_name, username")
-      .eq("id", uid)
-      .single();
-    const senderName = me?.display_name || me?.username || "Un membre";
-    if (members?.length) {
-      await sb.from("notifications").insert(
-        members.map((m) => ({
-          recipient_id: m.profile_id,
-          actor_id: uid,
-          category: "message",
-          type: "nouveau_message",
-          title: `${senderName} t'a envoyé un message`,
-          content: (content || "Image envoyée").slice(0, 180),
-          entity_type: "conversation",
-          entity_title: senderName,
-        })),
-      );
-    }
-  } catch {
-    /* silencieux */
-  }
   return data as DbMessage;
 }
 
@@ -397,12 +434,23 @@ export async function sendProjectInvitationDb(input: {
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour inviter un collaborateur.");
 
-  const { data: matches, error: resolveError } = await sb.rpc(
-    "resolve_profile_for_project_invitation",
-    { identifier: input.recipient.trim() },
-  );
-  if (resolveError) throw new Error(resolveError.message);
-  const recipient = (matches?.[0] ?? null) as DbProfile | null;
+  let recipient: DbProfile | null = null;
+  if (UUID_RE.test(input.recipient.trim())) {
+    const { data, error } = await sb
+      .from("profiles")
+      .select(PROFILE_COLS)
+      .eq("id", input.recipient.trim())
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    recipient = data as DbProfile | null;
+  } else {
+    const { data: matches, error: resolveError } = await sb.rpc(
+      "resolve_profile_for_project_invitation",
+      { identifier: input.recipient.trim() },
+    );
+    if (resolveError) throw new Error(resolveError.message);
+    recipient = (matches?.[0] ?? null) as DbProfile | null;
+  }
   if (!recipient) throw new Error("Aucun compte ne correspond à ce pseudo ou cet e-mail.");
   if (recipient.id === uid) throw new Error("Tu fais déjà partie de ce projet.");
 
@@ -513,7 +561,7 @@ export async function respondProjectInvitationDb(recordId: string, accept: boole
     .eq("id", uid)
     .single();
   const memberName = me?.display_name || me?.username || "Un membre";
-  await sb.from("notifications").insert({
+  const { error: notificationError } = await sb.from("notifications").insert({
     record_id: recordId,
     recipient_id: record.initiator_id,
     actor_id: uid,
@@ -567,7 +615,7 @@ export async function sendFriendRequestDb(recipientId: string): Promise<void> {
     .select("id")
     .single();
   if (error) throw new Error(error.message);
-  await sb.from("notifications").insert({
+  const { error: notificationError } = await sb.from("notifications").insert({
     record_id: record.id,
     recipient_id: recipientId,
     actor_id: uid,
@@ -578,6 +626,7 @@ export async function sendFriendRequestDb(recipientId: string): Promise<void> {
     entity_type: "friend_request",
     entity_title: senderName,
   });
+  if (notificationError) throw new Error(notificationError.message);
 }
 
 export type ProfileWorkflowDbInput = {
@@ -699,6 +748,76 @@ export async function respondFriendRequestDb(recordId: string, accept: boolean):
   });
 }
 
+/** Accepts or declines a sponsorship workflow addressed to the current account. */
+export async function respondSponsorshipRequestDb(
+  recordId: string,
+  accept: boolean,
+): Promise<void> {
+  const sb = getSupabase();
+  const uid = (await sb.auth.getSession()).data.session?.user.id;
+  if (!uid) throw new Error("Connecte-toi pour répondre à cette demande.");
+  const { data: record, error: recordError } = await sb
+    .from("workflow_records")
+    .select("initiator_id, recipient_id, kind, entity_title, payload")
+    .eq("id", recordId)
+    .eq("recipient_id", uid)
+    .in("kind", ["sponsorship_contact", "patronage_request", "announcement_sponsoring"])
+    .single();
+  if (recordError) throw new Error(recordError.message);
+
+  const status = accept ? "accepted" : "declined";
+  const { error: updateError } = await sb
+    .from("workflow_records")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", recordId);
+  if (updateError) throw new Error(updateError.message);
+
+  const sponsorshipId = (record.payload as { sponsorshipId?: unknown } | null)?.sponsorshipId;
+  if (typeof sponsorshipId === "string") {
+    const { data: sponsorship, error: sponsorshipError } = await sb
+      .from("sponsorships")
+      .select("data")
+      .eq("id", sponsorshipId)
+      .single();
+    if (sponsorshipError) throw new Error(sponsorshipError.message);
+    const { error: sponsorshipUpdateError } = await sb
+      .from("sponsorships")
+      .update({
+        data: {
+          ...(sponsorship.data as Record<string, unknown>),
+          status: accept ? "activated" : "cancelled",
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", sponsorshipId);
+    if (sponsorshipUpdateError) throw new Error(sponsorshipUpdateError.message);
+  }
+
+  const { data: me } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", uid)
+    .single();
+  const responderName = me?.display_name || me?.username || "Un membre";
+  const { error: notificationError } = await sb.from("notifications").insert({
+    record_id: recordId,
+    recipient_id: record.initiator_id,
+    actor_id: uid,
+    category: "sponsorship",
+    type: accept ? "parrainage_accepte" : "parrainage_refuse",
+    title: accept
+      ? `${responderName} a accepté ta demande de parrainage`
+      : `${responderName} a refusé ta demande de parrainage`,
+    content: accept
+      ? "Le parrainage peut maintenant être préparé dans Mes parrainages."
+      : "La demande a été clôturée.",
+    entity_type: "sponsorship",
+    entity_title: record.entity_title,
+    entity_status: accept ? "Accepté" : "Refusé",
+  });
+  if (notificationError) throw new Error(notificationError.message);
+}
+
 /** Liste des amis (demandes acceptées, dans les deux sens). */
 export async function listFriendsDb(): Promise<DbProfile[]> {
   const sb = getSupabase();
@@ -754,6 +873,28 @@ export async function listMyNotifications(): Promise<DbNotification[]> {
     .limit(80);
   if (error) throw new Error(error.message);
   return (data ?? []) as DbNotification[];
+}
+
+export async function subscribeMyNotifications(onChange: () => void): Promise<() => void> {
+  if (!supabase) return () => {};
+  const uid = (await supabase.auth.getSession()).data.session?.user.id;
+  if (!uid) return () => {};
+  const channel = supabase
+    .channel(`notifications-${uid}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+        filter: `recipient_id=eq.${uid}`,
+      },
+      onChange,
+    )
+    .subscribe();
+  return () => {
+    void supabase?.removeChannel(channel);
+  };
 }
 
 export async function markNotificationRead(id: string, read = true): Promise<void> {
@@ -958,6 +1099,22 @@ export async function listProfiles(limit = 60): Promise<DbProfile[]> {
     .limit(limit);
   if (error) throw new Error(error.message);
   return (data ?? []) as DbProfile[];
+}
+
+/** Public profile data used by Discover, including the Supabase preferences row. */
+export async function listDiscoverProfiles(limit = 60): Promise<DbDiscoverProfile[]> {
+  const profiles = await listProfiles(limit);
+  if (profiles.length === 0) return [];
+  const ids = profiles.map((profile) => profile.id);
+  const { data, error } = await getSupabase()
+    .from("profile_preferences")
+    .select("user_id, preferences")
+    .in("user_id", ids);
+  if (error) throw new Error(error.message);
+  const preferences = new Map(
+    (data ?? []).map((row) => [row.user_id, row.preferences as DbDiscoverProfile["preferences"]]),
+  );
+  return profiles.map((profile) => ({ ...profile, preferences: preferences.get(profile.id) ?? null }));
 }
 
 /** Recherche de profils par pseudo (pour démarrer une conversation). */

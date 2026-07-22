@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { sendSponsorshipContact } from "@/lib/user-workflows";
 import { useI18n } from "@/lib/i18n";
 import { loadStudioProjects } from "@/lib/studio-projects";
+import { listFavorites, setFavorite } from "@/lib/favorites";
 import {
   createSponsorship,
   formatMoney,
@@ -51,6 +52,23 @@ function SponsorshipPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void listFavorites()
+      .then((favorites) => {
+        const titles = new Set(
+          favorites.filter((favorite) => favorite.kind === "Sponsorship option").map((favorite) => favorite.title),
+        );
+        setSaved(Object.fromEntries(userAnnouncements.map((item) => [item.id, titles.has(item.title)])));
+      })
+      .catch(() => setSaved({}));
+  }, [userAnnouncements]);
+
+  const toggleSaved = async (announcement: Announcement) => {
+    const next = !saved[announcement.id];
+    await setFavorite("Sponsorship option", announcement.title, next);
+    setSaved((current) => ({ ...current, [announcement.id]: next }));
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -315,7 +333,7 @@ function SponsorshipPage() {
                   key={a.id}
                   a={a}
                   saved={!!saved[a.id]}
-                  onToggleSave={() => setSaved((s) => ({ ...s, [a.id]: !s[a.id] }))}
+                  onToggleSave={() => void toggleSaved(a)}
                   onViewDetails={() => setDetail(a)}
                   onContact={() => setContactFor(a)}
                 />
@@ -327,6 +345,8 @@ function SponsorshipPage() {
 
       <DetailDialog
         announcement={detail}
+        saved={detail ? !!saved[detail.id] : false}
+        onToggleSave={detail ? () => void toggleSaved(detail) : undefined}
         onOpenChange={(o) => !o && setDetail(null)}
         onContact={(announcement) => {
           setDetail(null);
@@ -408,6 +428,7 @@ function SponsorshipContactDialog({
     setSending(true);
     setError("");
     try {
+      let sponsorshipId: string | undefined;
       if (a.mode === "creator") {
         const amount = Number((budget || a.price || "0").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
         const service: Service = {
@@ -427,7 +448,7 @@ function SponsorshipContactDialog({
             : ("one_time" as PaymentType),
           notes: a.fullDescription,
         };
-        await createSponsorship({
+        const sponsorship = await createSponsorship({
           name: `${linked.trim()} - ${a.ownerName}`,
           project: linked.trim(),
           creator: a.ownerName,
@@ -448,8 +469,11 @@ function SponsorshipContactDialog({
             },
           ],
         });
+        sponsorshipId = sponsorship.id;
       }
-      sendSponsorshipContact({
+      if (!a.ownerId) throw new Error("Le propriétaire de cette annonce est introuvable.");
+      await sendSponsorshipContact({
+        sponsorshipId,
         announcementTitle: a.title,
         announcementMode: a.mode,
         owner: a.ownerId || a.ownerName,

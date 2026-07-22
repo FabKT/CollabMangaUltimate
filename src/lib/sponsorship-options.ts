@@ -45,16 +45,22 @@ async function currentUserId() {
 
 export async function listSponsorOptions(ownerId?: string | null): Promise<SponsorOption[]> {
   const sb = getSupabase();
-  let { data, error } = await sb
+  const primary = await sb
     .from("sponsor_options")
     .select("owner_id, data, owner:profiles!sponsor_options_owner_id_fkey(display_name, username, avatar_url, banner_url)")
     .order("created_at", { ascending: false });
+  let data: Array<{
+    owner_id: string;
+    data: unknown;
+    owner: unknown;
+  }> | null = primary.data as unknown as Array<{ owner_id: string; data: unknown; owner: unknown }> | null;
+  let error = primary.error;
   if (error) {
     const fallback = await sb
       .from("sponsor_options")
       .select("owner_id, data, owner:profiles!sponsor_options_owner_id_fkey(display_name, username, avatar_url)")
       .order("created_at", { ascending: false });
-    data = fallback.data;
+    data = fallback.data as unknown as typeof data;
     error = fallback.error;
   }
   if (error) throw new Error(error.message);

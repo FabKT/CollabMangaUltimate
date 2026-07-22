@@ -154,7 +154,7 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
     const serviceLabel = (s: Service) => (customIds.has(s.id) ? `${s.name} (option supplémentaire)` : s.name);
 
     try {
-      await createSponsorship({
+      const sponsorship = await createSponsorship({
         name: `${project.trim()} - ${selectedCreator.name}`,
         project: project.trim(),
         creator: selectedCreator.name,
@@ -176,14 +176,15 @@ export function SponsorshipModal({ open, onClose }: { open: boolean; onClose: ()
         ],
       });
 
-      sendSponsorshipContact({
-      announcementTitle: messageTitle.trim() || `Demande de parrainage - ${project.trim()}`,
-      announcementMode: "creator",
-      owner: selectedCreator.name,
-      linked: project.trim(),
-      budgetOrPrice: formatMoney(total, currency),
-      sponsorshipType: selectedServices.map(serviceLabel).join(", "),
-      message: message.trim(),
+      await sendSponsorshipContact({
+        sponsorshipId: sponsorship.id,
+        announcementTitle: messageTitle.trim() || `Demande de parrainage - ${project.trim()}`,
+        announcementMode: "creator",
+        owner: selectedCreator.id,
+        linked: project.trim(),
+        budgetOrPrice: formatMoney(total, currency),
+        sponsorshipType: selectedServices.map(serviceLabel).join(", "),
+        message: message.trim(),
       });
       close();
     } catch (submitError) {

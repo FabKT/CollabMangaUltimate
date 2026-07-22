@@ -25,7 +25,11 @@ import { bearerHeader } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
-import { openImageEditor, type ImageEditDraft } from "@/lib/image-edit-workspace";
+import {
+  openImageEditor,
+  type ImageEditDraft,
+  type ImageEditReferenceRole,
+} from "@/lib/image-edit-workspace";
 import {
   BookImage,
   Check,
@@ -918,10 +922,7 @@ function CollabMangaAIPage() {
         imageDataUrl: item.imageDataUrl!,
         mimeType: item.mimeType,
         description: item.description,
-        role:
-          item.role === "Generated Page"
-            ? "Inspiration"
-            : item.role,
+        role: (item.role === "Generated Page" ? "Inspiration" : item.role) as ImageEditReferenceRole,
       })),
     aspectRatio,
     source: "Manga Page Creator",

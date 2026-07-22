@@ -18,11 +18,21 @@ export type StudioRecruitLike = {
 /** Annonce de recrutement Studio → annonce « projet » (rendu identique à la page Annonces). */
 export function projectAnnouncementFromRecruit(
   r: StudioRecruitLike,
-  ctx: { projectName: string; genre?: string; subgenres?: string[]; cover?: string; language?: string },
+  ctx: {
+    projectName: string;
+    projectId?: string;
+    ownerId?: string;
+    genre?: string;
+    subgenres?: string[];
+    cover?: string;
+    language?: string;
+  },
 ): ProjectAnnouncement {
   return {
     kind: "project",
     id: r.id,
+    ownerId: ctx.ownerId,
+    projectId: ctx.projectId,
     title: r.title || (r.role ? `Recherche ${r.role}` : "Annonce de recrutement"),
     projectName: ctx.projectName,
     cover: ctx.cover,

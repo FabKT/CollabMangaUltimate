@@ -1,18 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { listAnnouncements } from "@/lib/db";
+import {
+  listAnnouncements,
+  sendAnnouncementApplicationDb,
+  sendProjectInvitationDb,
+} from "@/lib/db";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
-import { loadStudioProjects } from "@/lib/studio-projects";
+import { loadPublicStudioProjects, loadStudioProjects } from "@/lib/studio-projects";
 import { projectAnnouncementFromRecruit, type StudioRecruitLike } from "@/lib/recruit-map";
 import { addInterested, listInterested } from "@/lib/announcement-interest";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { localizeLabel, useI18n } from "@/lib/i18n";
 import { Bookmark, X, ChevronDown, ImageIcon, Search, SlidersHorizontal } from "lucide-react";
-import {
-  respondToProposal,
-  sendAnnouncementSponsoring,
-  sendCollaborationInvitation,
-} from "@/lib/user-workflows";
+import { sendAnnouncementSponsoring } from "@/lib/user-workflows";
+import { listFavorites, setFavorite } from "@/lib/favorites";
 
 export const Route = createFileRoute("/_collab/announcements")({
   head: () => ({ meta: [{ title: "Annonces — CollabManga" }] }),
@@ -46,6 +47,8 @@ const manrope = { fontFamily: '"Manrope", ui-sans-serif, system-ui, sans-serif' 
 export type ProjectAnnouncement = {
   kind: "project";
   id: string;
+  ownerId?: string;
+  projectId?: string;
   title: string;
   projectName: string;
   cover?: string;
@@ -70,6 +73,7 @@ export type ProjectAnnouncement = {
 type UserAnnouncement = {
   kind: "user";
   id: string;
+  ownerId?: string;
   title: string;
   userName: string;
   avatarInitials: string;
@@ -501,6 +505,26 @@ function AnnouncementsPage() {
   const [dbUsers, setDbUsers] = useState<UserAnnouncement[]>([]);
   const [dbProjects, setDbProjects] = useState<ProjectAnnouncement[]>([]);
   const [studioProjects, setStudioProjects] = useState<ProjectAnnouncement[]>([]);
+  const [savedTitles, setSavedTitles] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    void listFavorites()
+      .then((favorites) =>
+        setSavedTitles(new Set(favorites.filter((item) => item.kind === "Announcement").map((item) => item.title))),
+      )
+      .catch(() => setSavedTitles(new Set()));
+  }, []);
+
+  const toggleSaved = async (title: string) => {
+    const next = !savedTitles.has(title);
+    await setFavorite("Announcement", title, next);
+    setSavedTitles((current) => {
+      const updated = new Set(current);
+      if (next) updated.add(title);
+      else updated.delete(title);
+      return updated;
+    });
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 600);
@@ -511,13 +535,15 @@ function AnnouncementsPage() {
   // collaborateur, même avant que sa copie Supabase soit disponible.
   useEffect(() => {
     type StudioProjectRecruitment = {
+      id: string;
+      ownerId?: string;
       title: string;
       genres?: string[];
       subgenres?: string[];
       coverDataUrl?: string;
       recruits?: StudioRecruitLike[];
     };
-    void loadStudioProjects<StudioProjectRecruitment>()
+    void loadPublicStudioProjects<StudioProjectRecruitment>()
       .then((projects) => {
         setStudioProjects(
           projects.flatMap((project) =>
@@ -526,6 +552,8 @@ function AnnouncementsPage() {
               .map((recruit) =>
                 projectAnnouncementFromRecruit(recruit, {
                   projectName: project.title,
+                  projectId: project.id,
+                  ownerId: project.ownerId,
                   genre: project.genres?.[0],
                   subgenres: project.subgenres,
                   cover: project.coverDataUrl,
@@ -549,6 +577,7 @@ function AnnouncementsPage() {
             projects.push({
               kind: "project",
               id: r.id,
+              ownerId: r.author_id,
               title: r.title,
               projectName: r.project_title || r.title,
               description: r.hook || r.description.slice(0, 160),
@@ -572,6 +601,7 @@ function AnnouncementsPage() {
             users.push({
               kind: "user",
               id: r.id,
+              ownerId: r.author_id,
               title: r.title,
               userName: author,
               avatarInitials: author.slice(0, 2).toUpperCase(),
@@ -717,6 +747,8 @@ function AnnouncementsPage() {
                   item={a}
                   onView={() => setDetailsFor(a)}
                   onApply={() => setWorkflowModal({ kind: "apply", item: a })}
+                  saved={savedTitles.has(a.title)}
+                  onSave={() => void toggleSaved(a.title)}
                 />
               ) : (
                 <UserCard
@@ -724,6 +756,8 @@ function AnnouncementsPage() {
                   item={a}
                   onView={() => setDetailsFor(a)}
                   onInvite={() => setWorkflowModal({ kind: "invite", item: a })}
+                  saved={savedTitles.has(a.title)}
+                  onSave={() => void toggleSaved(a.title)}
                 />
               ),
             )}
@@ -1222,12 +1256,15 @@ export function ProjectCard({
   item,
   onView,
   onApply,
+  saved = false,
+  onSave,
 }: {
   item: ProjectAnnouncement;
   onView: () => void;
   onApply: () => void;
+  saved?: boolean;
+  onSave?: () => void;
 }) {
-  const [saved, setSaved] = useState(false);
   return (
     <CardShell>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", flex: 1 }}>
@@ -1239,7 +1276,7 @@ export function ProjectCard({
           category="Recherche collaborateur"
           description={item.description}
           saved={saved}
-          onSave={() => setSaved((s) => !s)}
+          onSave={onSave ?? (() => {})}
           remuneration={item.remuneration}
         />
         <MetaGrid
@@ -1261,12 +1298,15 @@ function UserCard({
   item,
   onView,
   onInvite,
+  saved = false,
+  onSave,
 }: {
   item: UserAnnouncement;
   onView: () => void;
   onInvite: () => void;
+  saved?: boolean;
+  onSave?: () => void;
 }) {
-  const [saved, setSaved] = useState(false);
   return (
     <CardShell>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", flex: 1 }}>
@@ -1278,7 +1318,7 @@ function UserCard({
           category="Recherche projet"
           description={item.description}
           saved={saved}
-          onSave={() => setSaved((s) => !s)}
+          onSave={onSave ?? (() => {})}
           remuneration={item.remuneration}
         />
         <MetaGrid
@@ -1556,8 +1596,15 @@ export function DetailsModal({
   // Intéressés réels (ceux qui ont répondu) pour les annonces de projet.
   const [interested, setInterested] = useState<string[]>([]);
   useEffect(() => {
+    void listFavorites()
+      .then((favorites) =>
+        setSaved(favorites.some((favorite) => favorite.kind === "Announcement" && favorite.title === item.title)),
+      )
+      .catch(() => setSaved(false));
+  }, [item.title]);
+  useEffect(() => {
     if (!isProject) {
-      setInterested(["Kurogane Requiem", "Emberline", "Orbital Silence"]);
+      setInterested([]);
       return;
     }
     void listInterested(item.id)
@@ -1794,7 +1841,12 @@ export function DetailsModal({
           flexWrap: "wrap",
         }}
       >
-        <GhostButton onClick={() => setSaved((s) => !s)}>
+        <GhostButton
+          onClick={() => {
+            const next = !saved;
+            void setFavorite("Announcement", item.title, next).then(() => setSaved(next));
+          }}
+        >
           <Bookmark
             size={16}
             fill={saved ? "currentColor" : "none"}
@@ -1850,13 +1902,22 @@ export function AnnouncementWorkflowModal({
   onDone: (message: string) => void;
 }) {
   const [message, setMessage] = useState("");
-  const [projectTitle, setProjectTitle] = useState(
-    item.kind === "project" ? item.projectName : "Neon Ronin",
-  );
+  const [projectTitle, setProjectTitle] = useState(item.kind === "project" ? item.projectName : "");
+  const [projects, setProjects] = useState<Array<{ id: string; title: string }>>([]);
   const [role, setRole] = useState(item.kind === "project" ? item.roleNeeded : item.roleOffered);
   const [duration, setDuration] = useState("14 jours");
   const [level, setLevel] = useState("Standard");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (action !== "invite") return;
+    void loadStudioProjects<{ id: string; title: string }>()
+      .then((rows) => {
+        setProjects(rows);
+        setProjectTitle((current) => current || rows[0]?.title || "");
+      })
+      .catch(() => setProjects([]));
+  }, [action]);
 
   const title =
     action === "apply"
@@ -1872,12 +1933,16 @@ export function AnnouncementWorkflowModal({
         setError("Ajoute un court message de réponse.");
         return;
       }
-      const owner = item.kind === "project" ? `${item.projectName} team` : item.userName;
-      respondToProposal({
-        proposalTitle: item.title,
-        accepted: true,
+      if (!item.ownerId) {
+        setError("Le propriétaire de cette annonce est introuvable.");
+        return;
+      }
+      await sendAnnouncementApplicationDb({
+        announcementId: item.id,
+        recipientId: item.ownerId,
+        title: item.title,
+        projectTitle: item.kind === "project" ? item.projectName : undefined,
         message,
-        recipient: owner,
       });
       // Répondre à une annonce de projet → on rejoint la liste des intéressés (§3).
       if (item.kind === "project") await addInterested(item.id);
@@ -1893,9 +1958,14 @@ export function AnnouncementWorkflowModal({
         setError("Sélectionne une annonce utilisateur pour inviter un collaborateur.");
         return;
       }
-      sendCollaborationInvitation({
-        recipient: item.userName,
-        projectTitle,
+      const project = projects.find((candidate) => candidate.title === projectTitle);
+      if (!project || !item.ownerId) {
+        setError("Choisis un projet valide et vérifie le destinataire.");
+        return;
+      }
+      await sendProjectInvitationDb({
+        projectId: project.id,
+        recipient: item.ownerId,
         role,
         message,
       });
@@ -1923,12 +1993,16 @@ export function AnnouncementWorkflowModal({
         {action === "invite" && (
           <>
             <FieldLabel>Projet concerné</FieldLabel>
-            <TextInput
+            <select
               value={projectTitle}
-              onChange={setProjectTitle}
-              placeholder="Titre du projet"
-              ariaLabel="Projet concerné"
-            />
+              onChange={(event) => setProjectTitle(event.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Choisir un projet</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.title}>{project.title}</option>
+              ))}
+            </select>
             <FieldLabel>Rôle proposé</FieldLabel>
             <select
               value={role}

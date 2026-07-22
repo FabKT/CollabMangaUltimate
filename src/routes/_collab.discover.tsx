@@ -1,6 +1,7 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { listProfiles, sendFriendRequestDb, startConversationWith } from "@/lib/db";
+import { listDiscoverProfiles, sendFriendRequestDb, startConversationWith } from "@/lib/db";
+import { listSponsorOptions } from "@/lib/sponsorship-options";
 import { SITE_LANGUAGES } from "@/lib/languages";
 import { localizeLabel, useI18n } from "@/lib/i18n";
 import {
@@ -165,6 +166,13 @@ function profileFromDb(db: {
   display_name: string | null;
   avatar_url: string | null;
   role?: string | null;
+  preferences?: {
+    bio?: string;
+    languages?: string[];
+    available?: boolean;
+    favoriteGenres?: string[];
+    favoriteSubgenres?: string[];
+  } | null;
 }): Profile {
   const name = db.display_name || db.username;
   return {
@@ -173,11 +181,14 @@ function profileFromDb(db: {
     initials: initialsOf(name),
     avatarUrl: db.avatar_url ?? undefined,
     role: (db.role && ROLE_FROM_PROFILE[db.role]) || "Reader",
-    languages: ["Français"],
+    languages: db.preferences?.languages?.length ? db.preferences.languages : ["Français"],
     rating: 0,
-    availability: "Disponible",
-    bio: "Profil CollabManga — bio à compléter.",
-    genres: [],
+    availability: db.preferences?.available === false ? "Indisponible" : "Disponible",
+    bio: db.preferences?.bio || "Profil CollabManga — bio à compléter.",
+    genres: [
+      ...(db.preferences?.favoriteGenres ?? []),
+      ...(db.preferences?.favoriteSubgenres ?? []),
+    ],
     skills: [],
     projects: 0,
   };
@@ -427,9 +438,32 @@ function UsersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void listProfiles()
-      .then((rows) => {
-        if (!cancelled) setProfiles(rows.map(profileFromDb));
+    void Promise.all([listDiscoverProfiles(), listSponsorOptions()])
+      .then(([rows, options]) => {
+        if (cancelled) return;
+        setProfiles(
+          rows.map((row) => {
+            const profile = profileFromDb(row);
+            const ownOptions = options.filter((option) => option.ownerId === row.id);
+            return {
+              ...profile,
+              platforms: [...new Set(ownOptions.flatMap((option) => option.platforms))],
+              audience: ownOptions.length
+                ? `${Math.max(...ownOptions.map((option) => option.subscribersMax ?? option.subscribersMin ?? 0))} abonnés`
+                : undefined,
+              sponsorshipOptions: ownOptions.map((option) => ({
+                id: option.id,
+                title: option.format,
+                type: option.format,
+                videoType: option.videoType,
+                duration: option.duration,
+                price: option.price,
+                paymentMode: option.paymentMode,
+                description: option.description,
+              })),
+            };
+          }),
+        );
       })
       .catch(() => {
         if (!cancelled) setProfiles([]);
