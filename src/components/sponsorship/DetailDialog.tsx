@@ -90,12 +90,16 @@ export function DetailDialog({
             >
               <aside>
                 <SectionCard title={a.mode === "project" ? "Informations du projet" : "Createur de contenu"}>
-                  <Thumb
-                    accent={a.accent}
-                    label={a.mode === "project" ? "Projet" : "Profil"}
-                    className="h-40 rounded-[18px]"
-                    platforms={a.platforms}
-                  />
+                  {a.mode === "creator" ? (
+                    <CreatorIdentityHero announcement={a} />
+                  ) : (
+                    <Thumb
+                      accent={a.accent}
+                      label="Projet"
+                      className="h-40 rounded-[18px]"
+                      platforms={a.platforms}
+                    />
+                  )}
                   <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.06em] text-cm-muted">
                     {a.mode === "project" ? "Projet a promouvoir" : "Profil createur"}
                   </p>
@@ -156,5 +160,40 @@ export function DetailDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CreatorIdentityHero({ announcement }: { announcement: Announcement }) {
+  const initials = announcement.ownerName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "CM";
+
+  return (
+    <div className="relative h-40 overflow-hidden rounded-[18px] bg-cm-details">
+      {announcement.ownerBannerUrl ? (
+        <img src={announcement.ownerBannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(120% 120% at 15% 10%, color-mix(in oklab, ${announcement.accent} 22%, transparent), transparent 55%), linear-gradient(135deg, #0a1330, #060d22)`,
+          }}
+        />
+      )}
+      <div className="absolute inset-0 bg-[#050b1d]/35" />
+      <div className="absolute inset-0 grid place-items-center">
+        <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full border-2 border-cm-neon bg-cm-panel shadow-[0_14px_36px_rgba(0,0,0,0.38)]">
+          {announcement.ownerAvatarUrl ? (
+            <img src={announcement.ownerAvatarUrl} alt={announcement.ownerName} className="h-full w-full object-cover" />
+          ) : (
+            <span className="font-sora text-[22px] font-extrabold text-cm-neon">{initials}</span>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

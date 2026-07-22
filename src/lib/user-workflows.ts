@@ -72,6 +72,7 @@ type CreateRecordInput = Omit<WorkflowRecord, "id" | "createdAt"> & {
 };
 
 const CURRENT_USER = "Current user";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const nowIso = () => new Date().toISOString();
 const newId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -99,10 +100,14 @@ async function persistWorkflowRecord(input: CreateRecordInput) {
   if (!uid) return;
   let recipientId: string | null = null;
   if (input.recipient && input.recipient !== CURRENT_USER) {
-    const { data } = await sb.rpc("resolve_profile_for_project_invitation", {
-      identifier: input.recipient,
-    });
-    recipientId = data?.[0]?.id ?? null;
+    if (UUID_RE.test(input.recipient)) {
+      recipientId = input.recipient;
+    } else {
+      const { data } = await sb.rpc("resolve_profile_for_project_invitation", {
+        identifier: input.recipient,
+      });
+      recipientId = data?.[0]?.id ?? null;
+    }
   }
   const { data: record, error } = await sb
     .from("workflow_records")

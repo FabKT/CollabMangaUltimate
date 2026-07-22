@@ -90,6 +90,18 @@ export function parseCharacterImageInput(data: unknown) {
   return characterInputSchema.parse(data);
 }
 
+function supportingIdentityReferences(input: CharacterImageInput) {
+  return input.references
+    .filter((reference) => Boolean(reference.imageDataUrl))
+    .map((reference, index) => {
+      const userFocus = reference.description?.trim();
+      return {
+        ...reference,
+        description: `Supporting identity reference ${index + 1} of the SAME target character as Image A. Inspect and use every visible identity fact that this view reveals: facial proportions, eye shape, hairstyle construction, body build, outfit, accessories, colors or monochrome values, asymmetrical details and silhouette. Reconcile it with Image A; do not copy its pose, framing, background, text or source rendering style.${userFocus ? ` User-provided focus: ${userFocus}` : ""}`,
+      };
+    });
+}
+
 /**
  * THE PLAN — builds the character-card prompt (disposition-focused for now).
  */
@@ -101,7 +113,7 @@ export function buildCharacterCardPrompt(input: CharacterImageInput): string {
     normalizedStyleId === "retro90" ||
     normalizedStyleId.includes("90");
   const references =
-    input.references
+    supportingIdentityReferences(input)
       .filter((reference) => reference.name || reference.description)
       .map(
         (reference, index) =>
@@ -131,7 +143,8 @@ export function buildCharacterCardPrompt(input: CharacterImageInput): string {
     styleReferenceIsImageB
       ? "Image C, when attached, defines character-card structure only. It must not transfer its depicted character or style."
       : "Image C and any additional style-library images define target rendering mechanisms only. They must not transfer their depicted person, pose, clothing, scene, text or composition.",
-    "Extra references may refine explicitly declared identity or outfit facts, but must never replace Image A.",
+    "Every attached extra identity reference is mandatory supporting evidence of the SAME target character. Inspect each one and actively preserve the additional face, hair, body, outfit, accessory, color/value, silhouette and asymmetrical facts it reveals. Never silently ignore an attached identity reference.",
+    "Reconcile supporting references with Image A: Image A remains authoritative when facts conflict. Supporting references must never transfer their pose, framing, background, text, composition or source rendering style.",
     "User instructions override defaults only where explicit. Preserve all unrelated identity facts.",
     "",
     "USER INSTRUCTIONS:",
@@ -186,17 +199,16 @@ export async function requestPulseNoteCharacterImage(
 
   const finalPrompt = buildCharacterCardPrompt(input);
   const localPlanEnabled = isLocalAiServerMode();
-  const styleLibraryReferences = localPlanEnabled
-    ? input.styleReferenceImages
-        .filter((imageDataUrl) => Boolean(imageDataUrl && imageDataUrl !== input.styleImageDataUrl))
-        .map((imageDataUrl, index) => ({
-          id: `style-library-${index + 1}`,
-          name: `${input.styleName} style reference ${index + 1}`,
-          imageDataUrl,
-          description:
-            "Target rendering style evidence only. Do not copy identity, pose, outfit, scene, text or composition.",
-        }))
-    : [];
+  const identityReferences = supportingIdentityReferences(input);
+  const styleLibraryReferences = input.styleReferenceImages
+    .filter((imageDataUrl) => Boolean(imageDataUrl && imageDataUrl !== input.styleImageDataUrl))
+    .map((imageDataUrl, index) => ({
+      id: `style-library-${index + 1}`,
+      name: `${input.styleName} style reference ${index + 1}`,
+      imageDataUrl,
+      description:
+        "Mandatory target rendering-style evidence only. Analyze and apply its lineart, shapes, value logic, eye/face/hair treatment, shading, texture and polish. Do not copy identity, pose, anatomy, outfit, scene, text or composition.",
+    }));
 
   const response = await fetch(`${backendUrl}/api/character/generate`, {
     method: "POST",
@@ -219,7 +231,7 @@ export async function requestPulseNoteCharacterImage(
       styleImageDataUrl: input.styleImageDataUrl,
       styleReferenceImages: input.styleReferenceImages,
       structureImageDataUrl: input.structureImageDataUrl,
-      references: [...input.references, ...styleLibraryReferences],
+      references: [...identityReferences, ...styleLibraryReferences],
     }),
     signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
   });

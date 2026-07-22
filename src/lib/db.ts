@@ -11,6 +11,7 @@ export type DbProfile = {
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  banner_url?: string | null;
   /** Rôle principal choisi dans le popup de modification du profil (Dessinateur, Scénariste, Créateur de contenu, Lecteur). */
   role?: string | null;
 };
@@ -830,7 +831,81 @@ export async function addComment(
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .single();
   if (error) throw new Error(error.message);
-  return data as DbComment;
+  const created = data as DbComment;
+  try {
+    await notifyCommentOwner(entityType, entityId, uid, content.trim());
+  } catch {
+    /* A failed notification must never block the comment itself. */
+  }
+  return created;
+}
+
+async function notifyCommentOwner(
+  entityType: CommentEntityType,
+  entityId: string,
+  authorId: string,
+  content: string,
+) {
+  const sb = getSupabase();
+  const owner = await resolveCommentRecipient(entityType, entityId);
+  if (!owner?.recipientId || owner.recipientId === authorId) return;
+  const { data: me } = await sb
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", authorId)
+    .maybeSingle();
+  const senderName = me?.display_name || me?.username || "Un membre";
+  const labelByType: Record<CommentEntityType, string> = {
+    illustration: "illustration",
+    idea: "idée",
+    announcement: "annonce",
+    manga_chapter: "chapitre",
+    sponsor_option: "annonce de parrainage",
+  };
+  await sb.from("notifications").insert({
+    recipient_id: owner.recipientId,
+    actor_id: authorId,
+    category: entityType === "manga_chapter" ? "manga" : entityType === "sponsor_option" ? "sponsorship" : "system",
+    type: "nouveau_commentaire",
+    title: `${senderName} a commenté ton ${labelByType[entityType]}`,
+    content: content.slice(0, 180),
+    entity_type: entityType,
+    entity_title: owner.entityTitle,
+  });
+}
+
+async function resolveCommentRecipient(
+  entityType: CommentEntityType,
+  entityId: string,
+): Promise<{ recipientId: string | null; entityTitle: string } | null> {
+  const sb = getSupabase();
+  if (entityType === "illustration") {
+    const { data } = await sb.from("illustrations").select("author_id, title").eq("id", entityId).maybeSingle();
+    return data ? { recipientId: data.author_id, entityTitle: data.title || "Illustration" } : null;
+  }
+  if (entityType === "idea") {
+    const { data } = await sb.from("ideas").select("author_id, title").eq("id", entityId).maybeSingle();
+    return data ? { recipientId: data.author_id, entityTitle: data.title || "Idée" } : null;
+  }
+  if (entityType === "announcement") {
+    const { data } = await sb.from("announcements").select("author_id, title").eq("id", entityId).maybeSingle();
+    return data ? { recipientId: data.author_id, entityTitle: data.title || "Annonce" } : null;
+  }
+  if (entityType === "sponsor_option") {
+    const { data } = await sb.from("sponsor_options").select("owner_id, data").eq("id", entityId).maybeSingle();
+    const option = data?.data as { format?: string; title?: string } | null | undefined;
+    return data ? { recipientId: data.owner_id, entityTitle: option?.format || option?.title || "Parrainage" } : null;
+  }
+  const [projectId, chapterId] = entityId.split(":");
+  if (!projectId) return null;
+  const { data } = await sb.from("studio_projects").select("owner_id, title, data").eq("id", projectId).maybeSingle();
+  if (!data) return null;
+  const projectData = data.data as { chapters?: Array<{ id?: string; title?: string }> } | null;
+  const chapter = projectData?.chapters?.find((item) => item.id === chapterId);
+  return {
+    recipientId: data.owner_id,
+    entityTitle: chapter?.title ? `${data.title} · ${chapter.title}` : data.title || "Chapitre",
+  };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -840,18 +915,32 @@ export async function getProfileByUsername(
   slugOrId: string,
 ): Promise<(DbProfile & { role?: string | null; secondary_role?: string | null }) | null> {
   if (!supabase) return null;
-  const cols = "id, username, display_name, avatar_url, role, secondary_role";
+  const cols = "id, username, display_name, avatar_url, banner_url, role, secondary_role";
+  const fallbackCols = "id, username, display_name, avatar_url, role, secondary_role";
   const clean = slugOrId.replace(/^@/, "");
   if (UUID_RE.test(clean)) {
-    const { data } = await supabase.from("profiles").select(cols).eq("id", clean).maybeSingle();
+    let { data, error } = await supabase.from("profiles").select(cols).eq("id", clean).maybeSingle();
+    if (error) {
+      const fallback = await supabase.from("profiles").select(fallbackCols).eq("id", clean).maybeSingle();
+      data = fallback.data;
+    }
     if (data) return data as DbProfile & { role?: string | null; secondary_role?: string | null };
   }
-  const { data } = await supabase
+  let { data, error } = await supabase
     .from("profiles")
     .select(cols)
     .ilike("username", clean)
     .limit(1)
     .maybeSingle();
+  if (error) {
+    const fallback = await supabase
+      .from("profiles")
+      .select(fallbackCols)
+      .ilike("username", clean)
+      .limit(1)
+      .maybeSingle();
+    data = fallback.data;
+  }
   return (
     (data as (DbProfile & { role?: string | null; secondary_role?: string | null }) | null) ?? null
   );

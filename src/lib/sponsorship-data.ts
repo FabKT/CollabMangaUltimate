@@ -28,6 +28,9 @@ export interface Announcement {
   mode: AnnouncementMode;
   title: string;
   ownerName: string;
+  ownerId?: string;
+  ownerAvatarUrl?: string | null;
+  ownerBannerUrl?: string | null;
   category: string;
   shortDescription: string;
   fullDescription: string;

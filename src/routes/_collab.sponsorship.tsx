@@ -11,6 +11,14 @@ import { DetailDialog } from "@/components/sponsorship/DetailDialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { sendSponsorshipContact } from "@/lib/user-workflows";
 import { useI18n } from "@/lib/i18n";
+import { loadStudioProjects } from "@/lib/studio-projects";
+import {
+  createSponsorship,
+  formatMoney,
+  type PaymentType,
+  type Platform as SponsorshipPlatform,
+  type Service,
+} from "@/features/sponsorships/store";
 import {
   AdvancedFiltersDialog,
   emptyFilters,
@@ -21,6 +29,8 @@ import {
 export const Route = createFileRoute("/_collab/sponsorship")({
   component: SponsorshipPage,
 });
+
+type StudioProjectOption = { id: string; title: string };
 
 function SponsorshipPage() {
   const { t } = useI18n();
@@ -360,9 +370,11 @@ function SponsorshipContactDialog({
 }) {
   const { t } = useI18n();
   const [linked, setLinked] = useState("");
+  const [projects, setProjects] = useState<StudioProjectOption[]>([]);
   const [budget, setBudget] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
   const a = announcement;
   const isProjectAnnouncement = a?.mode === "project";
 
@@ -372,9 +384,18 @@ function SponsorshipContactDialog({
     setBudget(a.price ?? "");
     setMessage("");
     setError("");
+    setSending(false);
+    if (a.mode === "creator") {
+      void loadStudioProjects<StudioProjectOption>()
+        .then((rows) => {
+          setProjects(rows);
+          setLinked((current) => rows.find((project) => project.title === current)?.title || rows[0]?.title || current);
+        })
+        .catch(() => setProjects([]));
+    }
   }, [a]);
 
-  const submit = () => {
+  const submit = async () => {
     if (!a) return;
     if (!linked.trim()) {
       setError(isProjectAnnouncement ? t("sponsor.errorProfile") : t("sponsor.errorProject"));
@@ -384,16 +405,65 @@ function SponsorshipContactDialog({
       setError(t("sponsor.errorMessage"));
       return;
     }
-    sendSponsorshipContact({
-      announcementTitle: a.title,
-      announcementMode: a.mode,
-      owner: a.ownerName,
-      linked,
-      budgetOrPrice: budget || a.price || t("sponsor.budgetTBD"),
-      sponsorshipType: a.sponsorshipType,
-      message,
-    });
-    onDone(isProjectAnnouncement ? t("sponsor.sentProject") : t("sponsor.sentCreator"));
+    setSending(true);
+    setError("");
+    try {
+      if (a.mode === "creator") {
+        const amount = Number((budget || a.price || "0").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+        const service: Service = {
+          id: `sv-${crypto.randomUUID()}`,
+          name: a.sponsorshipType,
+          format: a.videoType || a.sponsorshipType,
+          duration: a.duration || "A definir",
+          platforms: a.platforms
+            .map((platform) => (platform === "Twitter / X" ? "Twitter/X" : platform))
+            .filter((platform): platform is SponsorshipPlatform =>
+              ["TikTok", "YouTube", "Instagram", "Twitter/X", "Other"].includes(platform),
+            ),
+          quantity: 1,
+          price: amount,
+          paymentType: a.paymentMode.toLocaleLowerCase().includes("abonnement")
+            ? ("subscription" as PaymentType)
+            : ("one_time" as PaymentType),
+          notes: a.fullDescription,
+        };
+        await createSponsorship({
+          name: `${linked.trim()} - ${a.ownerName}`,
+          project: linked.trim(),
+          creator: a.ownerName,
+          totalPrice: amount,
+          currency: "EUR",
+          status: "pending",
+          paymentType: service.paymentType,
+          notes: message.trim(),
+          conditions: "En attente de validation par le créateur de contenu.",
+          services: [service],
+          participants: [
+            {
+              id: a.ownerId || a.ownerName,
+              name: a.ownerName,
+              role: "creator",
+              meta: "Créateur de contenu",
+              initials: a.ownerName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "CM",
+            },
+          ],
+        });
+      }
+      sendSponsorshipContact({
+        announcementTitle: a.title,
+        announcementMode: a.mode,
+        owner: a.ownerId || a.ownerName,
+        linked,
+        budgetOrPrice: budget || a.price || (a.mode === "creator" ? formatMoney(0, "EUR") : t("sponsor.budgetTBD")),
+        sponsorshipType: a.sponsorshipType,
+        message,
+      });
+      onDone(isProjectAnnouncement ? t("sponsor.sentProject") : t("sponsor.sentCreator"));
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "La demande n'a pas pu être envoyée.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -415,12 +485,23 @@ function SponsorshipContactDialog({
                 <label className={cn(metaLabel, "mb-2 block")}>
                   {isProjectAnnouncement ? t("sponsor.creatorProfile") : t("sponsor.mangaToPromote")}
                 </label>
-                <input
-                  className={inputCls}
-                  value={linked}
-                  onChange={(event) => setLinked(event.target.value)}
-                  placeholder={isProjectAnnouncement ? t("sponsor.creatorPlaceholder") : t("sponsor.projectPlaceholder")}
-                />
+                {!isProjectAnnouncement && projects.length > 0 ? (
+                  <select className={inputCls} value={linked} onChange={(event) => setLinked(event.target.value)}>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.title}>
+                        {project.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={inputCls}
+                    value={linked}
+                    onChange={(event) => setLinked(event.target.value)}
+                    placeholder={isProjectAnnouncement ? t("sponsor.creatorPlaceholder") : t("sponsor.projectPlaceholder")}
+                    disabled={!isProjectAnnouncement && projects.length > 0}
+                  />
+                )}
               </div>
 
               <div>
@@ -460,9 +541,9 @@ function SponsorshipContactDialog({
               <button type="button" className={btnSecondary} onClick={() => onOpenChange(false)}>
                 {t("sponsor.cancel")}
               </button>
-              <button type="button" className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-cm-neon px-[18px] font-manrope text-[14px] font-bold text-[#04111e] transition-colors hover:bg-cm-neon-hover" onClick={submit}>
+              <button type="button" className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-cm-neon px-[18px] font-manrope text-[14px] font-bold text-[#04111e] transition-colors hover:bg-cm-neon-hover disabled:opacity-60" onClick={() => void submit()} disabled={sending}>
                 <Send className="h-4 w-4" />
-                {t("sponsor.send")}
+                {sending ? "Envoi..." : t("sponsor.send")}
               </button>
             </DialogFooter>
           </>

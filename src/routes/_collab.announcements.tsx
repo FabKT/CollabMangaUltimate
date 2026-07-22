@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listAnnouncements } from "@/lib/db";
+import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import { loadStudioProjects } from "@/lib/studio-projects";
 import { projectAnnouncementFromRecruit, type StudioRecruitLike } from "@/lib/recruit-map";
 import { addInterested, listInterested } from "@/lib/announcement-interest";
@@ -1552,15 +1553,6 @@ export function DetailsModal({
   const entityTitle = isProject ? item.projectName : item.userName;
   const entitySubtitle = isProject ? "Projet recruteur" : itemRole(item);
   const entityDescription = isProject ? item.fullDescription : item.fullDescription;
-  const comments = isProject
-    ? [
-        "Brief clair, le role recherche est facile a comprendre.",
-        "Le projet semble deja assez structure pour rejoindre l'equipe.",
-      ]
-    : [
-        "Profil interessant, les competences annoncees correspondent bien au besoin.",
-        "Portfolio a demander avant invitation, mais la disponibilite est claire.",
-      ];
   // Intéressés réels (ceux qui ont répondu) pour les annonces de projet.
   const [interested, setInterested] = useState<string[]>([]);
   useEffect(() => {
@@ -1744,33 +1736,7 @@ export function DetailsModal({
 
             <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
               {tab === "comments" ? (
-                comments.map((comment, index) => (
-                  <div
-                    key={comment}
-                    style={{
-                      padding: 12,
-                      borderRadius: 12,
-                      background: C.card,
-                      border: `1px solid ${C.border}`,
-                    }}
-                  >
-                    <p style={{ ...manrope, color: C.text, fontSize: 12, fontWeight: 800 }}>
-                      Utilisateur {index + 1}
-                    </p>
-                    <p
-                      style={{
-                        ...manrope,
-                        marginTop: 6,
-                        color: C.sec,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        lineHeight: "20px",
-                      }}
-                    >
-                      {comment}
-                    </p>
-                  </div>
-                ))
+                <CommentsPanel entityType="announcement" entityId={item.id} />
               ) : interested.length === 0 ? (
                 <p
                   style={{ ...manrope, color: C.muted, fontSize: 13, fontWeight: 500, padding: 8 }}

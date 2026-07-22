@@ -21,6 +21,8 @@ export type SponsorOption = {
   language?: string;
   createdAt: string;
   ownerId?: string;
+  ownerAvatarUrl?: string | null;
+  ownerBannerUrl?: string | null;
 };
 
 const LEGACY_KEY = "collabmanga.sponsorOptions.v1";
@@ -43,10 +45,18 @@ async function currentUserId() {
 
 export async function listSponsorOptions(ownerId?: string | null): Promise<SponsorOption[]> {
   const sb = getSupabase();
-  const { data, error } = await sb
+  let { data, error } = await sb
     .from("sponsor_options")
-    .select("owner_id, data")
+    .select("owner_id, data, owner:profiles!sponsor_options_owner_id_fkey(display_name, username, avatar_url, banner_url)")
     .order("created_at", { ascending: false });
+  if (error) {
+    const fallback = await sb
+      .from("sponsor_options")
+      .select("owner_id, data, owner:profiles!sponsor_options_owner_id_fkey(display_name, username, avatar_url)")
+      .order("created_at", { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw new Error(error.message);
 
   const userId = await currentUserId();
@@ -64,7 +74,21 @@ export async function listSponsorOptions(ownerId?: string | null): Promise<Spons
   }
   return (data ?? [])
     .filter((row) => !ownerId || row.owner_id === ownerId)
-    .map((row) => ({ ...(row.data as SponsorOption), ownerId: row.owner_id }));
+    .map((row) => {
+      const owner = row.owner as {
+        display_name?: string | null;
+        username?: string | null;
+        avatar_url?: string | null;
+        banner_url?: string | null;
+      } | null;
+      return {
+        ...(row.data as SponsorOption),
+        ownerId: row.owner_id,
+        ownerName: owner?.display_name || owner?.username || (row.data as SponsorOption).ownerName,
+        ownerAvatarUrl: owner?.avatar_url ?? null,
+        ownerBannerUrl: owner?.banner_url ?? null,
+      };
+    });
 }
 
 async function persistOption(option: SponsorOption, userId: string) {

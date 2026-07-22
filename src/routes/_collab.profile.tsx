@@ -193,6 +193,7 @@ function ProfilePage({
     username: string;
     display_name: string | null;
     avatar_url: string | null;
+    banner_url?: string | null;
     role?: string | null;
     secondary_role?: string | null;
   }): PublicProfileIdentity => {
@@ -207,6 +208,7 @@ function ProfilePage({
       mainRole: p.role ?? undefined,
       secondaryRole: p.secondary_role ?? undefined,
       avatarUrl: p.avatar_url ?? undefined,
+      bannerUrl: p.banner_url ?? undefined,
     };
   };
 
@@ -234,6 +236,24 @@ function ProfilePage({
         const user = data.session?.user;
         if (!user || cancelled) return;
         setShownUserId(user.id);
+        let { data: profileRow, error: profileError } = await supabase
+          .from("profiles")
+          .select("username, display_name, avatar_url, banner_url, role, secondary_role")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profileError) {
+          const fallback = await supabase
+            .from("profiles")
+            .select("username, display_name, avatar_url, role, secondary_role")
+            .eq("id", user.id)
+            .maybeSingle();
+          profileRow = fallback.data;
+        }
+        if (profileRow) {
+          setLiveIdentity(identityFromProfile(profileRow));
+          setProfileType(profileRow.role === "Créateur de contenu" ? "content" : "creator");
+          return;
+        }
         const meta = user.user_metadata as Record<string, string | undefined>;
         const username = meta?.username || user.email?.split("@")[0] || "utilisateur";
         const displayName = meta?.display_name || meta?.full_name || username;
@@ -2354,9 +2374,12 @@ function MediaUploadButton({ kind, onDone }: { kind: "avatar" | "banner"; onDone
       await supabase.auth.updateUser({
         data: kind === "avatar" ? { avatar_url: url } : { banner_url: url },
       });
-      if (kind === "avatar") {
-        const uid = (await supabase.auth.getSession()).data.session?.user.id;
-        if (uid) await supabase.from("profiles").update({ avatar_url: url }).eq("id", uid);
+      const uid = (await supabase.auth.getSession()).data.session?.user.id;
+      if (uid) {
+        await supabase
+          .from("profiles")
+          .update(kind === "avatar" ? { avatar_url: url } : { banner_url: url })
+          .eq("id", uid);
       }
       setState("saved");
       onDone?.();

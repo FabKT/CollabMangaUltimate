@@ -43,7 +43,11 @@ export function AnnouncementCard({
       }}
       className="group flex flex-col overflow-hidden rounded-[18px] border border-[rgba(133,154,206,0.18)] bg-cm-card shadow-[0_8px_22px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(133,154,206,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cm-neon/40"
     >
-      <Thumb accent={a.accent} label={a.category || a.sponsorshipType} className="aspect-video" platforms={a.platforms} />
+      {a.mode === "creator" ? (
+        <CreatorHero announcement={a} />
+      ) : (
+        <Thumb accent={a.accent} label={a.category || a.sponsorshipType} className="aspect-video" platforms={a.platforms} />
+      )}
 
       <div className="flex flex-1 flex-col gap-4 p-5">
         {/* identity */}
@@ -114,6 +118,48 @@ export function AnnouncementCard({
         </div>
       </div>
     </article>
+  );
+}
+
+function CreatorHero({ announcement }: { announcement: Announcement }) {
+  const initials = announcement.ownerName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "CM";
+
+  return (
+    <div className="relative aspect-video overflow-hidden bg-cm-details">
+      {announcement.ownerBannerUrl ? (
+        <img src={announcement.ownerBannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(120% 120% at 15% 10%, color-mix(in oklab, ${announcement.accent} 22%, transparent), transparent 55%), linear-gradient(135deg, #0a1330, #060d22)`,
+          }}
+        />
+      )}
+      <div className="absolute inset-0 bg-[#050b1d]/35" />
+      <div className="absolute inset-0 grid place-items-center">
+        <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full border-2 border-cm-neon bg-cm-panel shadow-[0_14px_36px_rgba(0,0,0,0.38)]">
+          {announcement.ownerAvatarUrl ? (
+            <img src={announcement.ownerAvatarUrl} alt={announcement.ownerName} className="h-full w-full object-cover" />
+          ) : (
+            <span className="font-sora text-[22px] font-extrabold text-cm-neon">{initials}</span>
+          )}
+        </div>
+      </div>
+      {announcement.platforms.length > 0 && (
+        <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">
+          {announcement.platforms.slice(0, 3).map((platform) => (
+            <PlatformChip key={platform} platform={platform} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
