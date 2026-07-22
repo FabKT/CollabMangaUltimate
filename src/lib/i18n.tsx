@@ -184,6 +184,26 @@ const messages = {
     "hub.discoverMoreText":
       "Explorez le catalogue et découvrez de nouvelles histoires créées par les créateurs CollabManga.",
     "hub.startProject": "Démarrer un projet manga",
+    "sponsorHub.badge": "CollabManga · Parrainages",
+    "sponsorHub.title": "Mes parrainages",
+    "sponsorHub.description":
+      "Gérez vos collaborations de parrainage : prix, services, plateformes, liens de livraison et statuts.",
+    "sponsorHub.add": "Ajouter un parrainage",
+    "sponsorHub.search": "Rechercher par parrainage, projet, créateur ou statut…",
+    "sponsorHub.project": "Projet",
+    "sponsorHub.creator": "Créateur",
+    "sponsorHub.total": "Total",
+    "sponsorHub.view": "Voir le parrainage",
+    "sponsorHub.services": "services",
+    "sponsorHub.due": "échéance",
+    "sponsorHub.empty": "Aucun parrainage pour l'instant",
+    "sponsorHub.emptyText":
+      "Créez un parrainage pour gérer une collaboration avec un créateur de contenu ou un projet manga.",
+    "sponsorStatus.all": "Tous",
+    "sponsorStatus.activated": "Activés",
+    "sponsorStatus.pending": "En attente",
+    "sponsorStatus.finished": "Terminés",
+    "sponsorStatus.cancelled": "Annulés",
   },
   en: {
     "common.language": "Language",
@@ -350,6 +370,26 @@ const messages = {
     "hub.discoverMoreText":
       "Explore the catalog and find new stories created by CollabManga creators.",
     "hub.startProject": "Start a Manga Project",
+    "sponsorHub.badge": "CollabManga · Sponsorships",
+    "sponsorHub.title": "My Sponsorships",
+    "sponsorHub.description":
+      "Manage sponsorship collaborations, prices, services, platforms, delivery links, and statuses.",
+    "sponsorHub.add": "Add a sponsorship",
+    "sponsorHub.search": "Search by sponsorship, project, creator, or status…",
+    "sponsorHub.project": "Project",
+    "sponsorHub.creator": "Creator",
+    "sponsorHub.total": "Total",
+    "sponsorHub.view": "View sponsorship",
+    "sponsorHub.services": "services",
+    "sponsorHub.due": "due",
+    "sponsorHub.empty": "No sponsorships yet",
+    "sponsorHub.emptyText":
+      "Create a sponsorship to manage a collaboration with a content creator or manga project.",
+    "sponsorStatus.all": "All",
+    "sponsorStatus.activated": "Activated",
+    "sponsorStatus.pending": "Pending",
+    "sponsorStatus.finished": "Finished",
+    "sponsorStatus.cancelled": "Cancelled",
   },
 } as const;
 

@@ -3,20 +3,22 @@ import { useMemo, useState } from "react";
 import { useSponsorships, formatMoney, type SponsorshipStatus } from "../features/sponsorships/store";
 import { StatusBadge } from "../features/sponsorships/ui";
 import { SponsorshipModal } from "../features/sponsorships/SponsorshipModal";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/sponsorship-hub")({
   component: SponsorshipsListPage,
 });
 
-const FILTERS: { key: "all" | SponsorshipStatus; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "activated", label: "Activated" },
-  { key: "pending", label: "Pending" },
-  { key: "finished", label: "Finished" },
-  { key: "cancelled", label: "Cancelled" },
-];
+const FILTERS = [
+  { key: "all", labelKey: "sponsorStatus.all" },
+  { key: "activated", labelKey: "sponsorStatus.activated" },
+  { key: "pending", labelKey: "sponsorStatus.pending" },
+  { key: "finished", labelKey: "sponsorStatus.finished" },
+  { key: "cancelled", labelKey: "sponsorStatus.cancelled" },
+] as const satisfies { key: "all" | SponsorshipStatus; labelKey: string }[];
 
 function SponsorshipsListPage() {
+  const { t } = useI18n();
   const items = useSponsorships();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | SponsorshipStatus>("all");
@@ -49,11 +51,11 @@ function SponsorshipsListPage() {
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-end sm:justify-between">
           <div className="min-w-0">
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border bg-surface/60 px-2.5 py-1 text-[11px] font-medium text-text-secondary">
-              <span className="h-1.5 w-1.5 rounded-full bg-neon" /> CollabManga · Sponsorships
+              <span className="h-1.5 w-1.5 rounded-full bg-neon" /> {t("sponsorHub.badge")}
             </div>
-            <h1 className="font-display text-3xl font-bold text-foreground sm:text-[34px]">My Sponsorships</h1>
+            <h1 className="font-display text-3xl font-bold text-foreground sm:text-[34px]">{t("sponsorHub.title")}</h1>
             <p className="mt-1.5 max-w-2xl text-sm text-text-secondary">
-              Manage sponsorship collaborations, prices, services, platforms, delivery links, and statuses.
+              {t("sponsorHub.description")}
             </p>
           </div>
           <button
@@ -61,7 +63,7 @@ function SponsorshipsListPage() {
             className="btn-neon inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            Add a sponsorship
+            {t("sponsorHub.add")}
           </button>
         </header>
 
@@ -72,8 +74,8 @@ function SponsorshipsListPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by sponsorship, project, creator, or status…"
-              aria-label="Search sponsorships"
+              placeholder={t("sponsorHub.search")}
+              aria-label={t("sponsorHub.search")}
               className="w-full rounded-xl border border-border bg-surface/70 pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-text-muted focus:border-neon/50 focus:outline-none focus:ring-2 focus:ring-neon/25"
             />
           </div>
@@ -89,7 +91,7 @@ function SponsorshipsListPage() {
                     onClick={() => setFilter(f.key)}
                     className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition ${active ? "bg-neon-soft text-neon" : "text-text-secondary hover:text-foreground"}`}
                   >
-                    {f.label}
+                    {t(f.labelKey)}
                     <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-neon/15 text-neon" : "bg-surface-3 text-text-muted"}`}>{counts[f.key] ?? 0}</span>
                   </button>
                 );
@@ -119,15 +121,15 @@ function SponsorshipsListPage() {
                         <span className="truncate">{s.project} · {s.creator}</span>
                       </div>
                       <div className="mt-1 hidden text-xs text-text-muted sm:block">
-                        {s.services.length} services · {s.paymentType.replace("_", " ")}{s.deadline ? ` · due ${s.deadline}` : ""}
+                        {s.services.length} {t("sponsorHub.services")} · {s.paymentType.replace("_", " ")}{s.deadline ? ` · ${t("sponsorHub.due")} ${s.deadline}` : ""}
                       </div>
                     </div>
                     <div className="hidden min-w-0 sm:block">
-                      <div className="text-[11px] uppercase tracking-wide text-text-muted">Project</div>
+                      <div className="text-[11px] uppercase tracking-wide text-text-muted">{t("sponsorHub.project")}</div>
                       <div className="truncate text-sm text-text-secondary">{s.project}</div>
                     </div>
                     <div className="hidden min-w-0 sm:block">
-                      <div className="text-[11px] uppercase tracking-wide text-text-muted">Creator</div>
+                      <div className="text-[11px] uppercase tracking-wide text-text-muted">{t("sponsorHub.creator")}</div>
                       <div className="truncate text-sm text-text-secondary">{s.creator}</div>
                     </div>
                     <div className="hidden sm:block">
@@ -135,11 +137,11 @@ function SponsorshipsListPage() {
                     </div>
                     <div className="flex items-center gap-3 justify-self-end">
                       <div className="text-right">
-                        <div className="text-[11px] uppercase tracking-wide text-text-muted">Total</div>
+                        <div className="text-[11px] uppercase tracking-wide text-text-muted">{t("sponsorHub.total")}</div>
                         <div className="font-display text-sm font-semibold text-foreground">{formatMoney(s.totalPrice, s.currency)}</div>
                       </div>
                       <span className="hidden shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-secondary transition group-hover:border-neon/50 group-hover:text-neon sm:inline">
-                        View sponsorship →
+                        {t("sponsorHub.view")} →
                       </span>
                     </div>
                     <div className="col-span-2 sm:hidden">
@@ -158,14 +160,15 @@ function SponsorshipsListPage() {
 }
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface/40 px-6 py-14 text-center">
       <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-neon-soft text-neon">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 7 9 18l-5-5"/></svg>
       </div>
-      <h2 className="font-display text-lg font-semibold">No sponsorships yet</h2>
-      <p className="mt-1.5 max-w-md text-sm text-text-secondary">Create a sponsorship to manage a collaboration with a content creator or manga project.</p>
-      <button onClick={onCreate} className="btn-neon mt-5 rounded-lg px-4 py-2 text-sm font-semibold">Add a sponsorship</button>
+      <h2 className="font-display text-lg font-semibold">{t("sponsorHub.empty")}</h2>
+      <p className="mt-1.5 max-w-md text-sm text-text-secondary">{t("sponsorHub.emptyText")}</p>
+      <button onClick={onCreate} className="btn-neon mt-5 rounded-lg px-4 py-2 text-sm font-semibold">{t("sponsorHub.add")}</button>
     </div>
   );
 }
