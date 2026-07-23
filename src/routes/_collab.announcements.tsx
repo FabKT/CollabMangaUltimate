@@ -82,6 +82,8 @@ type UserAnnouncement = {
   portfolioImage?: string;
   description: string;
   roleOffered: string;
+  /** Second rôle du profil auteur (facultatif). */
+  secondaryRole?: string;
   remuneration: boolean;
   engagement: "Long terme" | "Ponctuel";
   mainSkill: string;
@@ -611,6 +613,7 @@ function AnnouncementsPage() {
               bannerUrl: r.author?.banner_url ?? undefined,
               description: r.hook || r.description.slice(0, 160),
               roleOffered: r.author?.role || r.status_sought || "—",
+              secondaryRole: r.author?.secondary_role || undefined,
               remuneration: r.remuneration,
               engagement: r.engagement,
               mainSkill: r.author?.role || r.status_sought || "—",
@@ -1389,6 +1392,12 @@ function UserCard({
           avatarUrl={item.avatarUrl}
           bannerUrl={item.bannerUrl}
         />
+        {item.roleOffered && item.roleOffered !== "—" && (
+          <RoleSpotlight
+            label={item.secondaryRole ? "Rôles" : "Rôle"}
+            role={item.secondaryRole ? `${item.roleOffered} · ${item.secondaryRole}` : item.roleOffered}
+          />
+        )}
         <CardHeader
           title={item.title}
           subtitle={item.userName}
@@ -1669,7 +1678,13 @@ export function DetailsModal({
   const [saved, setSaved] = useState(false);
   const isProject = item.kind === "project";
   const entityTitle = isProject ? item.projectName : item.userName;
-  const entitySubtitle = isProject ? "Projet recruteur" : itemRole(item);
+  // Rôles à afficher : "Projet recruteur" pour un projet ; le rôle principal + le
+  // second rôle (s'il existe) du profil auteur pour une annonce utilisateur.
+  const entityRoles = isProject
+    ? ["Projet recruteur"]
+    : [item.roleOffered, item.secondaryRole].filter(
+        (role): role is string => Boolean(role) && role !== "—",
+      );
   const entityDescription = isProject ? item.fullDescription : item.fullDescription;
   // Intéressés réels (ceux qui ont répondu) pour les annonces de projet.
   const [interested, setInterested] = useState<string[]>([]);
@@ -1732,7 +1747,11 @@ export function DetailsModal({
             )}
 
             <div style={{ marginTop: 16 }}>
-              <CategoryChip>{entitySubtitle}</CategoryChip>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {entityRoles.map((role) => (
+                  <CategoryChip key={role}>{role}</CategoryChip>
+                ))}
+              </div>
               <h3
                 style={{
                   ...sora,
