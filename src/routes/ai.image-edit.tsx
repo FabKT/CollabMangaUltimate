@@ -64,7 +64,9 @@ async function readTargetImage(file: File) {
   };
 }
 
-function referenceRoles(t: (key: TranslationKey) => string): Array<{ value: ImageEditReferenceRole; label: string }> {
+function referenceRoles(
+  t: (key: TranslationKey) => string,
+): Array<{ value: ImageEditReferenceRole; label: string }> {
   return [
     { value: "Inspiration", label: t("ai.roleTargetedInspiration") },
     { value: "Pose", label: "Pose" },
@@ -87,6 +89,18 @@ function characterThumbnail(character: MangaCharacterProfile) {
   return character.cardImageDataUrl || character.images?.[0]?.imageDataUrl;
 }
 
+function emptyDraft(): ImageEditDraft {
+  return {
+    originalImageUrl: "",
+    currentImageUrl: "",
+    prompt: "",
+    selectedCharacterIds: [],
+    references: [],
+    aspectRatio: "2:3",
+    source: "",
+  };
+}
+
 function ImageEditPage() {
   const { t } = useI18n();
   const roles = useMemo(() => referenceRoles(t), [t]);
@@ -105,7 +119,7 @@ function ImageEditPage() {
       loadSession<ImageEditDraft>(IMAGE_EDIT_SESSION_KEY),
       loadCharacterProfiles(),
     ]).then(([saved, profiles]) => {
-      setDraft(saved);
+      setDraft(saved ?? emptyDraft());
       setCharacters(profiles);
       setLoaded(true);
     });
@@ -293,52 +307,11 @@ function ImageEditPage() {
     }
   };
 
-  if (!loaded) return <div className="py-20 text-center text-text-muted">{t("ai.loadingEllipsis")}</div>;
-  if (!draft) {
-    return (
-      <>
-        <PageHeader
-          title={t("ai.imageEditTitle")}
-          description={t("ai.imageEditDescNoImage")}
-        />
-        <Panel className="mx-auto max-w-2xl py-16 text-center">
-          <input
-            ref={targetUploadRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(event) => {
-              void importTargetImage(event.target.files);
-              event.currentTarget.value = "";
-            }}
-          />
-          <ImageIcon className="mx-auto h-10 w-10 text-accent" />
-          <h1 className="mt-4 text-xl font-bold">{t("ai.importImageToModifyTitle")}</h1>
-          <p className="mt-2 text-sm text-text-secondary">
-            {t("ai.imageBecomesTargetText")}
-          </p>
-          {error && (
-            <p className="mt-4 rounded-[10px] border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-              {error}
-            </p>
-          )}
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => targetUploadRef.current?.click()}
-              className="cma-btn-primary"
-            >
-              <Upload className="h-4 w-4" /> {t("ai.importAnImage")}
-            </button>
-            <Link to="/ai/history" className="cma-btn-secondary">
-              {t("ai.openHistory")}
-            </Link>
-          </div>
-        </Panel>
-      </>
-    );
+  if (!loaded || !draft) {
+    return <div className="py-20 text-center text-text-muted">{t("ai.loadingEllipsis")}</div>;
   }
 
+  const hasImage = Boolean(draft.currentImageUrl);
   const tabs: Array<{ id: EditorTab; label: string; icon: typeof ImageIcon }> = [
     { id: "image", label: "Image", icon: ImageIcon },
     { id: "characters", label: t("ai.charactersTab"), icon: UserRound },
@@ -348,10 +321,10 @@ function ImageEditPage() {
   const portrait = draft.aspectRatio === "2:3";
 
   return (
-    <>
+    <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
         title={t("ai.imageEditTitle")}
-        description={t("ai.imageEditDescWithImage")}
+        description={hasImage ? t("ai.imageEditDescWithImage") : t("ai.imageEditDescNoImage")}
       />
       <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
         <Panel padding={0} className="min-w-0 overflow-hidden">
@@ -385,25 +358,63 @@ function ImageEditPage() {
                     event.currentTarget.value = "";
                   }}
                 />
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="truncate text-xs text-text-muted">
-                    {draft.source || t("ai.targetImageFallback")}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => targetUploadRef.current?.click()}
-                    className="cma-btn-secondary shrink-0"
+                {hasImage ? (
+                  <>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="truncate text-xs text-text-muted">
+                        {draft.source || t("ai.targetImageFallback")}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => targetUploadRef.current?.click()}
+                        className="cma-btn-secondary shrink-0"
+                      >
+                        <Upload className="h-4 w-4" /> {t("ai.replace")}
+                      </button>
+                    </div>
+                    <div className="flex h-full min-h-[470px] items-center justify-center rounded-[16px] bg-stage p-4">
+                      <img
+                        src={draft.currentImageUrl}
+                        alt={t("ai.imageToModifyAlt")}
+                        className="max-h-[470px] max-w-full rounded-[10px] object-contain"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void importTargetImage(event.dataTransfer.files);
+                    }}
+                    className="flex min-h-[470px] flex-col items-center justify-center gap-4 rounded-[16px] border border-dashed border-border-strong bg-stage p-6 text-center"
                   >
-                    <Upload className="h-4 w-4" /> {t("ai.replace")}
-                  </button>
-                </div>
-                <div className="flex h-full min-h-[470px] items-center justify-center rounded-[16px] bg-stage p-4">
-                  <img
-                    src={draft.currentImageUrl}
-                    alt={t("ai.imageToModifyAlt")}
-                    className="max-h-[470px] max-w-full rounded-[10px] object-contain"
-                  />
-                </div>
+                    <ImageIcon className="h-10 w-10 text-accent" />
+                    <div>
+                      <p className="text-[15px] font-bold">{t("ai.importImageToModifyTitle")}</p>
+                      <p className="mx-auto mt-1 max-w-sm text-[13px] text-text-secondary">
+                        {t("ai.imageBecomesTargetText")}
+                      </p>
+                    </div>
+                    {error && (
+                      <p className="rounded-[10px] border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-semibold text-danger">
+                        {error}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => targetUploadRef.current?.click()}
+                        className="cma-btn-primary"
+                      >
+                        <Upload className="h-4 w-4" /> {t("ai.importAnImage")}
+                      </button>
+                      <Link to="/ai/history" className="cma-btn-secondary">
+                        {t("ai.openHistory")}
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -607,7 +618,7 @@ function ImageEditPage() {
               )}
             </div>
           </div>
-          {error && (
+          {hasImage && error && (
             <p className="mt-3 rounded-[10px] border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
               {error}
             </p>
@@ -615,13 +626,13 @@ function ImageEditPage() {
           <button
             type="button"
             onClick={() => void modifyImage()}
-            disabled={isGenerating || !draft.prompt.trim()}
+            disabled={isGenerating || !hasImage || !draft.prompt.trim()}
             className="cma-btn-primary mt-4 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Wand2 className="h-4 w-4" /> {result ? t("ai.modifyAgain") : t("ai.modifyImageBtn")}
           </button>
         </Panel>
       </div>
-    </>
+    </div>
   );
 }

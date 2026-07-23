@@ -48,79 +48,142 @@ export function buildSwapPrompt(input: SwapImageInput) {
     )
     .join("\n");
 
-  return `MULTI-CHARACTER SWAP BACKEND PROMPT
-STRICT CHARACTER REPLACEMENT WITH PAGE PRESERVATION
+  return `STRICT FULL-CHARACTER SWAP BACKEND
+COMPLETE CHARACTER REPLACEMENT + IMMUTABLE SCENE PRESERVATION
 
-You are editing an existing illustrated or manga page by replacing one or more original characters with externally provided replacement characters.
+0. OBJECTIVE AND DEFAULT MODE
 
-This is a strict character-exchange task. The final page must preserve the original page's structure, storytelling, composition, action, text, and visual style. The original characters must be replaced by their corresponding replacement characters.
+Edit the provided source image directly. The default operation is FULL_CHARACTER_SWAP, never face-only or head-only replacement. Replace every authorized visible occurrence of each mapped ORIGINAL character with its paired REPLACEMENT character.
 
-1. INPUT ROLES
+Replace the complete visible character. Preserve the complete original scene. Use the original character only as an immutable geometric scaffold for pose, perspective, interaction, visibility and occlusion.
 
-PAGE IMAGE is the mandatory page to edit. It defines the complete page layout, panels, compositions, camera angles, framing, poses, expressions, gestures, interactions, objects, backgrounds, dialogue bubbles, sound effects, text, and visual style.
+1. SOURCE ROLES
 
-Each ORIGINAL character reference identifies the character currently present in the page who must be located and removed. Each paired REPLACEMENT character reference defines who must replace that original character. The USER PROMPT provides optional explicit overrides.
+SOURCE PAGE IMAGE is the absolute authority for canvas dimensions, aspect ratio, page and panel structure, borders, gutters, reading order, composition, framing, camera, perspective, pose skeleton, action, expression, gaze, interactions, objects, backgrounds, text, effects, visibility, cropping, occlusion and final graphic style.
 
-2. FUNDAMENTAL RULE
+ORIGINAL references identify only which character must be found and removed. They may define face, hair, morphology, outfit, accessories and continuity between occurrences, but they define no final content.
 
-The PAGE defines WHERE the character appears, HOW the character is posed and framed, WHAT expression and action the character has, and HOW the character interacts with the scene. The ORIGINAL reference defines WHICH character must be replaced. The paired REPLACEMENT reference defines WHO appears instead: face, hairstyle, morphology, distinguishing traits, and outfit by default.
+REPLACEMENT references define only the replacement's identity: face geometry, eyes, brows, nose, mouth, ears, hair and hairline, skin value or color, morphology, permanent marks, personal accessories and authorized outfit. Their pose, expression, camera, framing, composition and source rendering style must never be copied.
 
-3. CHARACTER-DETECTION PHASE
+The latest explicit USER instruction wins only for the exact property it mentions. Everything else remains locked.
 
-Before editing, identify every reliable occurrence of each original character across all panels using face, hairstyle, silhouette, outfit, accessories, body proportions, distinguishing features, and contextual continuity. Handle front, back, profile, three-quarter, occluded, small, moving, close-up, and partial-body appearances. Replace every reliable occurrence by default. Never replace an uncertain character at random.
-
-4. MULTIPLE-SWAP MAPPING LOCK
+2. PERMANENT MULTI-SWAP MAPPING
 
 ${mappings}
 
-Each original is permanently mapped only to its paired replacement. Never swap mappings, mix faces, hairstyles or outfits, merge identities, or transfer features between pairs. Analyze all pairs before editing.
+Analyze every pair before editing. Each original is permanently linked to exactly one replacement. Never exchange mappings, mix faces, bodies, skin, hairstyles, clothing or accessories between pairs, place replacement A's face on replacement B's body, or merge identities.
 
-5. IDENTITY REPLACEMENT LOCK
+3. OCCURRENCE DETECTION
 
-Remove the original identity completely. Replace face identity, hairstyle, hair structure, distinguishing facial traits, recognizable body identity, and outfit by default. Preserve pose, expression, gaze, body orientation, perspective, scale, placement, action, and interaction. The result must be unmistakably the replacement, never a hybrid.
+Locate every reliable authorized occurrence of each ORIGINAL across all panels using face, hair, silhouette, outfit, accessories, proportions, marks and narrative continuity. Detect front, back, profile, three-quarter, close-up, full body, small, moving, cropped and partially occluded appearances.
 
-6. EXACT POSE AND EXPRESSION LOCK
+Replace every reliable occurrence by default. Do not replace uncertain bystanders. Respect explicit inclusions or exclusions from the user. Track each occurrence by panel, bounds, orientation, visible body regions, crop and occluders before editing.
 
-The replacement must adopt the exact pose and expression of the original occurrence. Preserve head position and tilt, neck and shoulder angles, torso and hip rotation, every limb and joint placement, hands and fingers, balance, body mechanics, eyebrows, eye openness, gaze, facial tension, mouth shape, and emotional intensity. Ignore the pose and expression shown in replacement references unless the user explicitly overrides them.
+4. COMPLETE BODY-PART COVERAGE
 
-7. ORIENTATION, PERSPECTIVE, AND SILHOUETTE LOCK
+For every occurrence, inventory all visible or partially visible character-owned regions:
+- head, hair, face, ears and neck;
+- shoulders, torso, chest, back, waist and pelvis;
+- left and right upper arms, elbows, forearms, wrists, hands and fingers;
+- left and right thighs, knees, lower legs, ankles and feet;
+- exposed skin, permanent marks, body-specific features and personal accessories;
+- clothing according to the active clothing rule.
 
-Preserve viewing direction, camera distance, scale, foreshortening, perspective distortion, scene depth, body footprint, center of gravity, and action silhouette. Never rotate a replacement toward the camera. Infer back/profile details from its identity references while preserving the original orientation.
+Replace every inventoried visible region. A replaced face with the original neck, arms, hands, legs, skin, morphology or hair is a complete failure. A hidden or panel-cropped region must remain hidden or cropped and must not be invented.
 
-8. INTERACTION AND OCCLUSION LOCK
+5. IMMUTABLE POSE SCAFFOLD
 
-Preserve every interaction, object held, touch point, overlap, foreground/background relationship, crop, and occlusion. Do not reveal hidden areas or hide visible scene elements.
+Keep the source coordinates and trajectories of head center, chin, neck base, shoulders, elbows, wrists, hands, pelvis, hips, knees, ankles and feet. Fit the replacement morphology around this skeleton.
 
-9. CLOTHING RULE
+Do not move a joint, shorten or lengthen a limb, rotate a hand, change body direction, alter the center of gravity, add or remove a limb, make the pose more comfortable, or modify the action silhouette.
 
-By default, use the replacement character's own outfit, reconstructed for the original pose, perspective, crop, orientation, and action. Adapt folds, fabric direction, hidden parts, and movement without changing the action or composition. An explicit user instruction may instead request the original outfit, a hybrid outfit, or a custom outfit.
+6. LIMB OWNERSHIP AND ANATOMICAL CONTINUITY
 
-10. ACCESSORIES AND PROPS
+Assign every visible limb to one character and preserve continuous chains:
+shoulder -> upper arm -> elbow -> forearm -> wrist -> hand -> fingers;
+hip -> thigh -> knee -> lower leg -> ankle -> foot.
 
-Preserve replacement identity accessories when they do not break the scene. Preserve every scene prop independently from clothing, including weapons, phones, bags, tools, sports equipment, and manipulated objects.
+No duplicated, missing, fused, interrupted or reassigned limb; no hand on the wrong forearm; no fingers from a neighboring character; no ownership change at intersections. Preserve readable anatomy while retaining exact source geometry.
 
-11. PAGE-STYLE PRESERVATION
+7. SKIN CONTINUITY AND NO ORIGINAL RESIDUE
 
-Render each replacement using the page's exact lineart, shading, screentones, color logic, contrast, detail level, hair-rendering logic, and face-rendering logic. Replacement references define identity, not final rendering style. The replacement must look naturally drawn inside the original page, never pasted from another artwork.
+Apply the replacement's skin color or monochrome skin value consistently to every exposed region: face, ears, neck, shoulders, arms, elbows, forearms, wrists, hands, fingers, thighs, knees, legs, ankles and feet.
 
-12. TEXT AND BALLOON PRESERVATION
+In black-and-white manga, translate that skin into the source grammar using consistent white paper, flat gray, screentone, hatching or controlled local blacks. Never recolor only the face.
 
-Preserve all dialogue, speech bubbles, tails, captions, sound effects, typography, and placement exactly. Keep each tail pointing to the same spatial position. Do not rewrite, remove, or move text unless explicitly requested.
+After the swap, no identity-specific residue of the original may remain: no original face, jaw, ears, hairline, hair, skin, body build, marks, accessories or unauthorized clothing.
 
-13. USER-PROMPT OVERRIDES
+8. IDENTITY, MORPHOLOGY, FACE AND HAIR
 
-Apply only explicit user overrides concerning panel or occurrence scope, clothing, accessories, expression, pose, style, preserved elements, or removed elements. Do not infer unrequested overrides.
+Transfer the replacement's complete recognizable identity and morphology within the immutable source pose: facial construction, eyes, hair, neck volume, shoulder width, torso, waist, hips, limb thickness, hands and permanent traits.
 
-14. PAGE PRESERVATION LOCK
+Reconstruct face and hair at the source head angle, tilt, perspective, crop and visibility. Never create a hybrid jaw, mixed hairline, mixed ear, mixed skin or blended identity. Morphology may change surface volume but must not move joints, break perspective, cover important objects or disturb neighboring characters.
 
-Preserve panel count, layout, geometry, borders, framing, camera angles, backgrounds, objects, storytelling, reading order, and page rhythm. Do not regenerate a new composition, redesign the page, move panels, or change the narrative.
+9. EXPRESSION, GAZE AND ORIENTATION
 
-15. FINAL MANDATORY INSTRUCTION
+The replacement adopts the source occurrence's exact expression and acting: brows, eyelids, iris and pupil direction, gaze target, mouth shape, jaw tension, sweat, stress marks and emotional intensity.
 
-Edit the provided page directly. For every mapped pair, locate the original character, remove its identity, and insert only its assigned replacement while preserving the original pose, expression, orientation, perspective, body mechanics, action, interactions, composition, text, and page style. Use the replacement outfit by default unless explicitly overridden.
+Preserve head, torso, pelvis and leg orientations independently. A character shown from behind remains from behind. Never turn a profile or back view toward the camera because the reference is frontal.
 
-The final result must clearly read as the exact same original page, with every selected original character perfectly replaced by its assigned replacement character.
-${input.prompt?.trim() ? `\nUSER PROMPT - EXPLICIT OVERRIDES ONLY:\n${input.prompt.trim()}` : ""}`;
+10. PERSPECTIVE, VISIBILITY, OCCLUSION AND INTERACTION
+
+Preserve camera distance and height, field of view, depth, scale, foreshortening, projected limb size, foreground/background order and every crop. Preserve every overlap and occluder.
+
+Keep all contact points and interactions exactly: held object, touching surface, strike, block, gaze target, person contact, object contact and motion direction. Do not reveal hidden areas, hide visible areas, move a neighbor, displace a prop or change depth order.
+
+11. CLOTHING MODES
+
+Default: KEEP_REPLACEMENT_OUTFIT. Reconstruct the replacement's outfit around the immutable source skeleton, action, perspective, crop and occlusion. Adapt folds and hidden edges without changing the pose.
+
+If the user explicitly requests KEEP_ORIGINAL_OUTFIT, preserve source garments, numbers, logos and folds, but still replace all exposed skin, face, hair, neck, arms, hands, legs, morphology and body identity.
+
+HYBRID_OUTFIT and CUSTOM_OUTFIT apply only when explicitly described. Clothing rules never authorize preservation of the original skin or body. Treat garment numbers, names and logos separately and change them only when explicitly requested.
+
+12. EDIT MASK, PROTECTION MASK AND TRANSITIONS
+
+The edit mask must cover the complete visible target occurrence from hair to feet, including every visible limb, skin region, authorized garment, accessory and the minimal extension needed for hair or clothing.
+
+Protect all non-target characters, their limbs, backgrounds, objects, panel borders, gutters, bubbles, text, sound effects and scene props. At mask boundaries, reconstruct only the minimum hair edges, garment folds, outlines, shadows and occlusion seams required for a natural integration.
+
+Never use a face-only or head-only mask in full-character mode.
+
+13. GLOBAL PAGE AND TEXT LOCK
+
+Preserve canvas, ratio, panel count and geometry, borders, gutters, reading order, composition, camera, backgrounds, non-target characters, objects, action, storytelling, dialogue, balloon shapes and tails, captions, sound effects, typography and placement.
+
+Do not redesign, reframe, rewrite, translate, erase or invent. A requested character swap is not permission to regenerate the page.
+
+14. SOURCE STYLE MATCHING
+
+Render the replacement in the exact visual language of the source page: line weight, contour logic, face and eye treatment, hair masses, flat colors or monochrome values, screentones, hatching, shadows, contrast, texture density and finish.
+
+The source page defines final style. Replacement references define identity only. Never paste their art style, lighting, background, pose, expression or composition. In flat-color or flat-value art, preserve clean unified fills and avoid gradients, painterly volume, photorealism or unnecessary texture.
+
+15. SOURCE ISOLATION
+
+Use source page only for scene geometry and style. Use ORIGINAL references only for detection. Use REPLACEMENT references only for replacement identity. Use USER text only for explicit exceptions. Do not borrow unrelated people, poses, clothes, scenery, text or lighting from any reference.
+
+16. QUALITY CONTROL AND REJECTION
+
+Before returning the image, verify for every mapped occurrence:
+- complete body coverage equals all visible inventoried regions;
+- no original identity or skin residue remains;
+- mapping and identity are correct and not hybridized;
+- all joints, limb chains, hands and feet are anatomically continuous;
+- source pose, expression, gaze, camera, perspective and silhouette are unchanged;
+- crops, occlusions, depth and contact points are unchanged;
+- clothing mode is correctly applied;
+- style, tones and skin values match the source page;
+- all protected pixels, panels, backgrounds, characters, objects and text remain unchanged.
+
+Reject and internally correct any face-only result, residual original body part, wrong mapping, mixed identity, duplicated or missing limb, skin discontinuity, altered pose, altered panel, moved text, changed background or mismatched style.
+
+17. FINAL MANDATORY INSTRUCTION
+
+Perform a complete local replacement of every authorized visible occurrence for every permanent mapping. Replace the entire visible character identity and body from head to feet while preserving the exact source skeleton, pose, expression, gaze, orientation, perspective, action, interaction, occlusion, composition, text and manga style.
+
+The final image must be unmistakably the exact same original scene with only the selected complete characters replaced.
+${input.prompt?.trim() ? `\nUSER INSTRUCTIONS - EXPLICIT PROPERTY OVERRIDES ONLY:\n${input.prompt.trim()}` : ""}`;
 }
 
 export async function requestPulseNoteSwap(input: SwapImageInput): Promise<SwapImageResult> {

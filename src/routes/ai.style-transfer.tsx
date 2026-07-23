@@ -124,6 +124,15 @@ async function imageSourceToDataUrl(src?: string) {
   return fileToDataUrl(new File([await response.blob()], "style-reference.png"));
 }
 
+function imageAspectRatio(src: string): Promise<"2:3" | "3:2"> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image.naturalWidth >= image.naturalHeight ? "3:2" : "2:3");
+    image.onerror = () => resolve("2:3");
+    image.src = src;
+  });
+}
+
 function StyleTransferPage() {
   const { t } = useI18n();
   const MODE_CONFIG = useMemo(() => modeConfig(t), [t]);
@@ -223,6 +232,7 @@ function StyleTransferPage() {
           )
         : [];
       const styleReferenceImages = activeCustomStyle?.images ?? presetStyleReferences;
+      const aspectRatio = await imageAspectRatio(baseImage);
       window.localStorage.setItem("collabmanga.ai-job.style-transfer.mode", mode);
       const generated = await runDurableGeneration<StyleTransferResult>(
         "style-transfer",
@@ -233,6 +243,7 @@ function StyleTransferPage() {
           styleName: activeCustomStyle?.name ?? activeStyle?.name ?? "",
           styleDescription: isCustom ? "" : (activeStyle?.description ?? ""),
           customStyleImages: styleReferenceImages,
+          aspectRatio,
         },
       );
       setResult(generated);
@@ -289,7 +300,7 @@ function StyleTransferPage() {
   };
 
   return (
-    <div className="manga-canvas-page flex h-[calc(100dvh-93px)] w-full min-w-0 flex-col overflow-hidden text-text-primary md:h-[calc(100dvh-48px)] lg:h-[calc(100dvh-64px)]">
+    <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader title={t("ai.styleTransfer")} description={t("ai.styleTransferDesc")} />
 
       {/* Onglets : Planche / Personnage */}
@@ -397,9 +408,9 @@ function StyleTransferPage() {
       </section>
 
       {/* Before / After — two equal parts */}
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 md:gap-4">
+      <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2">
         {/* Before */}
-        <section className="shadow-panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-surface-2">
+        <section className="shadow-panel flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-surface-2">
           <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2.5 md:p-4">
             <div className="flex min-w-0 items-center gap-2">
               <span className="rounded-full border border-border bg-surface-3 px-2 py-0.5 text-[11px] font-bold text-text-secondary">
@@ -419,13 +430,13 @@ function StyleTransferPage() {
               </button>
             )}
           </header>
-          <div className="min-h-0 flex-1 p-2.5 md:p-4">
+          <div className="aspect-square w-full p-2.5 md:p-4">
             <BeforeArea baseImage={baseImage} importCta={cfg.importCta} onImport={importBase} />
           </div>
         </section>
 
         {/* After */}
-        <section className="shadow-panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-surface-2">
+        <section className="shadow-panel flex min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-surface-2">
           <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2.5 md:p-4">
             <div className="flex min-w-0 items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
@@ -442,7 +453,7 @@ function StyleTransferPage() {
               <Download className="h-4 w-4" />
             </button>
           </header>
-          <div className="min-h-0 flex-1 p-2.5 md:p-4">
+          <div className="aspect-square w-full p-2.5 md:p-4">
             {/* Cadre fixe, résultat entier affiché sans déformation. */}
             <div className="h-full w-full overflow-hidden rounded-[12px] bg-stage">
               {isGenerating ? (

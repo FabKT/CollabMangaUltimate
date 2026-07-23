@@ -21,6 +21,7 @@ const plancheTransferInputSchema = z.object({
   styleName: z.string().default("Moderne"),
   styleDescription: z.string().default(""),
   customStyleImages: z.array(z.string()).default([]),
+  aspectRatio: z.enum(["2:3", "3:2"]).default("2:3"),
 });
 
 export type PlancheTransferInput = z.infer<typeof plancheTransferInputSchema>;
@@ -347,5 +348,6 @@ export async function requestPulseNotePlancheTransfer(
     styleId: input.styleId,
     styleName: input.styleName,
     styleReferenceImages: input.customStyleImages,
+    aspectRatio: input.aspectRatio,
   });
 }

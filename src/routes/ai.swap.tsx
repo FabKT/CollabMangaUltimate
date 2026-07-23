@@ -17,7 +17,11 @@ import {
 import { PageHeader } from "@/components/cma/Layout";
 import { createId, loadCharacterProfiles, type MangaCharacterProfile } from "@/lib/manga-workspace";
 import { loadSession, saveSession } from "@/lib/manga-session";
-import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
+import {
+  hasPendingGeneration,
+  resumeDurableGeneration,
+  runDurableGeneration,
+} from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { recordGeneratedImage } from "@/lib/manga-history";
 import type { SwapImageResult } from "@/server-functions/swap-image";
@@ -129,9 +133,7 @@ function SwapPage() {
   // basée dessus ; l'image est recadrée (object-cover) au cadre de base.
   const [pageAspect, setPageAspect] = useState<"2:3" | "3:2">("2:3");
   const [characters, setCharacters] = useState<MangaCharacterProfile[]>([]);
-  const [pairs, setPairs] = useState<SwapPair[]>([
-    newPair(),
-  ]);
+  const [pairs, setPairs] = useState<SwapPair[]>([newPair()]);
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<SwapImageResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,21 +145,21 @@ function SwapPage() {
     let cancelled = false;
     void Promise.all([loadCharacterProfiles(), loadSession<SwapSnapshot>("swap")]).then(
       ([savedCharacters, snapshot]) => {
-      if (cancelled) return;
-      setCharacters(savedCharacters);
-      if (snapshot) {
-        setTab(snapshot.tab ?? "page");
-        setPageImage(snapshot.pageImage ?? null);
-        setPageAspect(snapshot.pageAspect === "3:2" ? "3:2" : "2:3");
-        setPairs(
-          snapshot.pairs?.length
-            ? snapshot.pairs.map((pair) => ({ ...newPair(), ...pair }))
-            : [newPair()],
-        );
-        setPrompt(snapshot.prompt ?? "");
-        setResult(snapshot.result ?? null);
-      }
-      setLoaded(true);
+        if (cancelled) return;
+        setCharacters(savedCharacters);
+        if (snapshot) {
+          setTab(snapshot.tab ?? "page");
+          setPageImage(snapshot.pageImage ?? null);
+          setPageAspect(snapshot.pageAspect === "3:2" ? "3:2" : "2:3");
+          setPairs(
+            snapshot.pairs?.length
+              ? snapshot.pairs.map((pair) => ({ ...newPair(), ...pair }))
+              : [newPair()],
+          );
+          setPrompt(snapshot.prompt ?? "");
+          setResult(snapshot.result ?? null);
+        }
+        setLoaded(true);
       },
     );
     return () => {
@@ -168,9 +170,11 @@ function SwapPage() {
   useEffect(() => {
     if (!hasPendingGeneration("swap")) return;
     setIsGenerating(true);
-    void resumeDurableGeneration<SwapImageResult>("swap").then((generated) => {
-      if (generated) setResult(generated);
-    }).catch((err) => setError(err instanceof Error ? err.message : t("ai.characterSwapFailed")))
+    void resumeDurableGeneration<SwapImageResult>("swap")
+      .then((generated) => {
+        if (generated) setResult(generated);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : t("ai.characterSwapFailed")))
       .finally(() => setIsGenerating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -200,15 +204,13 @@ function SwapPage() {
         if (pair.originalImage) return true;
         const original = characterMap.get(pair.originalId);
         return Boolean(
-          original &&
-            original.id !== replacement.id &&
-            profileReferences(original).length > 0,
+          original && original.id !== replacement.id && profileReferences(original).length > 0,
         );
       }),
     [characterMap, pairs],
   );
   const canGenerate = Boolean(pageImage && validPairs.length === pairs.length && pairs.length > 0);
-  const pageAspectCss = pageAspect === "3:2" ? "3 / 2" : "2 / 3";
+  const pageAspectCss = "1 / 1";
 
   const importPage = async (files: FileList | null) => {
     const file = Array.from(files ?? []).find((candidate) => candidate.type.startsWith("image/"));
@@ -288,16 +290,12 @@ function SwapPage() {
           },
         };
       });
-      const generated = await runDurableGeneration<SwapImageResult>(
-        "swap",
-        "/api/swap/generate",
-        {
-          pageImageDataUrl: pageImage,
-          pairs: payloadPairs,
-          prompt,
-          aspectRatio,
-        },
-      );
+      const generated = await runDurableGeneration<SwapImageResult>("swap", "/api/swap/generate", {
+        pageImageDataUrl: pageImage,
+        pairs: payloadPairs,
+        prompt,
+        aspectRatio,
+      });
       setResult(generated);
       void recordGeneratedImage({
         source: "Swap",
@@ -308,8 +306,19 @@ function SwapPage() {
           originalImageUrl: generated.imageUrl,
           currentImageUrl: generated.imageUrl,
           prompt: "",
-          selectedCharacterIds: Array.from(new Set(validPairs.flatMap((pair) => [pair.originalId, pair.replacementId]).filter(Boolean))),
-          references: [{ id: "swap-source", name: t("ai.sourcePage"), imageDataUrl: pageImage, role: "Target" as const }],
+          selectedCharacterIds: Array.from(
+            new Set(
+              validPairs.flatMap((pair) => [pair.originalId, pair.replacementId]).filter(Boolean),
+            ),
+          ),
+          references: [
+            {
+              id: "swap-source",
+              name: t("ai.sourcePage"),
+              imageDataUrl: pageImage,
+              role: "Target" as const,
+            },
+          ],
           aspectRatio,
           source: "Swap",
         },
@@ -334,10 +343,7 @@ function SwapPage() {
 
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
-      <PageHeader
-        title="Swap"
-        description={t("ai.swapDesc")}
-      />
+      <PageHeader title="Swap" description={t("ai.swapDesc")} />
 
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <section className="shadow-panel flex min-h-[680px] min-w-0 flex-col rounded-[18px] border border-border bg-surface-2">
@@ -398,12 +404,7 @@ function SwapPage() {
                 ))}
                 <button
                   type="button"
-                  onClick={() =>
-                    setPairs((current) => [
-                      ...current,
-                      newPair(),
-                    ])
-                  }
+                  onClick={() => setPairs((current) => [...current, newPair()])}
                   className="flex h-11 items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-3 text-[13px] font-bold text-text-secondary hover:border-accent hover:text-accent"
                 >
                   <Plus className="h-4 w-4" />
@@ -486,7 +487,7 @@ function SwapPage() {
                   <img
                     src={result.imageUrl}
                     alt={t("ai.swappedPageAlt")}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
                 </button>
               ) : (
@@ -570,7 +571,7 @@ function PageUploader({
             style={{ aspectRatio: aspect }}
           >
             {/* Planche recadrée au cadre de base (object-cover). */}
-            <img src={image} alt={t("ai.sourcePage")} className="h-full w-full object-cover" />
+            <img src={image} alt={t("ai.sourcePage")} className="h-full w-full object-contain" />
           </button>
           <div className="flex gap-2">
             <button
@@ -669,9 +670,13 @@ function OriginalPicker({
   const preview = pair.originalImage ?? profilePreview(profile);
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="relative flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded-[10px] border border-border bg-stage">
+      <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-border bg-stage">
         {preview ? (
-          <img src={preview} alt={profile?.name ?? t("ai.originalCharacterFallback")} className="h-full w-full object-cover" />
+          <img
+            src={preview}
+            alt={profile?.name ?? t("ai.originalCharacterFallback")}
+            className="h-full w-full object-contain"
+          />
         ) : (
           <Users className="h-7 w-7 text-text-muted" />
         )}
@@ -709,7 +714,11 @@ function OriginalPicker({
           >
             <option value="">{t("ai.selectWord")}</option>
             {characters.map((character) => (
-              <option key={character.id} value={character.id} disabled={character.id === pair.replacementId}>
+              <option
+                key={character.id}
+                value={character.id}
+                disabled={character.id === pair.replacementId}
+              >
                 {character.name}
               </option>
             ))}
@@ -743,12 +752,12 @@ function CharacterSelector({
   const preview = profilePreview(profile);
   return (
     <label className="flex min-w-0 cursor-pointer flex-col gap-2">
-      <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded-[10px] border border-border bg-stage">
+      <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-border bg-stage">
         {preview ? (
           <img
             src={preview}
             alt={profile?.name ?? t("ai.characterFallback")}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
         ) : (
           <Users className="h-7 w-7 text-text-muted" />
