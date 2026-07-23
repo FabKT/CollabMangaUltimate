@@ -12,7 +12,8 @@ export const Route = createFileRoute("/ai")({
 
 function AiRoute() {
   const content = <AiSubscriptionGate />;
-  return isLocalAiClientMode ? content : <RequireAuth>{content}</RequireAuth>;
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  return isLocalAiClientMode || pathname === "/ai/subscribe" ? content : <RequireAuth>{content}</RequireAuth>;
 }
 
 function AiSubscriptionGate() {
