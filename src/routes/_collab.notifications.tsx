@@ -36,6 +36,7 @@ import {
   Paperclip,
   Layers,
 } from "lucide-react";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/notifications")({
   head: () => ({
@@ -91,17 +92,24 @@ type Notification = {
 
 // ---------- Config --------------------------------------------------------
 
-const TABS: { id: "all" | Category; label: string }[] = [
-  { id: "all", label: "Tout" },
-  { id: "message", label: "Message" },
-  { id: "project", label: "Mes projets" },
-  { id: "sponsorship", label: "Parrainage" },
-  { id: "friend", label: "Amis" },
-  { id: "manga", label: "Manga" },
+const TABS: { id: "all" | Category; labelKey: TranslationKey }[] = [
+  { id: "all", labelKey: "notif.tabAll" },
+  { id: "message", labelKey: "notif.tabMessage" },
+  { id: "project", labelKey: "notif.tabProjects" },
+  { id: "sponsorship", labelKey: "notif.tabSponsorship" },
+  { id: "friend", labelKey: "notif.tabFriends" },
+  { id: "manga", labelKey: "notif.tabManga" },
 ];
 
 const FILTERS = ["All", "Unread", "Read", "Important"] as const;
 type FilterKey = (typeof FILTERS)[number];
+
+const FILTER_LABEL_KEY: Record<FilterKey, TranslationKey> = {
+  All: "notif.filterAll",
+  Unread: "notif.filterUnread",
+  Read: "notif.filterRead",
+  Important: "notif.filterImportant",
+};
 
 const CATEGORY_ICON: Record<Category, React.ComponentType<{ className?: string }>> = {
   message: MessageSquare,
@@ -112,18 +120,30 @@ const CATEGORY_ICON: Record<Category, React.ComponentType<{ className?: string }
   system: Sparkles,
 };
 
-const CATEGORY_LABEL: Record<Category, string> = {
-  message: "Message",
-  project: "Mes projets",
-  sponsorship: "Parrainage",
-  friend: "Amis",
-  manga: "Manga",
-  system: "Système",
+const CATEGORY_LABEL_KEY: Record<Category, TranslationKey> = {
+  message: "notif.catMessage",
+  project: "notif.catProjects",
+  sponsorship: "notif.catSponsorship",
+  friend: "notif.catFriends",
+  manga: "notif.catManga",
+  system: "notif.catSystem",
+};
+
+const KIND_LABEL_KEY: Record<RelatedEntity["kind"], TranslationKey> = {
+  project: "notif.kindProject",
+  manga: "notif.kindManga",
+  chapter: "notif.kindChapter",
+  sponsorship: "notif.kindSponsorship",
+  conversation: "notif.kindConversation",
+  profile: "notif.kindProfile",
+  note: "notif.kindNote",
+  ai: "notif.kindAi",
 };
 
 // ---------- Page ----------------------------------------------------------
 
 function NotificationsPage() {
+  const { t, locale } = useI18n();
   const [activeTab, setActiveTab] = useState<"all" | Category>("all");
   const [filter, setFilter] = useState<FilterKey>("All");
   const [search, setSearch] = useState("");
@@ -159,38 +179,38 @@ function NotificationsPage() {
       try {
         if (n.recordId && n.category === "project" && (label.includes("accept") || label.includes("accepte"))) {
           await respondProjectInvitationDb(n.recordId, true);
-          await completeNotificationAction(n.id.replace(/^db-/, ""), "Acceptée");
+          await completeNotificationAction(n.id.replace(/^db-/, ""), t("notif.statusAccepted"));
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "project" && (label.includes("refus") || label.includes("declin"))) {
           await respondProjectInvitationDb(n.recordId, false);
-          await completeNotificationAction(n.id.replace(/^db-/, ""), "Refusée");
+          await completeNotificationAction(n.id.replace(/^db-/, ""), t("notif.statusDeclined"));
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "sponsorship" && (label.includes("accept") || label.includes("accepte"))) {
           await respondSponsorshipRequestDb(n.recordId, true);
-          await completeNotificationAction(n.id.replace(/^db-/, ""), "Acceptée");
+          await completeNotificationAction(n.id.replace(/^db-/, ""), t("notif.statusAccepted"));
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "sponsorship" && (label.includes("refus") || label.includes("declin"))) {
           await respondSponsorshipRequestDb(n.recordId, false);
-          await completeNotificationAction(n.id.replace(/^db-/, ""), "Refusée");
+          await completeNotificationAction(n.id.replace(/^db-/, ""), t("notif.statusDeclined"));
           refreshDb();
           return;
         }
         // Demande d'ami : accepter / refuser (met à jour le workflow_record).
         if (n.recordId && n.category === "friend" && (label.includes("accept") || label.includes("accepte"))) {
           await respondFriendRequestDb(n.recordId, true);
-          await completeNotificationAction(n.id.replace(/^db-/, ""), "Acceptée");
+          await completeNotificationAction(n.id.replace(/^db-/, ""), t("notif.statusAccepted"));
           refreshDb();
           return;
         }
         if (n.recordId && n.category === "friend" && (label.includes("refus") || label.includes("declin") || label.includes("decline"))) {
           await respondFriendRequestDb(n.recordId, false);
-          await completeNotificationAction(n.id.replace(/^db-/, ""), "Refusée");
+          await completeNotificationAction(n.id.replace(/^db-/, ""), t("notif.statusDeclined"));
           refreshDb();
           return;
         }
@@ -226,7 +246,10 @@ function NotificationsPage() {
     [navigate, refreshDb],
   );
 
-  const notifications = useMemo(() => dbNotifications.map(dbToNotification), [dbNotifications]);
+  const notifications = useMemo(
+    () => dbNotifications.map((n) => dbToNotification(n, t, locale)),
+    [dbNotifications, t, locale],
+  );
 
   const filtered = useMemo(() => {
     const matches = notifications.filter((n) => {
@@ -260,6 +283,7 @@ function NotificationsPage() {
     <main className="min-h-screen bg-bg text-text">
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-4 py-6 md:px-6 md:py-8 lg:px-8">
         <PageTitle
+          t={t}
           onMarkAll={async () => {
             await markAllNotificationsRead();
             refreshDb();
@@ -272,6 +296,7 @@ function NotificationsPage() {
 
         <div className="mt-6 md:mt-8">
           <TabBar
+            t={t}
             tabs={TABS}
             active={activeTab}
             onChange={(id) => {
@@ -284,6 +309,7 @@ function NotificationsPage() {
 
         <section className="mt-6 grid flex-1 grid-cols-1 gap-6 lg:mt-8 lg:grid-cols-2">
           <ListPanel
+            t={t}
             notifications={filtered}
             selectedId={selected?.id ?? null}
             onSelect={(id) => {
@@ -302,7 +328,7 @@ function NotificationsPage() {
           />
 
           <div className="hidden lg:block">
-            <DetailPanel notification={selected} onAction={runAction} />
+            <DetailPanel t={t} notification={selected} onAction={runAction} />
           </div>
         </section>
       </div>
@@ -315,15 +341,15 @@ function NotificationsPage() {
               onClick={() => setMobileDetailOpen(false)}
               className="inline-flex items-center gap-2 text-[13px] font-semibold text-text-secondary hover:text-text"
             >
-              <X className="h-4 w-4" /> Close
+              <X className="h-4 w-4" /> {t("notif.close")}
             </button>
             <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
-              Notification
+              {t("notif.mobileLabel")}
             </span>
             <span className="w-10" />
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-slim p-4">
-            <DetailPanel notification={selected} onAction={runAction} embedded />
+            <DetailPanel t={t} notification={selected} onAction={runAction} embedded />
           </div>
         </div>
       )}
@@ -339,7 +365,11 @@ function NotificationsPage() {
 // ---------- Page title ----------------------------------------------------
 
 /** Mappe une notification Supabase (table `notifications`) vers le format de la page. */
-function dbToNotification(n: DbNotification): Notification {
+function dbToNotification(
+  n: DbNotification,
+  t: (key: TranslationKey) => string,
+  locale: "fr" | "en",
+): Notification {
   const category = (["message", "project", "sponsorship", "friend", "manga", "system"].includes(n.category)
     ? n.category
     : "system") as Category;
@@ -351,7 +381,7 @@ function dbToNotification(n: DbNotification): Notification {
     preview: n.content,
     description: n.content,
     actor: n.actor?.display_name || n.actor?.username || "CollabManga",
-    time: relativeTime(n.created_at),
+    time: relativeTime(n.created_at, t, locale),
     status: n.read ? "read" : "unread",
     importance: n.actions?.some((action) => action.kind === "primary" || action.kind === "danger")
       ? "action"
@@ -370,7 +400,7 @@ function dbToNotification(n: DbNotification): Notification {
                   : "profile",
           title: n.entity_title,
           subtitle: n.entity_subtitle || n.entity_type || "",
-          status: n.entity_status || (n.read ? "Lu" : "Nouveau"),
+          status: n.entity_status || (n.read ? t("notif.read") : t("notif.unread")),
         }
       : undefined,
     meta: n.meta ?? undefined,
@@ -379,18 +409,18 @@ function dbToNotification(n: DbNotification): Notification {
         ? (n.actions as ActionSpec[])
         : n.category === "friend" && n.type === "demande_ami"
         ? [
-            { label: "Accepter", kind: "primary" },
-            { label: "Refuser", kind: "danger" },
+            { label: t("notif.actionAccept"), kind: "primary" },
+            { label: t("notif.actionDecline"), kind: "danger" },
           ]
         : n.category === "message"
-          ? [{ label: "Ouvrir la conversation", kind: "primary" }]
+          ? [{ label: t("notif.actionOpenConversation"), kind: "primary" }]
           : n.actor_id
-            ? [{ label: "Voir le profil", kind: "secondary" }]
+            ? [{ label: t("notif.actionViewProfile"), kind: "secondary" }]
             : [],
     secondaryActions: n.secondary_actions?.length
       ? (n.secondary_actions as ActionSpec[])
       : n.category === "friend" && n.type === "demande_ami" && n.actor_id
-        ? [{ label: "Voir le profil", kind: "secondary" }]
+        ? [{ label: t("notif.actionViewProfile"), kind: "secondary" }]
         : undefined,
   };
 }
@@ -411,21 +441,25 @@ function routeByContext(n: Notification, navigate: ReturnType<typeof useNavigate
   }
 }
 
-function relativeTime(iso: string) {
+function relativeTime(iso: string, t: (key: TranslationKey) => string, locale: "fr" | "en") {
   const elapsed = Math.max(0, Date.now() - new Date(iso).getTime());
   const minutes = Math.floor(elapsed / 60000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} h`;
-  const days = Math.floor(hours / 24);
-  return `${days} d`;
+  if (minutes < 1) return t("notif.timeNow");
+  const value =
+    minutes < 60
+      ? `${minutes} min`
+      : Math.floor(minutes / 60) < 24
+        ? `${Math.floor(minutes / 60)} h`
+        : `${Math.floor(minutes / 60 / 24)} ${locale === "fr" ? "j" : "d"}`;
+  return locale === "fr" ? `il y a ${value}` : `${value} ago`;
 }
 
 function PageTitle({
+  t,
   onMarkAll,
   onClearRead,
 }: {
+  t: (key: TranslationKey) => string;
   onMarkAll: () => Promise<void>;
   onClearRead: () => Promise<void>;
 }) {
@@ -436,10 +470,10 @@ function PageTitle({
           className="font-display text-[28px] font-bold leading-9 text-text"
           style={{ fontFamily: "var(--font-display)" }}
         >
-          Notifications
+          {t("notif.title")}
         </h1>
         <p className="mt-2 text-[14px] font-medium leading-[22px] text-text-secondary">
-          Track messages, project updates, sponsorship proposals, friend activity, and manga updates.
+          {t("notif.subtitle")}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -447,13 +481,13 @@ function PageTitle({
           icon={<CheckCheck className="h-4 w-4" />}
           onClick={() => void onMarkAll()}
         >
-          Mark all as read
+          {t("notif.markAllRead")}
         </SecondaryButton>
         <SecondaryButton
           icon={<Trash2 className="h-4 w-4" />}
           onClick={() => void onClearRead()}
         >
-          Clear read
+          {t("notif.clearRead")}
         </SecondaryButton>
       </div>
     </header>
@@ -463,12 +497,14 @@ function PageTitle({
 // ---------- Tabs ----------------------------------------------------------
 
 function TabBar({
+  t,
   tabs,
   active,
   onChange,
   unread,
 }: {
-  tabs: { id: "all" | Category; label: string }[];
+  t: (key: TranslationKey) => string;
+  tabs: { id: "all" | Category; labelKey: TranslationKey }[];
   active: "all" | Category;
   onChange: (id: "all" | Category) => void;
   unread: Record<string, number>;
@@ -476,18 +512,18 @@ function TabBar({
   return (
     <div
       role="tablist"
-      aria-label="Notification categories"
+      aria-label={t("notif.categoriesAria")}
       className="scrollbar-slim -mx-1 flex gap-2 overflow-x-auto px-1"
     >
-      {tabs.map((t) => {
-        const isActive = active === t.id;
-        const count = unread[t.id] ?? 0;
+      {tabs.map((tab) => {
+        const isActive = active === tab.id;
+        const count = unread[tab.id] ?? 0;
         return (
           <button
-            key={t.id}
+            key={tab.id}
             role="tab"
             aria-selected={isActive}
-            onClick={() => onChange(t.id)}
+            onClick={() => onChange(tab.id)}
             className={[
               "inline-flex h-[38px] shrink-0 items-center gap-2 rounded-full border px-[14px] text-[13px] font-bold leading-[18px] transition-colors",
               isActive
@@ -495,7 +531,7 @@ function TabBar({
                 : "border-[color:var(--color-border-default)] bg-elevated text-text-secondary hover:border-[rgba(57,255,136,0.30)] hover:text-text",
             ].join(" ")}
           >
-            <span>{t.label}</span>
+            <span>{t(tab.labelKey)}</span>
             {count > 0 && (
               <span
                 className={[
@@ -518,6 +554,7 @@ function TabBar({
 // ---------- List panel ----------------------------------------------------
 
 function ListPanel({
+  t,
   notifications,
   selectedId,
   onSelect,
@@ -528,6 +565,7 @@ function ListPanel({
   newestFirst,
   onToggleSort,
 }: {
+  t: (key: TranslationKey) => string;
   notifications: Notification[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -541,16 +579,16 @@ function ListPanel({
   return (
     <div
       className="flex h-[calc(100vh-260px)] min-h-[560px] flex-col rounded-[22px] border border-[color:var(--color-border-default)] bg-panel p-4 shadow-[var(--shadow-panel)]"
-      aria-label="Notification list"
+      aria-label={t("notif.listAria")}
     >
       {/* Search */}
       <label className="relative block">
-        <span className="sr-only">Search notifications</span>
+        <span className="sr-only">{t("notif.searchAria")}</span>
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
         <input
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search notifications…"
+          placeholder={t("notif.searchPlaceholder")}
           className="h-11 w-full rounded-[14px] border border-[color:var(--color-border-default)] bg-input pl-11 pr-4 text-[14px] font-medium text-text placeholder:text-text-muted focus:border-[color:var(--color-neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)] focus:outline-none"
         />
       </label>
@@ -571,13 +609,13 @@ function ListPanel({
                     : "border-[color:var(--color-border-default)] bg-input text-text-secondary hover:text-text",
                 ].join(" ")}
               >
-                {f}
+                {t(FILTER_LABEL_KEY[f])}
               </button>
             );
           })}
         </div>
         <button type="button" onClick={onToggleSort} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[color:var(--color-border-default)] bg-input px-3 text-[12px] font-semibold text-text-secondary hover:text-text">
-          {newestFirst ? "Newest first" : "Oldest first"}
+          {newestFirst ? t("notif.newestFirst") : t("notif.oldestFirst")}
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -586,13 +624,14 @@ function ListPanel({
       <div className="scrollbar-slim mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
         {notifications.length === 0 ? (
           <EmptyState
-            title="No notifications in this category"
-            text="Try another tab or clear filters."
+            title={t("notif.emptyTitle")}
+            text={t("notif.emptyText")}
           />
         ) : (
           notifications.map((n) => (
             <NotificationRow
               key={n.id}
+              t={t}
               notification={n}
               selected={n.id === selectedId}
               onClick={() => onSelect(n.id)}
@@ -605,10 +644,12 @@ function ListPanel({
 }
 
 function NotificationRow({
+  t,
   notification,
   selected,
   onClick,
 }: {
+  t: (key: TranslationKey) => string;
   notification: Notification;
   selected: boolean;
   onClick: () => void;
@@ -668,7 +709,7 @@ function NotificationRow({
             {unread && (
               <span
                 className="h-2 w-2 rounded-full bg-[color:var(--color-neon)] shadow-[0_0_8px_rgba(57,255,136,0.6)]"
-                aria-label="Unread"
+                aria-label={t("notif.unread")}
               />
             )}
           </div>
@@ -681,10 +722,12 @@ function NotificationRow({
 // ---------- Detail panel --------------------------------------------------
 
 function DetailPanel({
+  t,
   notification,
   onAction,
   embedded = false,
 }: {
+  t: (key: TranslationKey) => string;
   notification: Notification | null;
   onAction: (n: Notification, a: ActionSpec) => void;
   embedded?: boolean;
@@ -695,11 +738,11 @@ function DetailPanel({
 
   if (!notification) {
     return (
-      <aside className={wrapper} aria-label="Notification details">
+      <aside className={wrapper} aria-label={t("notif.detailsAria")}>
         <EmptyState
           icon={<Bell className="h-5 w-5" />}
-          title="Select a notification"
-          text="Choose a notification from the list to view details and available actions."
+          title={t("notif.selectTitle")}
+          text={t("notif.selectText")}
           centered
         />
       </aside>
@@ -707,18 +750,18 @@ function DetailPanel({
   }
 
   return (
-    <aside className={wrapper} aria-label="Notification details">
+    <aside className={wrapper} aria-label={t("notif.detailsAria")}>
       <div className="scrollbar-slim -mr-2 flex-1 overflow-y-auto pr-2">
         {/* Top area */}
         <div className="flex flex-wrap items-center gap-2">
-          <Chip tone="neutral">{CATEGORY_LABEL[notification.category]}</Chip>
+          <Chip tone="neutral">{t(CATEGORY_LABEL_KEY[notification.category])}</Chip>
           <Chip tone={notification.status === "unread" ? "neon" : "neutral"}>
-            {notification.status === "unread" ? "Unread" : "Read"}
+            {notification.status === "unread" ? t("notif.unread") : t("notif.read")}
           </Chip>
-          {notification.importance === "important" && <Chip tone="warning">Important</Chip>}
-          {notification.importance === "action" && <Chip tone="info">Action required</Chip>}
+          {notification.importance === "important" && <Chip tone="warning">{t("notif.important")}</Chip>}
+          {notification.importance === "action" && <Chip tone="info">{t("notif.actionRequired")}</Chip>}
           <span className="ml-auto text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
-            {notification.time} ago
+            {notification.time}
           </span>
         </div>
 
@@ -733,7 +776,7 @@ function DetailPanel({
         </p>
         {notification.actor !== "CollabManga" ? (
           <p className="mt-2 text-[12px] font-semibold text-text-muted">
-            Envoyée par {notification.actor}
+            {t("notif.sentBy")} {notification.actor}
           </p>
         ) : null}
 
@@ -741,8 +784,9 @@ function DetailPanel({
         <div className="mt-6 space-y-4">
           {notification.entity && (
             <RelatedEntityCard
+              t={t}
               entity={notification.entity}
-              onOpen={() => onAction(notification, { label: "open", kind: "ghost" })}
+              onOpen={() => onAction(notification, { label: t("notif.open"), kind: "ghost" })}
             />
           )}
 
@@ -765,16 +809,16 @@ function DetailPanel({
           {notification.category === "message" && (
             <PreviewCard
               icon={<MessageSquare className="h-4 w-4" />}
-              label="Message preview"
+              label={t("notif.messagePreview")}
               body={notification.preview || notification.description}
             />
           )}
           {notification.category === "sponsorship" &&
             notification.entity?.kind === "sponsorship" && (
               <div className="grid grid-cols-3 gap-3">
-                <MetaTile label="Price" value={notification.entity.price ?? "—"} />
-                <MetaTile label="Video type" value={notification.entity.videoType ?? "—"} />
-                <MetaTile label="Duration" value={notification.entity.duration ?? "—"} />
+                <MetaTile label={t("notif.price")} value={notification.entity.price ?? "—"} />
+                <MetaTile label={t("notif.videoType")} value={notification.entity.videoType ?? "—"} />
+                <MetaTile label={t("notif.duration")} value={notification.entity.duration ?? "—"} />
               </div>
             )}
         </div>
@@ -815,21 +859,29 @@ function DetailPanel({
 
 function iconForAction(label: string) {
   const l = label.toLowerCase();
-  if (l.includes("accept") || l.includes("validate") || l.includes("confirm"))
+  if (l.includes("accept") || l.includes("validate") || l.includes("confirm") || l.includes("valide") || l.includes("confirme"))
     return <Check className="h-4 w-4" />;
-  if (l.includes("decline") || l.includes("delete") || l.includes("reject") || l.includes("remove"))
+  if (l.includes("decline") || l.includes("delete") || l.includes("reject") || l.includes("remove") || l.includes("refus") || l.includes("supprim"))
     return <X className="h-4 w-4" />;
-  if (l.includes("reply")) return <Reply className="h-4 w-4" />;
-  if (l.includes("open") || l.includes("view") || l.includes("read"))
+  if (l.includes("reply") || l.includes("répond") || l.includes("repond")) return <Reply className="h-4 w-4" />;
+  if (l.includes("open") || l.includes("view") || l.includes("read") || l.includes("ouvrir") || l.includes("voir") || l.includes("lire"))
     return <ExternalLink className="h-4 w-4" />;
-  if (l.includes("mark as read")) return <CheckCheck className="h-4 w-4" />;
-  if (l.includes("calendar")) return <Calendar className="h-4 w-4" />;
-  if (l.includes("attachment") || l.includes("download")) return <Paperclip className="h-4 w-4" />;
-  if (l.includes("profile") || l.includes("friend")) return <UserPlus className="h-4 w-4" />;
+  if (l.includes("mark as read") || l.includes("marquer")) return <CheckCheck className="h-4 w-4" />;
+  if (l.includes("calendar") || l.includes("calendrier")) return <Calendar className="h-4 w-4" />;
+  if (l.includes("attachment") || l.includes("download") || l.includes("pièce jointe")) return <Paperclip className="h-4 w-4" />;
+  if (l.includes("profile") || l.includes("friend") || l.includes("profil") || l.includes("ami")) return <UserPlus className="h-4 w-4" />;
   return null;
 }
 
-function RelatedEntityCard({ entity, onOpen }: { entity: RelatedEntity; onOpen: () => void }) {
+function RelatedEntityCard({
+  t,
+  entity,
+  onOpen,
+}: {
+  t: (key: TranslationKey) => string;
+  entity: RelatedEntity;
+  onOpen: () => void;
+}) {
   const iconMap: Record<RelatedEntity["kind"], React.ReactNode> = {
     project: <FolderKanban className="h-5 w-5" />,
     manga: <BookOpen className="h-5 w-5" />,
@@ -848,7 +900,7 @@ function RelatedEntityCard({ entity, onOpen }: { entity: RelatedEntity; onOpen: 
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
-          Related {entity.kind}
+          {t("notif.related")} {t(KIND_LABEL_KEY[entity.kind])}
         </p>
         <p className="mt-0.5 truncate text-[14px] font-bold text-text">{entity.title}</p>
         <p className="truncate text-[13px] font-medium text-text-secondary">{entity.subtitle}</p>
@@ -860,9 +912,9 @@ function RelatedEntityCard({ entity, onOpen }: { entity: RelatedEntity; onOpen: 
         <button
           onClick={onOpen}
           className="inline-flex items-center gap-1 text-[12px] font-semibold text-text-secondary hover:text-text"
-          aria-label="Open"
+          aria-label={t("notif.open")}
         >
-          Open <ExternalLink className="h-3.5 w-3.5" />
+          {t("notif.open")} <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

@@ -49,6 +49,7 @@ import {
   type ProfileType,
   type PublicProfileIdentity,
 } from "@/lib/profile-identity";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 /** Projection minimale d'un projet Studio stocké dans Supabase. */
 type StudioProjectLite = {
@@ -125,13 +126,17 @@ const PROFILE_LANGUAGES = [
 ] as const;
 const PROFILE_VISIBILITY_OPTIONS = ["Public", "Privé", "Sur invitation"] as const;
 
-async function persistProfileIdentity(displayName: string, username: string): Promise<void> {
-  if (!supabase) throw new Error("Supabase n'est pas configuré.");
+async function persistProfileIdentity(
+  displayName: string,
+  username: string,
+  t: (key: TranslationKey) => string,
+): Promise<void> {
+  if (!supabase) throw new Error(t("profile.supabaseNotConfigured"));
   const cleanUsername = username.trim().replace(/^@/, "");
-  if (!displayName.trim() || !cleanUsername) throw new Error("Le nom et le nom d'utilisateur sont obligatoires.");
+  if (!displayName.trim() || !cleanUsername) throw new Error(t("profile.nameUsernameRequired"));
   const { data: sessionData } = await supabase.auth.getSession();
   const user = sessionData.session?.user;
-  if (!user) throw new Error("Connecte-toi pour modifier ton profil.");
+  if (!user) throw new Error(t("profile.userMustLogIn"));
   const { error: authError } = await supabase.auth.updateUser({
     data: { display_name: displayName.trim(), username: cleanUsername },
   });
@@ -179,6 +184,7 @@ function ProfilePage({
   profileId?: string;
 }) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const publicLocked = initialMode === "public";
   const [profileType, setProfileType] = useState<ProfileType>(initialProfileType);
   const [mode] = useState<ViewMode>(initialMode);
@@ -390,7 +396,7 @@ function ProfilePage({
     setPreferences(next);
     if (!publicLocked) {
       void saveProfilePreferences(next, shownUserId).catch((error: unknown) => {
-        setFeedback(error instanceof Error ? error.message : "Le profil n'a pas pu être enregistré.");
+        setFeedback(error instanceof Error ? error.message : t("profile.profileSaveFailed"));
       });
     }
   };
@@ -403,9 +409,9 @@ function ProfilePage({
   const copyProfileLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      showFeedback("Lien du profil copié.");
+      showFeedback(t("profile.profileLinkCopied"));
     } catch {
-      showFeedback("Impossible de copier le lien.");
+      showFeedback(t("profile.copyLinkFailed"));
     }
   };
 
@@ -414,7 +420,7 @@ function ProfilePage({
   const openConversation = async () => {
     if (contacting) return;
     if (!shownUserId) {
-      setFeedback("Ce profil ne peut pas encore être contacté.");
+      setFeedback(t("profile.cannotContactYet"));
       return;
     }
     setContacting(true);
@@ -422,7 +428,7 @@ function ProfilePage({
       const conversation = await startConversationWith(shownUserId);
       await navigate({ to: "/messages", search: { conversation } });
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Impossible d'ouvrir la conversation.");
+      setFeedback(error instanceof Error ? error.message : t("profile.cannotOpenConversation"));
       window.setTimeout(() => setFeedback(null), 3200);
     } finally {
       setContacting(false);
@@ -430,22 +436,22 @@ function ProfilePage({
   };
 
   const tabs = useMemo(() => {
-    const base =
+    const base: { id: string; labelKey: TranslationKey }[] =
       profileType === "creator"
         ? [
-            { id: "overview", label: "Overview" },
-            { id: "projects", label: "Projects" },
-            { id: "illustrations", label: "Illustrations" },
-            { id: "propositions", label: "Idées" },
-            { id: "announcements", label: "Announcements" },
+            { id: "overview", labelKey: "profile.tabOverview" },
+            { id: "projects", labelKey: "profile.tabProjects" },
+            { id: "illustrations", labelKey: "profile.tabIllustrations" },
+            { id: "propositions", labelKey: "profile.tabIdeas" },
+            { id: "announcements", labelKey: "profile.tabAnnouncements" },
           ]
         : [
-            { id: "overview", label: "Overview" },
-            { id: "sponsorship", label: "Sponsorship" },
-            { id: "illustrations", label: "Illustrations" },
-            { id: "announcements", label: "Announcements" },
-            { id: "projects", label: "Projects Promoted" },
-            { id: "propositions", label: "Idées" },
+            { id: "overview", labelKey: "profile.tabOverview" },
+            { id: "sponsorship", labelKey: "profile.tabSponsorship" },
+            { id: "illustrations", labelKey: "profile.tabIllustrations" },
+            { id: "announcements", labelKey: "profile.tabAnnouncements" },
+            { id: "projects", labelKey: "profile.tabProjectsPromoted" },
+            { id: "propositions", labelKey: "profile.tabIdeas" },
           ];
     if (mode === "public") {
       return base.filter((item) => {
@@ -456,22 +462,26 @@ function ProfilePage({
         return true;
       });
     }
-    base.push({ id: "friends", label: "Amis" }, { id: "favorites", label: "Favoris" }, { id: "account", label: "Account" });
+    base.push(
+      { id: "friends", labelKey: "profile.tabFriends" },
+      { id: "favorites", labelKey: "profile.tabFavorites" },
+      { id: "account", labelKey: "profile.tabAccount" },
+    );
     return base;
   }, [profileType, mode, preferences.showIdeas, preferences.showIllustrations, preferences.showProjects, preferences.showSponsorships]);
 
   if (publicLocked && publicProfileStatus !== "ready") {
     const isLoading = publicProfileStatus === "loading";
     const title = isLoading
-      ? "Chargement du profil..."
+      ? t("profile.loadingProfile")
       : publicProfileStatus === "not-found"
-        ? "Profil introuvable"
-        : "Impossible de charger ce profil";
+        ? t("profile.profileNotFound")
+        : t("profile.loadFailedTitle");
     const message = isLoading
-      ? "Les informations de ce membre sont chargées depuis Supabase."
+      ? t("profile.loadingProfileText")
       : publicProfileStatus === "not-found"
-        ? "Ce compte n'existe pas ou n'est plus disponible."
-        : "La connexion à Supabase a échoué. Réessaie dans un instant.";
+        ? t("profile.notFoundText")
+        : t("profile.connectionFailedText");
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#050B1D] px-4 text-[#F7FAFF]">
@@ -487,7 +497,7 @@ function ProfilePage({
               onClick={() => setIdentityRefreshKey((value) => value + 1)}
               className="mt-6 rounded-lg bg-[#39FF88] px-5 py-2.5 text-sm font-bold text-[#04180d]"
             >
-              Réessayer
+              {t("profile.retry")}
             </button>
           ) : null}
         </div>
@@ -498,7 +508,7 @@ function ProfilePage({
   if (publicLocked && (!preferencesLoaded || preferencesUserId !== shownUserId)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#050B1D] px-4 text-[#F7FAFF]">
-        <div className="h-9 w-9 animate-spin rounded-full border-2 border-[#39FF88]/30 border-t-[#39FF88]" aria-label="Chargement du profil" />
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-[#39FF88]/30 border-t-[#39FF88]" aria-label={t("profile.loadingProfile")} />
       </div>
     );
   }
@@ -507,9 +517,9 @@ function ProfilePage({
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#050B1D] px-4 text-[#F7FAFF]">
         <div className="w-full max-w-md text-center">
-          <h1 className="font-display text-2xl font-bold">Profil privé</h1>
+          <h1 className="font-display text-2xl font-bold">{t("profile.privateProfile")}</h1>
           <p className="mt-3 text-sm text-[#B8C4E5]">
-            Ce membre a choisi de ne pas rendre son profil public.
+            {t("profile.privateProfileText")}
           </p>
         </div>
       </div>
@@ -524,6 +534,7 @@ function ProfilePage({
       >
 
         <ProfileHeader
+          t={t}
           profileType={profileType}
           mode={mode}
           identity={effectiveIdentity}
@@ -551,13 +562,13 @@ function ProfilePage({
               <Tabs.List className="flex min-w-max items-center gap-1 border-b px-1"
                 style={{ borderColor: "rgba(133,154,206,0.18)" }}
               >
-                {tabs.map((t) => (
+                {tabs.map((tabItem) => (
                   <Tabs.Trigger
-                    key={t.id}
-                    value={t.id}
+                    key={tabItem.id}
+                    value={tabItem.id}
                     className="cm-tab relative whitespace-nowrap px-4 py-3 text-[13px] font-semibold transition-colors"
                   >
-                    {t.label}
+                    {t(tabItem.labelKey)}
                   </Tabs.Trigger>
                 ))}
               </Tabs.List>
@@ -566,6 +577,7 @@ function ProfilePage({
             <div className="mt-6">
               <Tabs.Content value="overview">
                 <OverviewTab
+                  t={t}
                   profileType={profileType}
                   mode={mode}
                   identity={effectiveIdentity}
@@ -587,6 +599,7 @@ function ProfilePage({
               </Tabs.Content>
               <Tabs.Content value="projects">
                 <ProjectsTab
+                  t={t}
                   profileType={profileType}
                   mode={mode}
                   projects={myProjects}
@@ -599,6 +612,7 @@ function ProfilePage({
               </Tabs.Content>
               <Tabs.Content value="illustrations">
                 <IllustrationsTab
+                  t={t}
                   mode={mode}
                   illustrations={myIllustrations}
                   onAdd={() => setAddOpen("illustration")}
@@ -607,6 +621,7 @@ function ProfilePage({
               </Tabs.Content>
               <Tabs.Content value="propositions">
                 <PropositionsTab
+                  t={t}
                   mode={mode}
                   ideas={myIdeas}
                   onAdd={() => setAddOpen("proposition")}
@@ -615,6 +630,7 @@ function ProfilePage({
               </Tabs.Content>
               <Tabs.Content value="announcements">
                 <AnnouncementsTab
+                  t={t}
                   mode={mode}
                   announcements={myAnnouncements}
                   onAdd={() => setAddOpen("announcement")}
@@ -623,6 +639,7 @@ function ProfilePage({
               </Tabs.Content>
               <Tabs.Content value="sponsorship">
                 <SponsorshipTab
+                  t={t}
                   mode={mode}
                   options={myOptions}
                   onAdd={() => setAddOpen("sponsorship")}
@@ -633,10 +650,11 @@ function ProfilePage({
               {mode === "own" && (
                 <>
                   <Tabs.Content value="friends">
-                    <ProfileFriendsTab />
+                    <ProfileFriendsTab t={t} />
                   </Tabs.Content>
                   <Tabs.Content value="favorites">
                     <FavoritesTab
+                      t={t}
                       favorites={favorites}
                       onRemove={async (id) => {
                         await removeFavorite(id);
@@ -646,6 +664,7 @@ function ProfilePage({
                   </Tabs.Content>
                   <Tabs.Content value="account">
                     <AccountTab
+                      t={t}
                       identity={effectiveIdentity}
                       preferences={preferences}
                       onPreferencesChange={updatePreferences}
@@ -661,6 +680,7 @@ function ProfilePage({
       </div>
 
       <EditProfileModal
+        t={t}
         open={editOpen}
         onClose={() => setEditOpen(false)}
         profileType={profileType}
@@ -671,6 +691,7 @@ function ProfilePage({
         onProfileTypeChange={setProfileType}
       />
       <DetailsModal
+        t={t}
         open={!!detailsOpen}
         onClose={() => setDetailsOpen(null)}
         title={detailsOpen?.title ?? ""}
@@ -682,12 +703,13 @@ function ProfilePage({
         announcement={myAnnouncements.find((a) => a.title === detailsOpen?.title)}
         option={myOptions.find((o) => o.format === detailsOpen?.title)}
         project={myProjects.find((p) => p.title === detailsOpen?.title)}
-        onEdit={(t) => {
+        onEdit={(title) => {
           setDetailsOpen(null);
-          setEditSponsorship(t);
+          setEditSponsorship(title);
         }}
       />
       <AddSponsorshipModal
+        t={t}
         open={addOpen === "sponsorship" || editSponsorship !== null}
         editTitle={editSponsorship}
         ownerName={effectiveIdentity.displayName}
@@ -697,12 +719,13 @@ function ProfilePage({
           setEditSponsorship(null);
         }}
       />
-      <AddAnnouncementModal open={addOpen === "announcement"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
-      <AddIllustrationModal open={addOpen === "illustration"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
-      <AddPropositionModal open={addOpen === "proposition"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
-      <AddProjectModal open={addOpen === "project"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
+      <AddAnnouncementModal t={t} open={addOpen === "announcement"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
+      <AddIllustrationModal t={t} open={addOpen === "illustration"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
+      <AddPropositionModal t={t} open={addOpen === "proposition"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
+      <AddProjectModal t={t} open={addOpen === "project"} onClose={() => setAddOpen(null)} onCreated={refreshOwnContent} />
       {workflowOpen && workflowOpen !== "patronage" && (
         <ProfileWorkflowModal
+          t={t}
           type={workflowOpen}
           profileType={profileType}
           profileName={effectiveIdentity.displayName}
@@ -719,7 +742,7 @@ function ProfilePage({
         open={workflowOpen === "patronage"}
         initialCreatorId={shownUserId}
         onClose={() => setWorkflowOpen(null)}
-        onCreated={() => showFeedback("Demande de parrainage créée et envoyée.")}
+        onCreated={() => showFeedback(t("profile.sponsorshipCreated"))}
       />
       {feedback && <ProfileToast>{feedback}</ProfileToast>}
 
@@ -992,6 +1015,7 @@ function MetaLabel({ children }: { children: ReactNode }) {
 /* ---------------- Header ---------------- */
 
 function ProfileHeader({
+  t,
   profileType,
   mode,
   identity,
@@ -1012,6 +1036,7 @@ function ProfileHeader({
   allowMessages,
   allowPatronage,
 }: {
+  t: (key: TranslationKey) => string;
   profileType: ProfileType;
   mode: ViewMode;
   identity: PublicProfileIdentity;
@@ -1061,7 +1086,7 @@ function ProfileHeader({
             letterSpacing: "0.06em",
           }}
         >
-          Banner image
+          {t("profile.bannerImage")}
         </span>
       </div>
 
@@ -1108,9 +1133,9 @@ function ProfileHeader({
               </Chip>
               {secondaryRole && secondaryRole !== mainRole ? <Chip>{secondaryRole}</Chip> : null}
               {mode === "own" ? (
-                <AvailabilitySwitch available={available} onChange={onAvailabilityChange} />
+                <AvailabilitySwitch t={t} available={available} onChange={onAvailabilityChange} />
               ) : (
-                <Chip tone={available ? "active" : "neutral"}>{available ? "Available" : "Unavailable"}</Chip>
+                <Chip tone={available ? "active" : "neutral"}>{available ? t("profile.available") : t("profile.unavailable")}</Chip>
               )}
               {languages.length ? (
                 <Chip tone="info" icon={<Globe2 size={12} />}>{languages.join(" · ")}</Chip>
@@ -1123,24 +1148,24 @@ function ProfileHeader({
           {mode === "own" ? (
             <>
               <PrimaryButton icon={<Edit3 size={16} />} onClick={onEdit}>
-                Edit Profile
+                {t("profile.editProfile")}
               </PrimaryButton>
-              <CreateDropdown profileType={profileType} onSelect={onAdd} />
-              <GhostButton icon={<Link2 size={16} />} onClick={onCopyLink}>Copy Link</GhostButton>
+              <CreateDropdown t={t} profileType={profileType} onSelect={onAdd} />
+              <GhostButton icon={<Link2 size={16} />} onClick={onCopyLink}>{t("profile.copyLink")}</GhostButton>
             </>
           ) : profileType === "content" ? (
             <>
-              {allowPatronage ? <PrimaryButton icon={<Send size={16} />} onClick={onPatronage}>Propose Sponsorship</PrimaryButton> : null}
-              {allowMessages ? <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton> : null}
-              <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
-              <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
+              {allowPatronage ? <PrimaryButton icon={<Send size={16} />} onClick={onPatronage}>{t("profile.proposeSponsorship")}</PrimaryButton> : null}
+              {allowMessages ? <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? t("profile.opening") : t("profile.message")}</SecondaryButton> : null}
+              <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>{t("profile.follow")}</SecondaryButton>
+              <GhostButton icon={<Users size={16} />} onClick={onFriend}>{t("profile.addFriend")}</GhostButton>
             </>
           ) : (
             <>
-              {allowInvites ? <PrimaryButton icon={<Users size={16} />} onClick={onInvite}>Invite to Project</PrimaryButton> : null}
-              {allowMessages ? <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? "Ouverture…" : "Message"}</SecondaryButton> : null}
-              <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>S'abonner</SecondaryButton>
-              <GhostButton icon={<Users size={16} />} onClick={onFriend}>Ajouter ami</GhostButton>
+              {allowInvites ? <PrimaryButton icon={<Users size={16} />} onClick={onInvite}>{t("profile.inviteToProject")}</PrimaryButton> : null}
+              {allowMessages ? <SecondaryButton icon={<MessageSquare size={16} />} onClick={onMessage}>{contacting ? t("profile.opening") : t("profile.message")}</SecondaryButton> : null}
+              <SecondaryButton icon={<Check size={16} />} onClick={onFollow}>{t("profile.follow")}</SecondaryButton>
+              <GhostButton icon={<Users size={16} />} onClick={onFriend}>{t("profile.addFriend")}</GhostButton>
             </>
           )}
         </div>
@@ -1149,13 +1174,13 @@ function ProfileHeader({
   );
 }
 
-function CreateDropdown({ profileType, onSelect }: { profileType: ProfileType; onSelect: (kind: AddKind) => void }) {
+function CreateDropdown({ t, profileType, onSelect }: { t: (key: TranslationKey) => string; profileType: ProfileType; onSelect: (kind: AddKind) => void }) {
   const items = [
-    { label: "Create Project", kind: "project" as const },
-    profileType === "content" ? { label: "Add service", kind: "sponsorship" as const } : null,
-    { label: "Upload Illustration", kind: "illustration" as const },
-    { label: "Create Collaboration Announcement", kind: "announcement" as const },
-    { label: "Create Idea", kind: "proposition" as const },
+    { label: t("profile.createProject"), kind: "project" as const },
+    profileType === "content" ? { label: t("profile.addService"), kind: "sponsorship" as const } : null,
+    { label: t("profile.uploadIllustration"), kind: "illustration" as const },
+    { label: t("profile.createAnnouncement"), kind: "announcement" as const },
+    { label: t("profile.createIdea"), kind: "proposition" as const },
   ].filter(Boolean) as { label: string; kind: AddKind }[];
 
   return (
@@ -1171,7 +1196,7 @@ function CreateDropdown({ profileType, onSelect }: { profileType: ProfileType; o
           }}
         >
           <Plus size={16} />
-          Create
+          {t("profile.create")}
           <ChevronDown size={14} />
         </button>
       </DropdownMenu.Trigger>
@@ -1203,9 +1228,11 @@ function CreateDropdown({ profileType, onSelect }: { profileType: ProfileType; o
 }
 
 function AvailabilitySwitch({
+  t,
   available,
   onChange,
 }: {
+  t: (key: TranslationKey) => string;
   available: boolean;
   onChange: (available: boolean) => void;
 }) {
@@ -1222,7 +1249,7 @@ function AvailabilitySwitch({
         color: available ? "#39FF88" : "#B8C4E5",
       }}
     >
-      <span>{available ? "Available" : "Unavailable"}</span>
+      <span>{available ? t("profile.available") : t("profile.unavailable")}</span>
       <span
         className="relative inline-flex h-5 w-9 rounded-full transition-colors"
         style={{ background: available ? "rgba(57,255,136,0.38)" : "#101B3F" }}
@@ -1242,6 +1269,7 @@ function AvailabilitySwitch({
 /* ---------------- Overview ---------------- */
 
 function OverviewTab({
+  t,
   profileType,
   mode,
   identity,
@@ -1258,6 +1286,7 @@ function OverviewTab({
   onEditSponsorship,
   showPrimaryContent,
 }: {
+  t: (key: TranslationKey) => string;
   profileType: ProfileType;
   mode: ViewMode;
   identity: PublicProfileIdentity;
@@ -1278,6 +1307,7 @@ function OverviewTab({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-1">
         <BioPanel
+          t={t}
           profileType={profileType}
           mode={mode}
           identity={identity}
@@ -1290,9 +1320,9 @@ function OverviewTab({
       </div>
       <div className="lg:col-span-2 space-y-6">
         {!showPrimaryContent ? null : profileType === "creator" ? (
-          <ProjectShowcase projects={projects} mode={mode} onAdd={() => onAdd("project")} onDetails={(t) => onDetails(t, "Project")} onOpenProject={onOpenProject} />
+          <ProjectShowcase t={t} projects={projects} mode={mode} onAdd={() => onAdd("project")} onDetails={(title) => onDetails(title, "Project")} onOpenProject={onOpenProject} />
         ) : (
-          <SponsorshipShowcase mode={mode} options={options} onAdd={() => onAdd("sponsorship")} onDetails={(t) => onDetails(t, "Sponsorship option")} onManage={onEditSponsorship} />
+          <SponsorshipShowcase t={t} mode={mode} options={options} onAdd={() => onAdd("sponsorship")} onDetails={(title) => onDetails(title, "Sponsorship option")} onManage={onEditSponsorship} />
         )}
       </div>
     </div>
@@ -1300,6 +1330,7 @@ function OverviewTab({
 }
 
 function BioPanel({
+  t,
   profileType,
   mode,
   identity,
@@ -1309,6 +1340,7 @@ function BioPanel({
   visibility,
   sponsorshipStatus,
 }: {
+  t: (key: TranslationKey) => string;
   profileType: ProfileType;
   mode: ViewMode;
   identity: PublicProfileIdentity;
@@ -1318,40 +1350,40 @@ function BioPanel({
   visibility: string;
   sponsorshipStatus: string;
 }) {
-  const publicBio = identity.tagline.trim() || "Cet utilisateur n'a pas encore renseigné sa bio.";
+  const publicBio = identity.tagline.trim() || t("profile.noBio");
   const languages = identity.languages ?? (mode === "own" ? ["English", "French", "Japanese"] : []);
   return (
     <Panel>
-      <SectionTitle title="About" />
+      <SectionTitle title={t("profile.about")} />
       <p className="text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
         {publicBio}
       </p>
 
       <div className="mt-6 space-y-4">
         {languages.length ? (
-          <InfoRow label="Languages">
+          <InfoRow label={t("profile.languages")}>
             {languages.map((language) => <Chip key={language} tone="info">{language}</Chip>)}
           </InfoRow>
         ) : null}
-        <InfoRow label="Main role">
+        <InfoRow label={t("profile.mainRole")}>
           <Chip tone="active">{mainRole}</Chip>
           {secondaryRole && secondaryRole !== mainRole ? <Chip>{secondaryRole}</Chip> : null}
         </InfoRow>
-        <InfoRow label="Availability">
-          <Chip tone={available ? "active" : "neutral"}>{available ? "Open to collaborations" : "Unavailable"}</Chip>
+        <InfoRow label={t("profile.availability")}>
+          <Chip tone={available ? "active" : "neutral"}>{available ? t("profile.openToCollabs") : t("profile.unavailable")}</Chip>
         </InfoRow>
         {profileType === "content" && mode === "own" ? (
-          <InfoRow label="Sponsorships"><Chip tone="active">{sponsorshipStatus}</Chip></InfoRow>
+          <InfoRow label={t("profile.sponsorships")}><Chip tone="active">{sponsorshipStatus}</Chip></InfoRow>
         ) : null}
 
         {mode === "own" && (
-          <InfoRow label="Profile visibility">
+          <InfoRow label={t("profile.profileVisibility")}>
             <Chip tone="active">{visibility}</Chip>
           </InfoRow>
         )}
         {mode === "public" && (
-          <InfoRow label="Contact preference">
-            <Chip tone="info">Via message</Chip>
+          <InfoRow label={t("profile.contactPreference")}>
+            <Chip tone="info">{t("profile.viaMessage")}</Chip>
           </InfoRow>
         )}
       </div>
@@ -1370,30 +1402,31 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 
 /* ---------------- Project showcase ---------------- */
 
-function ProjectShowcase({ projects = [], mode, onAdd, onDetails, onOpenProject }: { projects?: StudioProjectLite[]; mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void; onOpenProject: (id: string) => void }) {
+function ProjectShowcase({ t, projects = [], mode, onAdd, onDetails, onOpenProject }: { t: (key: TranslationKey) => string; projects?: StudioProjectLite[]; mode: ViewMode; onAdd: () => void; onDetails: (title: string) => void; onOpenProject: (id: string) => void }) {
 
   return (
     <Panel>
       <SectionTitle
-        title="Projects"
-        subtitle="Manga projects this user created, joined, or contributed to."
+        title={t("profile.projects")}
+        subtitle={t("profile.projectsSubtitle")}
         action={
           mode === "own" && (
-            <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Project</SecondaryButton>
+            <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>{t("profile.newProject")}</SecondaryButton>
           )
         }
       />
       <div className="space-y-4">
         {projects.length === 0 ? (
-          <EmptyState title="No projects yet" text="Les projets créés dans le Studio apparaîtront ici." />
+          <EmptyState title={t("profile.noProjectsYet")} text={t("profile.projectsWillAppear")} />
         ) : projects.slice(0, 3).map((p) => (
           <ProjectCard
             key={p.id}
+            t={t}
             project={{
               title: p.title,
               description: p.synopsis,
               coverUrl: p.coverDataUrl ?? p.coverUrl,
-              role: "Propriétaire",
+              role: t("profile.owner"),
               status: p.status,
               chapters: `${p.chapters.length} chapitre${p.chapters.length > 1 ? "s" : ""}`,
             }}
@@ -1407,10 +1440,12 @@ function ProjectShowcase({ projects = [], mode, onAdd, onDetails, onOpenProject 
 }
 
 function ProjectCard({
+  t,
   project,
   onDetails,
   onOpen = onDetails,
 }: {
+  t: (key: TranslationKey) => string;
   project: { title: string; description?: string; coverUrl?: string; role: string; status: string; chapters: string };
   onDetails: () => void;
   onOpen?: () => void;
@@ -1438,16 +1473,16 @@ function ProjectCard({
             <Chip tone={project.status === "Recruiting" ? "warning" : "info"}>{project.status}</Chip>
           </div>
           <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
-            {project.description || "Synopsis à compléter."}
+            {project.description || t("profile.synopsisTodo")}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <Chip>Role · {project.role}</Chip>
+            <Chip>{t("profile.role")} · {project.role}</Chip>
             <Chip>{project.chapters}</Chip>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-start gap-2 sm:flex-col sm:items-stretch sm:justify-center">
-          <PrimaryButton icon={<BookOpen size={16} />} onClick={onOpen}>View Project</PrimaryButton>
-          <SecondaryButton onClick={onDetails}>View Details</SecondaryButton>
+          <PrimaryButton icon={<BookOpen size={16} />} onClick={onOpen}>{t("profile.viewProject")}</PrimaryButton>
+          <SecondaryButton onClick={onDetails}>{t("profile.viewDetails")}</SecondaryButton>
         </div>
       </div>
     </Card>
@@ -1456,23 +1491,23 @@ function ProjectCard({
 
 /* ---------------- Sponsorship showcase ---------------- */
 
-function SponsorshipShowcase({ mode, options, onAdd, onDetails, onManage }: { mode: ViewMode; options?: SponsorOption[]; onAdd: () => void; onDetails: (title: string) => void; onManage: (title: string) => void }) {
+function SponsorshipShowcase({ t, mode, options, onAdd, onDetails, onManage }: { t: (key: TranslationKey) => string; mode: ViewMode; options?: SponsorOption[]; onAdd: () => void; onDetails: (title: string) => void; onManage: (title: string) => void }) {
   const cards = options ?? [];
   return (
     <Panel>
       <SectionTitle
-        title="Sponsorship Options"
-        subtitle="Services this creator offers to promote manga projects."
+        title={t("profile.sponsorshipOptions")}
+        subtitle={t("profile.sponsorshipOptionsSubtitle")}
         action={
-          mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>Add service</SecondaryButton>
+          mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>{t("profile.addService")}</SecondaryButton>
         }
       />
       {cards.length === 0 ? (
-        <EmptyState title="No services yet" text="Les services de parrainage créés apparaîtront ici." />
+        <EmptyState title={t("profile.noServicesYet")} text={t("profile.servicesWillAppear")} />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {cards.map((o, i) => (
-            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.format)} onManage={() => onManage(o.format)} />
+            <SponsorshipCard key={i} t={t} opt={o} mode={mode} onDetails={() => onDetails(o.format)} onManage={() => onManage(o.format)} />
           ))}
         </div>
       )}
@@ -1481,11 +1516,13 @@ function SponsorshipShowcase({ mode, options, onAdd, onDetails, onManage }: { mo
 }
 
 function SponsorshipCard({
+  t,
   opt,
   mode,
   onDetails,
   onManage,
 }: {
+  t: (key: TranslationKey) => string;
   opt: SponsorOption;
   mode: ViewMode;
   onDetails: () => void;
@@ -1499,14 +1536,14 @@ function SponsorshipCard({
             {opt.format}
           </h3>
           <p className="mt-1 line-clamp-2 text-[13px] leading-5" style={{ color: "#B8C4E5" }}>
-            {opt.description || "Service de parrainage."}
+            {opt.description || t("profile.sponsorshipServiceFallback")}
           </p>
         </div>
-        <IconButton label="Save" onClick={() => void addFavorite("Sponsorship option", opt.format)}><Check size={16} /></IconButton>
+        <IconButton label={t("profile.save")} onClick={() => void addFavorite("Sponsorship option", opt.format)}><Check size={16} /></IconButton>
       </div>
 
       <div className="mt-4">
-        <MetaLabel>Price</MetaLabel>
+        <MetaLabel>{t("profile.price")}</MetaLabel>
         <div
           className="cm-sora mt-1 text-[24px] font-extrabold leading-none"
           style={{ color: "#39FF88" }}
@@ -1516,7 +1553,7 @@ function SponsorshipCard({
       </div>
 
       <div className="mt-4">
-        <MetaLabel>Platforms</MetaLabel>
+        <MetaLabel>{t("profile.platforms")}</MetaLabel>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {opt.platforms.map((platform) => <Chip key={platform}>{platform}</Chip>)}
         </div>
@@ -1524,29 +1561,29 @@ function SponsorshipCard({
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
-          <MetaLabel>Type</MetaLabel>
+          <MetaLabel>{t("profile.type")}</MetaLabel>
           <div className="mt-1 text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{opt.format}</div>
         </div>
         <div>
-          <MetaLabel>Video</MetaLabel>
+          <MetaLabel>{t("profile.video")}</MetaLabel>
           <div className="mt-1 text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{opt.videoType}</div>
         </div>
         <div>
-          <MetaLabel>Duration</MetaLabel>
+          <MetaLabel>{t("profile.duration")}</MetaLabel>
           <div className="mt-1 text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>{opt.duration}</div>
         </div>
         <div>
-          <MetaLabel>Status</MetaLabel>
-          <div className="mt-1"><Chip tone="active">Available</Chip></div>
+          <MetaLabel>{t("profile.status")}</MetaLabel>
+          <div className="mt-1"><Chip tone="active">{t("profile.available")}</Chip></div>
         </div>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <SecondaryButton onClick={onDetails}>View Details</SecondaryButton>
+        <SecondaryButton onClick={onDetails}>{t("profile.viewDetails")}</SecondaryButton>
         {mode === "own" ? (
-          <PrimaryButton icon={<Edit3 size={16} />} onClick={onManage}>Manage</PrimaryButton>
+          <PrimaryButton icon={<Edit3 size={16} />} onClick={onManage}>{t("profile.manage")}</PrimaryButton>
         ) : (
-          <PrimaryButton icon={<Send size={16} />}>Propose Sponsorship</PrimaryButton>
+          <PrimaryButton icon={<Send size={16} />}>{t("profile.proposeSponsorship")}</PrimaryButton>
         )}
       </div>
     </Card>
@@ -1556,6 +1593,7 @@ function SponsorshipCard({
 /* ---------------- Other tabs ---------------- */
 
 function ProjectsTab({
+  t,
   profileType,
   mode,
   projects,
@@ -1563,6 +1601,7 @@ function ProjectsTab({
   onDetails,
   onOpenProject,
 }: {
+  t: (key: TranslationKey) => string;
   profileType: ProfileType;
   mode: ViewMode;
   projects?: StudioProjectLite[];
@@ -1576,7 +1615,7 @@ function ProjectsTab({
   const projectCards = (projects ?? []).map((p) => ({
     id: p.id,
     title: p.title,
-    role: "Propriétaire",
+    role: t("profile.owner"),
     status: p.status,
     description: p.synopsis,
     coverUrl: p.coverDataUrl ?? p.coverUrl,
@@ -1591,37 +1630,37 @@ function ProjectsTab({
   return (
     <Panel>
       <SectionTitle
-        title={profileType === "content" ? "Projects Promoted" : "All Projects"}
+        title={profileType === "content" ? t("profile.projectsPromotedTitle") : t("profile.allProjects")}
         subtitle={
           profileType === "content"
-            ? "Manga projects this creator has promoted."
-            : "Every project created, joined, or contributed to."
+            ? t("profile.promotedSubtitle")
+            : t("profile.everyProjectSubtitle")
         }
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <input className="cm-input" style={{ height: 40, width: 180 }} placeholder="Search projects" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <input className="cm-input" style={{ height: 40, width: 180 }} placeholder={t("profile.searchProjects")} value={query} onChange={(event) => setQuery(event.target.value)} />
             <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild><SecondaryButton>Filters</SecondaryButton></DropdownMenu.Trigger>
+              <DropdownMenu.Trigger asChild><SecondaryButton>{t("profile.filters")}</SecondaryButton></DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <DropdownMenu.Content align="end" sideOffset={8} className="z-50 min-w-[180px] rounded-[14px] p-1.5" style={{ background: "#0B1430", border: "1px solid rgba(133,154,206,0.28)" }}>
                   {["Tous", ...Array.from(new Set(projectCards.map((project) => project.status)))].map((status) => (
                     <DropdownMenu.Item key={status} onSelect={() => setStatusFilter(status)} className="cursor-pointer rounded-[10px] px-3 py-2 text-[13px] font-semibold outline-none data-[highlighted]:bg-white/5" style={{ color: status === statusFilter ? "#39FF88" : "#B8C4E5" }}>
-                      {status}
+                      {status === "Tous" ? t("profile.allStatuses") : status}
                     </DropdownMenu.Item>
                   ))}
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
-            {mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Project</SecondaryButton>}
+            {mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>{t("profile.newProject")}</SecondaryButton>}
           </div>
         }
       />
       {visibleProjects.length === 0 ? (
-        <EmptyState title={projectCards.length ? "Aucun résultat" : "No projects yet"} text={projectCards.length ? "Modifie la recherche ou le filtre actif." : "Les projets créés dans le Studio apparaîtront ici."} />
+        <EmptyState title={projectCards.length ? t("profile.noResults") : t("profile.noProjectsYet")} text={projectCards.length ? t("profile.adjustSearch") : t("profile.projectsWillAppear")} />
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {visibleProjects.map((p, i) => (
-            <ProjectCard key={p.id || i} project={p} onDetails={() => onDetails(p.title)} onOpen={() => onOpenProject(p.id)} />
+            <ProjectCard key={p.id || i} t={t} project={p} onDetails={() => onDetails(p.title)} onOpen={() => onOpenProject(p.id)} />
           ))}
         </div>
       )}
@@ -1629,27 +1668,28 @@ function ProjectsTab({
   );
 }
 
-function IllustrationsTab({ mode, illustrations, onDetails, onAdd }: { mode: ViewMode; illustrations?: DbIllustration[]; onDetails: (title: string) => void; onAdd: () => void }) {
+function IllustrationsTab({ t, mode, illustrations, onDetails, onAdd }: { t: (key: TranslationKey) => string; mode: ViewMode; illustrations?: DbIllustration[]; onDetails: (title: string) => void; onAdd: () => void }) {
   const items = illustrations ?? [];
   return (
     <Panel>
       <SectionTitle
-        title="Illustrations"
-        subtitle="Portfolio pieces, character designs and finished artwork."
+        title={t("profile.tabIllustrations")}
+        subtitle={t("profile.illustrationsSubtitle")}
         action={
-          mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>Upload</SecondaryButton>
+          mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>{t("profile.upload")}</SecondaryButton>
         }
       />
       {items.length === 0 ? (
-        <EmptyState title="No illustrations yet" text="Uploaded artwork will appear here." />
+        <EmptyState title={t("profile.noIllustrationsYet")} text={t("profile.artworkWillAppear")} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((illustration) => (
             <IllustrationCard
               key={illustration.id}
+              t={t}
               mode={mode}
               title={illustration.title}
-              subtitle={illustration.description || "Illustration"}
+              subtitle={illustration.description || t("profile.tabIllustrations")}
               imageUrl={illustration.image_url}
               onDetails={() => onDetails(illustration.title)}
             />
@@ -1661,12 +1701,14 @@ function IllustrationsTab({ mode, illustrations, onDetails, onAdd }: { mode: Vie
 }
 
 function IllustrationCard({
+  t,
   mode,
   title,
   subtitle,
   imageUrl,
   onDetails,
 }: {
+  t: (key: TranslationKey) => string;
   mode: ViewMode;
   title: string;
   subtitle?: string;
@@ -1694,44 +1736,44 @@ function IllustrationCard({
           {title}
         </h3>
         <p className="mt-0.5 truncate text-[12px] font-semibold" style={{ color: "#7F8CB3" }}>
-          {subtitle || "Illustration"}
+          {subtitle || t("profile.tabIllustrations")}
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <Chip tone="active">Publiée</Chip>
+          <Chip tone="active">{t("profile.published")}</Chip>
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2">
         <SecondaryButton onClick={onDetails} full>
-          View Details
+          {t("profile.viewDetails")}
         </SecondaryButton>
         {mode === "own" ? (
-          <IconButton label="Details" onClick={onDetails}><Eye size={16} /></IconButton>
+          <IconButton label={t("profile.detailsTitle")} onClick={onDetails}><Eye size={16} /></IconButton>
         ) : (
-          <IconButton label="Save" onClick={() => void addFavorite("Illustration", title)}><Check size={16} /></IconButton>
+          <IconButton label={t("profile.save")} onClick={() => void addFavorite("Illustration", title)}><Check size={16} /></IconButton>
         )}
       </div>
     </Card>
   );
 }
 
-function PropositionsTab({ mode, ideas, onDetails, onAdd }: { mode: ViewMode; ideas?: DbIdea[]; onDetails: (title: string) => void; onAdd: () => void }) {
+function PropositionsTab({ t, mode, ideas, onDetails, onAdd }: { t: (key: TranslationKey) => string; mode: ViewMode; ideas?: DbIdea[]; onDetails: (title: string) => void; onAdd: () => void }) {
   const items = ideas ?? [];
   return (
     <Panel>
       <SectionTitle
-        title="Idées"
-        subtitle="Story ideas, arcs and creative pitches shared by this creator."
-        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Idea</SecondaryButton>}
+        title={t("profile.tabIdeas")}
+        subtitle={t("profile.ideasSubtitle")}
+        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>{t("profile.newIdea")}</SecondaryButton>}
       />
       {items.length === 0 ? (
-        <EmptyState title="No ideas yet" text="Les idées publiées apparaîtront ici." />
+        <EmptyState title={t("profile.noIdeasYet")} text={t("profile.ideasWillAppear")} />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {items.map((idea) => (
             <Card key={idea.id}>
               <div className="flex items-start justify-between gap-2">
-                <Chip tone="info">{idea.category || "Idée"}</Chip>
-                {idea.image_url && <Chip>Image incluse</Chip>}
+                <Chip tone="info">{idea.category || t("profile.ideaFallback")}</Chip>
+                {idea.image_url && <Chip>{t("profile.imageIncluded")}</Chip>}
               </div>
               <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
                 {idea.title}
@@ -1740,7 +1782,7 @@ function PropositionsTab({ mode, ideas, onDetails, onAdd }: { mode: ViewMode; id
                 {idea.description}
               </p>
               <div className="mt-4 flex items-center gap-2">
-                <SecondaryButton onClick={() => onDetails(idea.title)}>View Details</SecondaryButton>
+                <SecondaryButton onClick={() => onDetails(idea.title)}>{t("profile.viewDetails")}</SecondaryButton>
               </div>
             </Card>
           ))}
@@ -1751,7 +1793,7 @@ function PropositionsTab({ mode, ideas, onDetails, onAdd }: { mode: ViewMode; id
 }
 
 /** Onglet Amis : demandes reçues (accepter/refuser) + liste des amis réels. */
-function ProfileFriendsTab() {
+function ProfileFriendsTab({ t }: { t: (key: TranslationKey) => string }) {
   const navigate = useNavigate();
   const [pending, setPending] = useState<DbFriendRequest[]>([]);
   const [friends, setFriends] = useState<DbProfile[]>([]);
@@ -1766,11 +1808,11 @@ function ProfileFriendsTab() {
   const respond = async (id: string, accept: boolean) => {
     try {
       await respondFriendRequestDb(id, accept);
-      setFeedback(accept ? "Demande acceptée — vous êtes amis." : "Demande refusée.");
+      setFeedback(accept ? t("profile.friendRequestAccepted") : t("profile.friendRequestDeclined"));
       refresh();
       window.setTimeout(() => setFeedback(null), 2600);
     } catch {
-      setFeedback("Action impossible.");
+      setFeedback(t("profile.actionImpossible"));
     }
   };
 
@@ -1779,13 +1821,13 @@ function ProfileFriendsTab() {
       const conversation = await startConversationWith(profileId);
       void navigate({ to: "/messages", search: { conversation } });
     } catch {
-      setFeedback("Impossible d'ouvrir la conversation.");
+      setFeedback(t("profile.conversationFailed"));
     }
   };
 
   return (
     <Panel>
-      <SectionTitle title="Amis" subtitle="Demandes reçues et liste de tes amis CollabManga." />
+      <SectionTitle title={t("profile.friendsTitle")} subtitle={t("profile.friendsSubtitle")} />
       {feedback && (
         <div className="mb-4 rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.4)", color: "#39FF88" }}>
           {feedback}
@@ -1794,7 +1836,7 @@ function ProfileFriendsTab() {
 
       {pending.length > 0 && (
         <div className="mb-6">
-          <h3 className="mb-3 text-[14px] font-extrabold" style={{ color: "#F7FAFF" }}>Demandes en attente</h3>
+          <h3 className="mb-3 text-[14px] font-extrabold" style={{ color: "#F7FAFF" }}>{t("profile.pendingRequests")}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {pending.map((r) => {
               const p = r.initiator;
@@ -1807,12 +1849,12 @@ function ProfileFriendsTab() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name}</p>
-                      <p className="text-[12px]" style={{ color: "#7F8CB3" }}>souhaite devenir ami</p>
+                      <p className="text-[12px]" style={{ color: "#7F8CB3" }}>{t("profile.wantsToBeFriend")}</p>
                     </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
-                    <PrimaryButton onClick={() => void respond(r.id, true)}>Accepter</PrimaryButton>
-                    <SecondaryButton onClick={() => void respond(r.id, false)}>Refuser</SecondaryButton>
+                    <PrimaryButton onClick={() => void respond(r.id, true)}>{t("notif.actionAccept")}</PrimaryButton>
+                    <SecondaryButton onClick={() => void respond(r.id, false)}>{t("notif.actionDecline")}</SecondaryButton>
                   </div>
                 </Card>
               );
@@ -1822,7 +1864,7 @@ function ProfileFriendsTab() {
       )}
 
       {friends.length === 0 ? (
-        <EmptyState title="Aucun ami pour l'instant" text="Envoie des demandes d'ami depuis la page Discover — elles apparaîtront ici." />
+        <EmptyState title={t("profile.noFriendsYet")} text={t("profile.sendFriendRequestsHint")} />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {friends.map((p) => {
@@ -1843,8 +1885,8 @@ function ProfileFriendsTab() {
                   </div>
                 </button>
                 <div className="mt-3 flex items-center gap-2">
-                  <PrimaryButton icon={<MessageSquare size={16} />} onClick={() => void contact(p.id)}>Contacter</PrimaryButton>
-                  <SecondaryButton onClick={() => void navigate({ to: "/profile/$profileId", params: { profileId: p.username } })}>Voir le profil</SecondaryButton>
+                  <PrimaryButton icon={<MessageSquare size={16} />} onClick={() => void contact(p.id)}>{t("profile.contact")}</PrimaryButton>
+                  <SecondaryButton onClick={() => void navigate({ to: "/profile/$profileId", params: { profileId: p.username } })}>{t("profile.viewProfile")}</SecondaryButton>
                 </div>
               </Card>
             );
@@ -1855,23 +1897,23 @@ function ProfileFriendsTab() {
   );
 }
 
-function FavoritesTab({ favorites, onRemove }: { favorites?: Favorite[]; onRemove: (id: string) => Promise<void> }) {
+function FavoritesTab({ t, favorites, onRemove }: { t: (key: TranslationKey) => string; favorites?: Favorite[]; onRemove: (id: string) => Promise<void> }) {
   // Favoris réels du compte connecté, enregistrés dans Supabase.
   const all = favorites ?? [];
   const byKind = (kind: string) => all.filter((f) => f.kind === kind);
   const groups: { title: string; kind: string; items: Favorite[] }[] = [
-    { title: "Annonces", kind: "Announcement", items: byKind("Announcement") },
-    { title: "Idées", kind: "Idée", items: byKind("Idée") },
-    { title: "Illustrations", kind: "Illustration", items: byKind("Illustration") },
-    { title: "Parrainages", kind: "Sponsorship option", items: byKind("Sponsorship option") },
-    { title: "Projets", kind: "Project", items: byKind("Project") },
+    { title: t("profile.favAnnouncements"), kind: "Announcement", items: byKind("Announcement") },
+    { title: t("profile.favIdeas"), kind: "Idée", items: byKind("Idée") },
+    { title: t("profile.favIllustrations"), kind: "Illustration", items: byKind("Illustration") },
+    { title: t("profile.favSponsorships"), kind: "Sponsorship option", items: byKind("Sponsorship option") },
+    { title: t("profile.favProjects"), kind: "Project", items: byKind("Project") },
   ];
 
   return (
     <Panel>
       <SectionTitle
-        title="Favoris"
-        subtitle="Elements sauvegardes, separes par categorie pour les retrouver rapidement."
+        title={t("profile.favoritesTitle")}
+        subtitle={t("profile.favoritesSubtitle")}
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {groups.map((group) => (
@@ -1891,7 +1933,7 @@ function FavoritesTab({ favorites, onRemove }: { favorites?: Favorite[]; onRemov
                     <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{item.title}</p>
                     <p className="mt-0.5 text-[12px] font-semibold" style={{ color: "#7F8CB3" }}>{group.kind}</p>
                   </div>
-                  <SecondaryButton onClick={() => void onRemove(item.id)}>Retirer</SecondaryButton>
+                  <SecondaryButton onClick={() => void onRemove(item.id)}>{t("profile.remove")}</SecondaryButton>
                 </div>
               ))}
             </div>
@@ -1902,26 +1944,26 @@ function FavoritesTab({ favorites, onRemove }: { favorites?: Favorite[]; onRemov
   );
 }
 
-function AnnouncementsTab({ mode, announcements, onDetails, onAdd }: { mode: ViewMode; announcements?: DbAnnouncement[]; onDetails: (title: string) => void; onAdd: () => void }) {
+function AnnouncementsTab({ t, mode, announcements, onDetails, onAdd }: { t: (key: TranslationKey) => string; mode: ViewMode; announcements?: DbAnnouncement[]; onDetails: (title: string) => void; onAdd: () => void }) {
   const items = announcements ?? [];
   return (
     <Panel>
       <SectionTitle
-        title="Announcements"
-        subtitle="Open collaboration calls and availability posts."
-        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>New Announcement</SecondaryButton>}
+        title={t("profile.tabAnnouncements")}
+        subtitle={t("profile.announcementsSubtitle")}
+        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>{t("profile.newAnnouncement")}</SecondaryButton>}
       />
       {items.length === 0 ? (
-        <EmptyState title="No announcements yet" text="Les annonces publiées apparaîtront ici." />
+        <EmptyState title={t("profile.noAnnouncementsYet")} text={t("profile.announcementsWillAppear")} />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {items.map((it) => (
             <Card key={it.id}>
               <div className="flex items-start justify-between gap-2">
                 <Chip tone={it.mode === "project" ? "info" : "active"}>
-                  {it.mode === "project" ? "Project seeks partner" : "User seeks project"}
+                  {it.mode === "project" ? t("profile.projectSeeksPartner") : t("profile.userSeeksProject")}
                 </Chip>
-                <Chip tone="warning">Recruiting</Chip>
+                <Chip tone="warning">{t("profile.recruiting")}</Chip>
               </div>
               <h3 className="mt-3 text-[16px] font-extrabold" style={{ color: "#F7FAFF" }}>
                 {it.title}
@@ -1930,14 +1972,14 @@ function AnnouncementsTab({ mode, announcements, onDetails, onAdd }: { mode: Vie
                 {it.hook || it.description}
               </p>
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {it.status_sought && <Chip>Role · {it.status_sought}</Chip>}
+                {it.status_sought && <Chip>{t("profile.role")} · {it.status_sought}</Chip>}
                 <Chip>{it.language}</Chip>
                 {it.genres.slice(0, 2).map((g) => (
                   <Chip key={g}>{g}</Chip>
                 ))}
               </div>
               <div className="mt-4 flex items-center gap-2">
-                <SecondaryButton onClick={() => onDetails(it.title)}>View Details</SecondaryButton>
+                <SecondaryButton onClick={() => onDetails(it.title)}>{t("profile.viewDetails")}</SecondaryButton>
               </div>
             </Card>
           ))}
@@ -1947,21 +1989,21 @@ function AnnouncementsTab({ mode, announcements, onDetails, onAdd }: { mode: Vie
   );
 }
 
-function SponsorshipTab({ mode, options, onDetails, onAdd, onManage }: { mode: ViewMode; options?: SponsorOption[]; onDetails: (title: string) => void; onAdd: () => void; onManage: (title: string) => void }) {
+function SponsorshipTab({ t, mode, options, onDetails, onAdd, onManage }: { t: (key: TranslationKey) => string; mode: ViewMode; options?: SponsorOption[]; onDetails: (title: string) => void; onAdd: () => void; onManage: (title: string) => void }) {
   const cards = options ?? [];
   return (
     <Panel>
       <SectionTitle
-        title="Sponsorship"
-        subtitle="Services offered and sponsorship announcements."
-        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>Add service</SecondaryButton>}
+        title={t("profile.tabSponsorship")}
+        subtitle={t("profile.sponsorshipTabSubtitle")}
+        action={mode === "own" && <SecondaryButton icon={<Plus size={16} />} onClick={onAdd}>{t("profile.addService")}</SecondaryButton>}
       />
       {cards.length === 0 ? (
-        <EmptyState title="No services yet" text="Les services de parrainage créés apparaîtront ici." />
+        <EmptyState title={t("profile.noServicesYet")} text={t("profile.servicesWillAppear")} />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {cards.map((o, i) => (
-            <SponsorshipCard key={i} opt={o} mode={mode} onDetails={() => onDetails(o.format)} onManage={() => onManage(o.format)} />
+            <SponsorshipCard key={i} t={t} opt={o} mode={mode} onDetails={() => onDetails(o.format)} onManage={() => onManage(o.format)} />
           ))}
         </div>
       )}
@@ -1970,12 +2012,14 @@ function SponsorshipTab({ mode, options, onDetails, onAdd, onManage }: { mode: V
 }
 
 function AccountTab({
+  t,
   identity,
   preferences,
   onPreferencesChange,
   onIdentityChange,
   onFeedback,
 }: {
+  t: (key: TranslationKey) => string;
   identity: PublicProfileIdentity;
   preferences: ProfilePreferences;
   onPreferencesChange: (preferences: ProfilePreferences) => void;
@@ -2001,23 +2045,23 @@ function AccountTab({
     if (saving) return;
     setSaving(true);
     try {
-      await persistProfileIdentity(displayName, username);
+      await persistProfileIdentity(displayName, username, t);
       onIdentityChange?.();
-      onFeedback("Informations du profil enregistrées.");
+      onFeedback(t("profile.identitySaved"));
     } catch (error) {
-      onFeedback(error instanceof Error ? error.message : "Enregistrement impossible.");
+      onFeedback(error instanceof Error ? error.message : t("profile.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const sendPasswordReset = async () => {
-    if (!supabase) return onFeedback("Supabase n'est pas configuré.");
+    if (!supabase) return onFeedback(t("profile.supabaseNotConfigured"));
     const { data } = await supabase.auth.getSession();
     const email = data.session?.user.email;
-    if (!email) return onFeedback("Aucune adresse e-mail n'est associée à ce compte.");
+    if (!email) return onFeedback(t("profile.noEmailLinked"));
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/profile` });
-    onFeedback(error ? error.message : "E-mail de réinitialisation envoyé.");
+    onFeedback(error ? error.message : t("profile.resetEmailSent"));
   };
 
   const logout = async () => {
@@ -2029,74 +2073,74 @@ function AccountTab({
     try {
       await updateMyRole(role);
       onIdentityChange?.();
-      onFeedback("Rôle principal enregistré.");
+      onFeedback(t("profile.mainRoleSaved"));
     } catch (error) {
-      onFeedback(error instanceof Error ? error.message : "Modification du rôle impossible.");
+      onFeedback(error instanceof Error ? error.message : t("profile.roleChangeFailed"));
     }
   };
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Panel>
-        <SectionTitle title="Identity" subtitle="Public display information." />
+        <SectionTitle title={t("profile.identity")} subtitle={t("profile.identitySubtitle")} />
         <div className="space-y-3">
-          <Field label="Display name"><input className="cm-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
-          <Field label="Username"><input className="cm-input" value={username} onChange={(event) => setUsername(event.target.value)} /></Field>
+          <Field label={t("profile.displayName")}><input className="cm-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
+          <Field label={t("profile.username")}><input className="cm-input" value={username} onChange={(event) => setUsername(event.target.value)} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Avatar"><MediaUploadButton kind="avatar" onDone={onIdentityChange} /></Field>
-            <Field label="Banner"><MediaUploadButton kind="banner" onDone={onIdentityChange} /></Field>
+            <Field label={t("profile.avatar")}><MediaUploadButton t={t} kind="avatar" onDone={onIdentityChange} /></Field>
+            <Field label={t("profile.banner")}><MediaUploadButton t={t} kind="banner" onDone={onIdentityChange} /></Field>
           </div>
-          <PrimaryButton full onClick={() => void saveIdentity()}>{saving ? "Enregistrement…" : "Enregistrer l'identité"}</PrimaryButton>
+          <PrimaryButton full onClick={() => void saveIdentity()}>{saving ? t("profile.saving") : t("profile.saveIdentity")}</PrimaryButton>
         </div>
       </Panel>
 
       <Panel>
-        <SectionTitle title="Profile information" subtitle="Roles, languages and preferences." />
+        <SectionTitle title={t("profile.profileInformation")} subtitle={t("profile.profileInfoSubtitle")} />
         <div className="space-y-3">
-          <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." value={preferences.bio} onChange={(event) => onPreferencesChange({ ...preferences, bio: event.target.value })} /></Field>
-          <Field label="Main role">
+          <Field label={t("profile.bio")}><textarea className="cm-textarea" placeholder={t("profile.bioPlaceholder")} value={preferences.bio} onChange={(event) => onPreferencesChange({ ...preferences, bio: event.target.value })} /></Field>
+          <Field label={t("profile.mainRole")}>
             <ProfileSelect defaultValue={identity.mainRole ?? "Dessinateur"} options={PROFILE_ROLES} onChange={(role) => void saveMainRole(role)} />
           </Field>
-          <Field label="Languages">
-            <LanguageMultiSelect values={preferences.languages} onChange={(languages) => onPreferencesChange({ ...preferences, languages })} />
+          <Field label={t("profile.languages")}>
+            <LanguageMultiSelect t={t} values={preferences.languages} onChange={(languages) => onPreferencesChange({ ...preferences, languages })} />
           </Field>
-          <AvailabilityEditToggle available={preferences.available} onChange={(available) => onPreferencesChange({ ...preferences, available })} />
+          <AvailabilityEditToggle t={t} available={preferences.available} onChange={(available) => onPreferencesChange({ ...preferences, available })} />
         </div>
       </Panel>
 
       <Panel>
-        <SectionTitle title="Content settings" subtitle="What appears on your public profile." />
+        <SectionTitle title={t("profile.contentSettings")} subtitle={t("profile.contentSettingsSubtitle")} />
         <div className="space-y-3">
-          <ToggleRow label="Show projects" checked={preferences.showProjects} onChange={(showProjects) => onPreferencesChange({ ...preferences, showProjects })} />
-          <ToggleRow label="Show illustrations" checked={preferences.showIllustrations} onChange={(showIllustrations) => onPreferencesChange({ ...preferences, showIllustrations })} />
-          <ToggleRow label="Show ideas" checked={preferences.showIdeas} onChange={(showIdeas) => onPreferencesChange({ ...preferences, showIdeas })} />
-          <ToggleRow label="Show sponsorship options" checked={preferences.showSponsorships} onChange={(showSponsorships) => onPreferencesChange({ ...preferences, showSponsorships })} />
-          <ToggleRow label="Allow project invitations" checked={preferences.allowInvites} onChange={(allowInvites) => onPreferencesChange({ ...preferences, allowInvites })} />
-          <ToggleRow label="Allow direct messages" checked={preferences.allowMessages} onChange={(allowMessages) => onPreferencesChange({ ...preferences, allowMessages })} />
+          <ToggleRow label={t("profile.showProjects")} checked={preferences.showProjects} onChange={(showProjects) => onPreferencesChange({ ...preferences, showProjects })} />
+          <ToggleRow label={t("profile.showIllustrations")} checked={preferences.showIllustrations} onChange={(showIllustrations) => onPreferencesChange({ ...preferences, showIllustrations })} />
+          <ToggleRow label={t("profile.showIdeas")} checked={preferences.showIdeas} onChange={(showIdeas) => onPreferencesChange({ ...preferences, showIdeas })} />
+          <ToggleRow label={t("profile.showSponsorshipOptions")} checked={preferences.showSponsorships} onChange={(showSponsorships) => onPreferencesChange({ ...preferences, showSponsorships })} />
+          <ToggleRow label={t("profile.allowInvites")} checked={preferences.allowInvites} onChange={(allowInvites) => onPreferencesChange({ ...preferences, allowInvites })} />
+          <ToggleRow label={t("profile.allowMessages")} checked={preferences.allowMessages} onChange={(allowMessages) => onPreferencesChange({ ...preferences, allowMessages })} />
         </div>
       </Panel>
 
       <Panel>
-        <SectionTitle title="CollabManga AI plan" subtitle="Usage and billing." />
+        <SectionTitle title={t("profile.aiPlan")} subtitle={t("profile.aiPlanSubtitle")} />
         <div className="grid grid-cols-2 gap-3">
-          <Stat label="Current plan" value="See details" />
-          <Stat label="Credits" value="Live balance" />
-          <Stat label="Usage" value="Current period" />
-          <Stat label="Renewal" value="Billing page" />
+          <Stat label={t("profile.currentPlan")} value={t("profile.seeDetails")} />
+          <Stat label={t("profile.credits")} value={t("profile.liveBalance")} />
+          <Stat label={t("profile.usage")} value={t("profile.currentPeriod")} />
+          <Stat label={t("profile.renewal")} value={t("profile.billingPage")} />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <PrimaryButton onClick={() => void navigate({ to: "/ai/plan" })}>Manage plan</PrimaryButton>
-          <SecondaryButton onClick={() => void navigate({ to: "/ai/history" })}>Usage history</SecondaryButton>
+          <PrimaryButton onClick={() => void navigate({ to: "/ai/plan" })}>{t("profile.managePlan")}</PrimaryButton>
+          <SecondaryButton onClick={() => void navigate({ to: "/ai/history" })}>{t("profile.usageHistory")}</SecondaryButton>
         </div>
       </Panel>
 
       <Panel className="lg:col-span-2">
-        <SectionTitle title="Security" subtitle="Account access and notifications." />
+        <SectionTitle title={t("profile.security")} subtitle={t("profile.securitySubtitle")} />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Field label="Email"><input className="cm-input" value={email || "Adresse du compte connecté"} readOnly /></Field>
-          <Field label="Password"><SecondaryButton full onClick={() => void sendPasswordReset()}>Change password</SecondaryButton></Field>
-          <Field label="Notifications"><SecondaryButton full onClick={() => void navigate({ to: "/notifications" })}>Manage notifications</SecondaryButton></Field>
-          <Field label="Session"><SecondaryButton full icon={<LogOut size={16} />} onClick={() => void logout()}>Se déconnecter</SecondaryButton></Field>
+          <Field label={t("profile.email")}><input className="cm-input" value={email || t("profile.connectedAccountEmail")} readOnly /></Field>
+          <Field label={t("profile.password")}><SecondaryButton full onClick={() => void sendPasswordReset()}>{t("profile.changePassword")}</SecondaryButton></Field>
+          <Field label="Notifications"><SecondaryButton full onClick={() => void navigate({ to: "/notifications" })}>{t("profile.manageNotifications")}</SecondaryButton></Field>
+          <Field label={t("profile.session")}><SecondaryButton full icon={<LogOut size={16} />} onClick={() => void logout()}>{t("profile.logout")}</SecondaryButton></Field>
         </div>
       </Panel>
     </div>
@@ -2130,7 +2174,7 @@ function ProfileSelect({
   );
 }
 
-function LanguageMultiSelect({ defaultValues = [], values, onChange }: { defaultValues?: string[]; values?: string[]; onChange?: (languages: string[]) => void }) {
+function LanguageMultiSelect({ t, defaultValues = [], values, onChange }: { t: (key: TranslationKey) => string; defaultValues?: string[]; values?: string[]; onChange?: (languages: string[]) => void }) {
   const [selected, setSelected] = useState<string[]>(values ?? defaultValues);
   useEffect(() => {
     if (values) setSelected(values);
@@ -2168,28 +2212,30 @@ function LanguageMultiSelect({ defaultValues = [], values, onChange }: { default
         <input key={language} type="hidden" name="languages" value={language} />
       ))}
       <p className="mt-1.5 text-[11px] font-medium" style={{ color: "#7F8CB3" }}>
-        Clique pour ajouter ou retirer une langue.
+        {t("profile.languageToggleHint")}
       </p>
     </>
   );
 }
 
 function AvailabilityEditToggle({
+  t,
   available,
   onChange,
 }: {
+  t: (key: TranslationKey) => string;
   available: boolean;
   onChange: (available: boolean) => void;
 }) {
   return (
     <div>
-      <div className="mb-1.5 text-[12px] font-bold" style={{ color: "#B8C4E5" }}>Availability</div>
+      <div className="mb-1.5 text-[12px] font-bold" style={{ color: "#B8C4E5" }}>{t("profile.availability")}</div>
       <div
         className="flex items-center justify-between rounded-[14px] px-4 py-3"
         style={{ background: "#0E193A", border: "1px solid rgba(133,154,206,0.18)" }}
       >
         <span className="text-[13px] font-semibold" style={{ color: "#F7FAFF" }}>
-          {available ? "Available" : "Not available"}
+          {available ? t("profile.available") : t("profile.unavailable")}
         </span>
         <button
           type="button"
@@ -2352,6 +2398,7 @@ function ModalShell({
 }
 
 function EditProfileModal({
+  t,
   open,
   onClose,
   profileType,
@@ -2361,6 +2408,7 @@ function EditProfileModal({
   onIdentityChange,
   onProfileTypeChange,
 }: {
+  t: (key: TranslationKey) => string;
   open: boolean;
   onClose: () => void;
   onIdentityChange?: () => void;
@@ -2395,12 +2443,12 @@ function EditProfileModal({
     setSaving(true);
     setSaveError("");
     try {
-      await persistProfileIdentity(displayName, username);
+      await persistProfileIdentity(displayName, username, t);
       await updateMyRole(mainRole, secondaryRole);
       onPreferencesChange(draftPreferences);
       onIdentityChange?.();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Enregistrement impossible.");
+      setSaveError(error instanceof Error ? error.message : t("profile.saveFailed"));
       setSaving(false);
       return;
     }
@@ -2413,61 +2461,61 @@ function EditProfileModal({
     <ModalShell
       open={open}
       onClose={onClose}
-      title="Edit profile"
+      title={t("profile.editProfileTitle")}
       width={840}
       footer={
         <>
-          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-          <PrimaryButton onClick={() => void save()}>{saving ? "Enregistrement…" : "Save Changes"}</PrimaryButton>
+          <SecondaryButton onClick={onClose}>{t("profile.cancel")}</SecondaryButton>
+          <PrimaryButton onClick={() => void save()}>{saving ? t("profile.saving") : t("profile.saveChanges")}</PrimaryButton>
         </>
       }
     >
       <div className="space-y-8">
-        <FormGroup title="Identity">
+        <FormGroup title={t("profile.identity")}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Display name"><input className="cm-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
-            <Field label="Username"><input className="cm-input" value={username} onChange={(event) => setUsername(event.target.value)} /></Field>
-            <Field label="Avatar"><MediaUploadButton kind="avatar" onDone={onIdentityChange} /></Field>
-            <Field label="Banner"><MediaUploadButton kind="banner" onDone={onIdentityChange} /></Field>
+            <Field label={t("profile.displayName")}><input className="cm-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
+            <Field label={t("profile.username")}><input className="cm-input" value={username} onChange={(event) => setUsername(event.target.value)} /></Field>
+            <Field label={t("profile.avatar")}><MediaUploadButton t={t} kind="avatar" onDone={onIdentityChange} /></Field>
+            <Field label={t("profile.banner")}><MediaUploadButton t={t} kind="banner" onDone={onIdentityChange} /></Field>
           </div>
         </FormGroup>
 
-        <FormGroup title="About">
-          <Field label="Bio"><textarea className="cm-textarea" placeholder="Bio to complete." value={draftPreferences.bio} onChange={(event) => setDraftPreferences((current) => ({ ...current, bio: event.target.value }))} /></Field>
+        <FormGroup title={t("profile.about")}>
+          <Field label={t("profile.bio")}><textarea className="cm-textarea" placeholder={t("profile.bioPlaceholder")} value={draftPreferences.bio} onChange={(event) => setDraftPreferences((current) => ({ ...current, bio: event.target.value }))} /></Field>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Spoken languages">
-              <LanguageMultiSelect values={draftPreferences.languages} onChange={(languages) => setDraftPreferences((current) => ({ ...current, languages }))} />
+            <Field label={t("profile.spokenLanguages")}>
+              <LanguageMultiSelect t={t} values={draftPreferences.languages} onChange={(languages) => setDraftPreferences((current) => ({ ...current, languages }))} />
             </Field>
-            <AvailabilityEditToggle available={draftPreferences.available} onChange={(available) => setDraftPreferences((current) => ({ ...current, available }))} />
-            <Field label="Main role">
+            <AvailabilityEditToggle t={t} available={draftPreferences.available} onChange={(available) => setDraftPreferences((current) => ({ ...current, available }))} />
+            <Field label={t("profile.mainRole")}>
               <ProfileSelect key={`main-${mainRole}`} defaultValue={mainRole} options={PROFILE_ROLES} onChange={setMainRole} />
             </Field>
-            <Field label="Secondary role">
+            <Field label={t("profile.secondaryRole")}>
               <ProfileSelect key={`sec-${secondaryRole}`} defaultValue={secondaryRole} options={PROFILE_ROLES} onChange={setSecondaryRole} />
             </Field>
           </div>
         </FormGroup>
 
-        <FormGroup title="Preferences">
+        <FormGroup title={t("profile.preferences")}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Field label="Profile visibility">
+            <Field label={t("profile.profileVisibility")}>
               <ProfileSelect key={draftPreferences.visibility} defaultValue={draftPreferences.visibility} options={PROFILE_VISIBILITY_OPTIONS} onChange={(visibility) => setDraftPreferences((current) => ({ ...current, visibility }))} />
             </Field>
             {profileType === "content" && (
-              <Field label="Sponsorship settings">
+              <Field label={t("profile.sponsorshipSettings")}>
                 <ProfileSelect key={draftPreferences.sponsorshipStatus} defaultValue={draftPreferences.sponsorshipStatus} options={["Accepting sponsorships", "Paused", "Hidden"]} onChange={(sponsorshipStatus) => setDraftPreferences((current) => ({ ...current, sponsorshipStatus }))} />
               </Field>
             )}
           </div>
         </FormGroup>
 
-        <FormGroup title="Genres favoris">
+        <FormGroup title={t("profile.favoriteGenres")}>
           <div className="space-y-4">
-            <ChoiceRow key={`genres-${draftPreferences.favoriteGenres.join("-")}`} multi label="Genres" options={["Shonen", "Seinen", "Shojo", "Josei"]} defaultValues={draftPreferences.favoriteGenres} onChange={(favoriteGenres) => setDraftPreferences((current) => ({ ...current, favoriteGenres }))} />
+            <ChoiceRow key={`genres-${draftPreferences.favoriteGenres.join("-")}`} multi label={t("profile.genres")} options={["Shonen", "Seinen", "Shojo", "Josei"]} defaultValues={draftPreferences.favoriteGenres} onChange={(favoriteGenres) => setDraftPreferences((current) => ({ ...current, favoriteGenres }))} />
             <ChoiceRow
               key={`subgenres-${draftPreferences.favoriteSubgenres.join("-")}`}
               multi
-              label="Sous-genres"
+              label={t("profile.subgenres")}
               defaultValues={draftPreferences.favoriteSubgenres}
               options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
               onChange={(favoriteSubgenres) => setDraftPreferences((current) => ({ ...current, favoriteSubgenres }))}
@@ -2481,7 +2529,7 @@ function EditProfileModal({
 }
 
 /** Upload réel d'avatar/bannière : Storage Supabase + user_metadata (+ profiles.avatar_url). */
-function MediaUploadButton({ kind, onDone }: { kind: "avatar" | "banner"; onDone?: () => void }) {
+function MediaUploadButton({ t, kind, onDone }: { t: (key: TranslationKey) => string; kind: "avatar" | "banner"; onDone?: () => void }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
@@ -2515,14 +2563,14 @@ function MediaUploadButton({ kind, onDone }: { kind: "avatar" | "banner"; onDone
     <>
       <SecondaryButton full onClick={() => inputRef.current?.click()}>
         {state === "saving"
-          ? "Envoi…"
+          ? t("profile.sending")
           : state === "saved"
-            ? "Enregistré ✓"
+            ? t("profile.saved")
             : state === "error"
-              ? "Échec — réessayer"
+              ? t("profile.uploadFailedRetry")
               : kind === "avatar"
-                ? "Upload avatar"
-                : "Upload banner"}
+                ? t("profile.uploadAvatar")
+                : t("profile.uploadBanner")}
       </SecondaryButton>
       <input
         ref={inputRef}
@@ -2606,14 +2654,17 @@ function ChoiceRow({
 }
 
 function ClassicImageUploader({
+  t,
   multiple = true,
-  label = "Importer une image",
+  label,
   onFiles,
 }: {
+  t: (key: TranslationKey) => string;
   multiple?: boolean;
   label?: string;
   onFiles?: (files: File[]) => void;
 }) {
+  const resolvedLabel = label ?? t("profile.importImage");
   const [images, setImages] = useState<string[]>([]);
   const filesRef = useRef<File[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -2664,7 +2715,7 @@ function ClassicImageUploader({
         onClick={() => openPicker(activeImage ? 0 : null)}
         className="group grid aspect-[4/3] w-full cursor-pointer place-items-center overflow-hidden rounded-[18px] text-center"
         style={{ background: "#08112B", border: "1px dashed rgba(133,154,206,0.32)", color: "#B8C4E5" }}
-        title={activeImage ? "Cliquer pour remplacer cette image" : label}
+        title={activeImage ? t("profile.clickToReplace") : resolvedLabel}
       >
         {activeImage ? (
           <img src={activeImage} alt="" className="h-full w-full object-cover" />
@@ -2676,7 +2727,7 @@ function ClassicImageUploader({
             >
               <ImageIcon size={22} />
             </span>
-            <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{label}</span>
+            <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{resolvedLabel}</span>
             <span className="text-[12px]" style={{ color: "#7F8CB3" }}>PNG, JPG, WEBP</span>
           </div>
         )}
@@ -2699,7 +2750,7 @@ function ClassicImageUploader({
               <button
                 type="button"
                 onClick={() => openPicker(index)}
-                title="Cliquer pour remplacer cette image"
+                title={t("profile.clickToReplace")}
                 className="h-16 w-16 overflow-hidden rounded-[12px]"
                 style={{ border: "1px solid rgba(133,154,206,0.22)", background: "#0E193A" }}
               >
@@ -2707,7 +2758,7 @@ function ClassicImageUploader({
               </button>
               <button
                 type="button"
-                aria-label="Supprimer cette image"
+                aria-label={t("profile.removeImage")}
                 onClick={() => removeAt(index)}
                 className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full text-[11px] font-black"
                 style={{ background: "#FF5F7E", color: "#04111E", border: "2px solid #0B1430" }}
@@ -2719,7 +2770,7 @@ function ClassicImageUploader({
           {/* Cadre « + » permanent pour ajouter une nouvelle image */}
           <button
             type="button"
-            aria-label="Ajouter une image"
+            aria-label={t("profile.addImage")}
             onClick={() => openPicker(null)}
             className="grid h-16 w-16 shrink-0 place-items-center rounded-[12px] text-[22px] font-black transition-colors"
             style={{ border: "1px dashed rgba(57,255,136,0.45)", color: "#39FF88", background: "rgba(57,255,136,0.06)" }}
@@ -2733,12 +2784,14 @@ function ClassicImageUploader({
 }
 
 function AddSponsorshipModal({
+  t,
   open,
   onClose,
   editTitle = null,
   ownerName = "Créateur",
   onCreated,
 }: {
+  t: (key: TranslationKey) => string;
   open: boolean;
   onClose: () => void;
   editTitle?: string | null;
@@ -2764,8 +2817,8 @@ function AddSponsorshipModal({
     <ServiceFormModal
       open={open}
       onClose={onClose}
-      title={isEdit ? "Modifier le service" : "Add service"}
-      submitLabel={isEdit ? "Enregistrer" : "Confirmer"}
+      title={isEdit ? t("profile.editService") : t("profile.addService")}
+      submitLabel={isEdit ? t("profile.save") : t("profile.confirm")}
       initial={existing}
       onSubmit={(values) => {
         void (async () => {
@@ -2794,7 +2847,7 @@ function AddSponsorshipModal({
   );
 }
 
-function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
+function AddAnnouncementModal({ t, open, onClose, onCreated }: { t: (key: TranslationKey) => string; open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [language, setLanguage] = useState("FR");
   const [title, setTitle] = useState("");
   const [hook, setHook] = useState("");
@@ -2811,7 +2864,7 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
   const submit = async () => {
     setError(null);
     if (!title.trim()) {
-      setError("Donne un titre à ton annonce.");
+      setError(t("profile.titleRequired"));
       return;
     }
     setSaving(true);
@@ -2835,7 +2888,7 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
         onClose();
       }, 1200);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Publication impossible.");
+      setError(err instanceof Error ? err.message : t("profile.publishFailed"));
     } finally {
       setSaving(false);
     }
@@ -2845,38 +2898,38 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
     <ModalShell
       open={open}
       onClose={onClose}
-      title="Créer une annonce"
+      title={t("profile.createAnnouncementTitle")}
       width={860}
       footer={
         <>
-          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
+          <SecondaryButton onClick={onClose}>{t("profile.cancel")}</SecondaryButton>
           <PrimaryButton onClick={submit}>
-            {saving ? "Publication…" : done ? "Publiée ✓" : "Confirmer"}
+            {saving ? t("profile.publishing") : done ? t("profile.published2") : t("profile.confirm")}
           </PrimaryButton>
         </>
       }
     >
       <div className="space-y-6">
-        <ChoiceRow label="Langage" options={["FR", "ENG", "ES", "IT", "JP"]} defaultValue="FR" onChange={(s) => setLanguage(s[0] ?? "FR")} />
-        <Field label="Titre">
-          <input className="cm-input" placeholder="Titre" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <ChoiceRow label={t("profile.language")} options={["FR", "ENG", "ES", "IT", "JP"]} defaultValue="FR" onChange={(s) => setLanguage(s[0] ?? "FR")} />
+        <Field label={t("profile.title")}>
+          <input className="cm-input" placeholder={t("profile.title")} value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
-        <Field label="Accroche">
-          <input className="cm-input" placeholder="Accroche" value={hook} onChange={(e) => setHook(e.target.value)} />
+        <Field label={t("profile.hook")}>
+          <input className="cm-input" placeholder={t("profile.hook")} value={hook} onChange={(e) => setHook(e.target.value)} />
         </Field>
-        <Field label="Description">
-          <textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <Field label={t("profile.description")}>
+          <textarea className="cm-textarea" placeholder={t("profile.description")} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
-        <ChoiceRow label="Statut recherché" options={[...PROFILE_ROLES]} defaultValue="Scénariste" onChange={(s) => setStatusSought(s[0] ?? "")} />
-        <ToggleRow label="Rémunération" checked={remuneration} onChange={setRemuneration} />
-        <ChoiceRow label="Engagement" options={["Long terme", "Ponctuel"]} defaultValue="Long terme" onChange={(values) => setEngagement(values[0] === "Ponctuel" ? "Ponctuel" : "Long terme")} />
+        <ChoiceRow label={t("profile.statusSought")} options={[...PROFILE_ROLES]} defaultValue="Scénariste" onChange={(s) => setStatusSought(s[0] ?? "")} />
+        <ToggleRow label={t("profile.remuneration")} checked={remuneration} onChange={setRemuneration} />
+        <ChoiceRow label={t("profile.engagement")} options={["Long terme", "Ponctuel"]} defaultValue="Long terme" onChange={(values) => setEngagement(values[0] === "Ponctuel" ? "Ponctuel" : "Long terme")} />
         <div>
-          <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>Type de projet favori</div>
+          <div className="cm-sora mb-3 text-[15px] font-bold" style={{ color: "#F7FAFF" }}>{t("profile.favoriteProjectType")}</div>
           <div className="space-y-4">
-            <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
+            <ChoiceRow multi label={t("profile.genreLabel")} options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
             <ChoiceRow
               multi
-              label="Sous-genre"
+              label={t("profile.subgenreLabel")}
               options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
               onChange={setSubgenres}
             />
@@ -2889,7 +2942,7 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
         )}
         {done && (
           <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.4)", color: "#39FF88" }}>
-            Annonce publiée ! Elle est visible dans la page Annonces.
+            {t("profile.announcementPublished")}
           </div>
         )}
       </div>
@@ -2897,7 +2950,7 @@ function AddAnnouncementModal({ open, onClose, onCreated }: { open: boolean; onC
   );
 }
 
-function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
+function AddIllustrationModal({ t, open, onClose, onCreated }: { t: (key: TranslationKey) => string; open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -2916,11 +2969,11 @@ function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onC
   const submit = async () => {
     setError(null);
     if (files.length === 0) {
-      setError("Importe au moins une image.");
+      setError(t("profile.imageRequired"));
       return;
     }
     if (!title.trim()) {
-      setError("Donne un titre à ton illustration.");
+      setError(t("profile.titleRequiredIllustration"));
       return;
     }
     setSaving(true);
@@ -2933,7 +2986,7 @@ function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onC
         onClose();
       }, 1200);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Publication impossible.");
+      setError(err instanceof Error ? err.message : t("profile.publishFailed"));
     } finally {
       setSaving(false);
     }
@@ -2946,25 +2999,25 @@ function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onC
         reset();
         onClose();
       }}
-      title="Ajouter illustration"
+      title={t("profile.addIllustrationTitle")}
       width={980}
       footer={
         <>
-          <SecondaryButton onClick={() => { reset(); onClose(); }}>Annuler</SecondaryButton>
+          <SecondaryButton onClick={() => { reset(); onClose(); }}>{t("profile.cancel")}</SecondaryButton>
           <PrimaryButton onClick={submit}>
-            {saving ? "Publication…" : done ? "Publiée ✓" : "Confirmer"}
+            {saving ? t("profile.publishing") : done ? t("profile.published2") : t("profile.confirm")}
           </PrimaryButton>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ClassicImageUploader multiple label="Importer des illustrations" onFiles={setFiles} />
+        <ClassicImageUploader t={t} multiple label={t("profile.importIllustrations")} onFiles={setFiles} />
         <div className="space-y-4">
-          <Field label="Titre">
-            <input className="cm-input" placeholder="Titre" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Field label={t("profile.title")}>
+            <input className="cm-input" placeholder={t("profile.title")} value={title} onChange={(e) => setTitle(e.target.value)} />
           </Field>
-          <Field label="Description">
-            <textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <Field label={t("profile.description")}>
+            <textarea className="cm-textarea" placeholder={t("profile.description")} value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
           {error && (
             <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
@@ -2973,7 +3026,7 @@ function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onC
           )}
           {done && (
             <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.4)", color: "#39FF88" }}>
-              Illustration publiée ! Elle est maintenant visible dans la page Illustration.
+              {t("profile.illustrationPublished")}
             </div>
           )}
         </div>
@@ -2982,7 +3035,7 @@ function AddIllustrationModal({ open, onClose, onCreated }: { open: boolean; onC
   );
 }
 
-function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
+function AddPropositionModal({ t, open, onClose, onCreated }: { t: (key: TranslationKey) => string; open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [category, setCategory] = useState("Autre");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -2992,8 +3045,8 @@ function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onCl
 
   const submit = async () => {
     setError(null);
-    if (!title.trim()) { setError("Donne un titre à ton idée."); return; }
-    if (!description.trim()) { setError("Ajoute une description."); return; }
+    if (!title.trim()) { setError(t("profile.titleRequiredIdea")); return; }
+    if (!description.trim()) { setError(t("profile.descRequired")); return; }
     setSaving(true);
     try {
       await addIdea({ title: title.trim(), category, description: description.trim(), files });
@@ -3001,7 +3054,7 @@ function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onCl
       onCreated?.();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Publication impossible.");
+      setError(err instanceof Error ? err.message : t("profile.publishFailed"));
     } finally {
       setSaving(false);
     }
@@ -3011,26 +3064,26 @@ function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onCl
     <ModalShell
       open={open}
       onClose={onClose}
-      title="Ajouter une idée"
+      title={t("profile.addIdeaTitle")}
       width={980}
       footer={
         <>
-          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={submit}>{saving ? "Publication…" : "Ajouter"}</PrimaryButton>
+          <SecondaryButton onClick={onClose}>{t("profile.cancel")}</SecondaryButton>
+          <PrimaryButton onClick={submit}>{saving ? t("profile.publishing") : t("profile.add")}</PrimaryButton>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ClassicImageUploader multiple label="Importer des images d'idée" onFiles={setFiles} />
+        <ClassicImageUploader t={t} multiple label={t("profile.importIdeaImages")} onFiles={setFiles} />
         <div className="space-y-4">
         <ChoiceRow
-          label="Type d'idée"
+          label={t("profile.ideaType")}
           defaultValue="Autre"
           options={["Autre", "Système de pouvoirs", "Motivations", "Charadesign", "Worldbuilding", "Équipement"]}
           onChange={(sel) => setCategory(sel[0] ?? "Autre")}
         />
-        <Field label="Titre"><input className="cm-input" placeholder="Titre" value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
-        <Field label="Description"><textarea className="cm-textarea" placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+        <Field label={t("profile.title")}><input className="cm-input" placeholder={t("profile.title")} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
+        <Field label={t("profile.description")}><textarea className="cm-textarea" placeholder={t("profile.description")} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
         {error && (
           <div className="rounded-[12px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,95,126,0.10)", border: "1px solid rgba(255,95,126,0.35)", color: "#FF5F7E" }}>
             {error}
@@ -3042,7 +3095,7 @@ function AddPropositionModal({ open, onClose, onCreated }: { open: boolean; onCl
   );
 }
 
-function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
+function AddProjectModal({ t, open, onClose, onCreated }: { t: (key: TranslationKey) => string; open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [name, setName] = useState("");
   const [synopsis, setSynopsis] = useState("");
   const [genres, setGenres] = useState<string[]>([]);
@@ -3052,7 +3105,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
   const [coverFiles, setCoverFiles] = useState<File[]>([]);
 
   const submit = async () => {
-    if (!name.trim()) { setError("Donne un nom au projet."); return; }
+    if (!name.trim()) { setError(t("profile.projectNameRequired")); return; }
     setError(null);
     setSaving(true);
     try {
@@ -3062,7 +3115,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
       const project = {
         id: `prj-${crypto.randomUUID()}`,
         title: name.trim(),
-        synopsis: synopsis.trim() || "Synopsis à compléter.",
+        synopsis: synopsis.trim() || t("profile.synopsisTodo"),
         coverUrl,
         status: "Draft",
         chaptersCount: 0,
@@ -3081,7 +3134,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
       onCreated?.();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Création impossible.");
+      setError(err instanceof Error ? err.message : t("profile.creationFailed"));
     } finally {
       setSaving(false);
     }
@@ -3091,24 +3144,24 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
     <ModalShell
       open={open}
       onClose={onClose}
-      title="Créer un projet"
+      title={t("profile.createProjectTitle")}
       width={980}
       footer={
         <>
-          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
-          <PrimaryButton onClick={submit}>{saving ? "Création…" : "Créer le projet"}</PrimaryButton>
+          <SecondaryButton onClick={onClose}>{t("profile.cancel")}</SecondaryButton>
+          <PrimaryButton onClick={submit}>{saving ? t("profile.creating") : t("profile.createProjectButton")}</PrimaryButton>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ClassicImageUploader multiple={false} label="Importer une couverture" onFiles={setCoverFiles} />
+        <ClassicImageUploader t={t} multiple={false} label={t("profile.importCover")} onFiles={setCoverFiles} />
         <div className="space-y-4">
-          <Field label="Nom du projet"><input className="cm-input" placeholder="Nom du projet" value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Synopsis"><textarea className="cm-textarea" placeholder="Synopsis du projet" value={synopsis} onChange={(e) => setSynopsis(e.target.value)} /></Field>
-          <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
+          <Field label={t("profile.projectName")}><input className="cm-input" placeholder={t("profile.projectName")} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label={t("profile.synopsis")}><textarea className="cm-textarea" placeholder={t("profile.synopsis")} value={synopsis} onChange={(e) => setSynopsis(e.target.value)} /></Field>
+          <ChoiceRow multi label={t("profile.genreLabel")} options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
           <ChoiceRow
             multi
-            label="Sous-genres"
+            label={t("profile.subgenres")}
             options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
             onChange={setSubgenres}
           />
@@ -3124,6 +3177,7 @@ function AddProjectModal({ open, onClose, onCreated }: { open: boolean; onClose:
 }
 
 function ProfileWorkflowModal({
+  t,
   type,
   profileType,
   profileName,
@@ -3131,6 +3185,7 @@ function ProfileWorkflowModal({
   onClose,
   onDone,
 }: {
+  t: (key: TranslationKey) => string;
   type: Exclude<ProfileWorkflow, "patronage">;
   profileType: ProfileType;
   profileName: string;
@@ -3153,27 +3208,27 @@ function ProfileWorkflowModal({
         setSelectedProjectId((current) => current || projects[0]?.id || "");
       })
       .catch((loadError: unknown) => {
-        setError(loadError instanceof Error ? loadError.message : "Impossible de charger tes projets.");
+        setError(loadError instanceof Error ? loadError.message : t("profile.loadProjectsFailed"));
       });
-  }, [type]);
+  }, [type, t]);
 
   const title =
     type === "invite"
-      ? "Inviter au projet"
+      ? t("profile.inviteToProjectTitle")
       : type === "friend"
-          ? "Ajouter en ami"
-          : "S'abonner";
+          ? t("profile.addAsFriend")
+          : t("profile.subscribe");
 
   const submit = async () => {
     if (submitting) return;
     setError("");
     if (!recipientId) {
-      setError("Ce profil n'est pas relié à un compte utilisateur actif.");
+      setError(t("profile.noActiveAccount"));
       return;
     }
     if (type === "invite") {
       if (!selectedProjectId) {
-        setError("Crée d'abord un projet avant d'envoyer une invitation.");
+        setError(t("profile.createProjectBeforeInvite"));
         return;
       }
     }
@@ -3187,12 +3242,12 @@ function ProfileWorkflowModal({
           role,
           message: message.trim(),
         });
-        onDone("Invitation de collaboration envoyée et notification créée.");
+        onDone(t("profile.invitationSent"));
         return;
       }
       if (type === "friend") {
         await sendFriendRequestDb(recipientId);
-        onDone("Demande d'amitié envoyée.");
+        onDone(t("profile.friendRequestSent"));
         return;
       }
       await sendProfileWorkflowDb(recipientId, {
@@ -3205,9 +3260,9 @@ function ProfileWorkflowModal({
         entityType: "profile",
         entityTitle: profileName,
       });
-      onDone("Abonnement ajouté. Le créateur recevra une notification.");
+      onDone(t("profile.subscriptionAdded"));
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Action impossible.");
+      setError(submitError instanceof Error ? submitError.message : t("profile.actionFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -3221,45 +3276,45 @@ function ProfileWorkflowModal({
       width={720}
       footer={
         <>
-          <SecondaryButton onClick={onClose}>Annuler</SecondaryButton>
+          <SecondaryButton onClick={onClose}>{t("profile.cancel")}</SecondaryButton>
           <PrimaryButton onClick={() => void submit()}>
-            {submitting ? "Envoi…" : type === "follow" || type === "friend" ? "Confirmer" : "Envoyer"}
+            {submitting ? t("profile.sending") : type === "follow" || type === "friend" ? t("profile.confirm") : t("profile.send")}
           </PrimaryButton>
         </>
       }
     >
       <div className="space-y-5">
         <div className="rounded-[16px] p-4" style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)" }}>
-          <div className="text-[12px] font-bold uppercase tracking-[0.06em]" style={{ color: "#7F8CB3" }}>Destinataire</div>
+          <div className="text-[12px] font-bold uppercase tracking-[0.06em]" style={{ color: "#7F8CB3" }}>{t("profile.recipient")}</div>
           <div className="mt-1 cm-sora text-[16px] font-bold" style={{ color: "#F7FAFF" }}>{profileName}</div>
         </div>
 
         {type === "invite" && (
           <>
-            <Field label="Projet concerné">
+            <Field label={t("profile.relatedProject")}>
               <select className="cm-input" value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>
-                {ownedProjects.length === 0 ? <option value="">Aucun projet disponible</option> : null}
+                {ownedProjects.length === 0 ? <option value="">{t("profile.noProjectAvailable")}</option> : null}
                 {ownedProjects.map((project) => (
                   <option key={project.id} value={project.id}>{project.title}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Rôle proposé">
+            <Field label={t("profile.proposedRole")}>
               <select className="cm-input" value={role} onChange={(event) => setRole(event.target.value)}>
                 {["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"].map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Message d'invitation">
-              <textarea className="cm-textarea" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Explique le rôle attendu, le rythme et les prochaines étapes." />
+            <Field label={t("profile.invitationMessage")}>
+              <textarea className="cm-textarea" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t("profile.invitationPlaceholder")} />
             </Field>
           </>
         )}
 
         {(type === "follow" || type === "friend") && (
           <p className="text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
-            Cette action utilise une confirmation directe, sans champ supplémentaire, conformément au workflow du document.
+            {t("profile.directConfirmText")}
           </p>
         )}
 
@@ -3281,6 +3336,7 @@ function ProfileToast({ children }: { children: ReactNode }) {
 }
 
 function DetailsModal({
+  t,
   open,
   onClose,
   title,
@@ -3294,6 +3350,7 @@ function DetailsModal({
   project,
   onEdit,
 }: {
+  t: (key: TranslationKey) => string;
   open: boolean;
   onClose: () => void;
   title: string;
@@ -3320,9 +3377,9 @@ function DetailsModal({
       width={1200}
       footer={
         <>
-          <SecondaryButton onClick={onClose}>Close</SecondaryButton>
+          <SecondaryButton onClick={onClose}>{t("profile.close")}</SecondaryButton>
           {canEdit && (
-            <PrimaryButton onClick={() => onEdit(title)} icon={<Edit3 size={16} />}>Modifier</PrimaryButton>
+            <PrimaryButton onClick={() => onEdit(title)} icon={<Edit3 size={16} />}>{t("profile.edit")}</PrimaryButton>
           )}
         </>
       }
@@ -3348,11 +3405,11 @@ function DetailsModal({
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone="info">{kind}</Chip>
             {idea?.category && <Chip>{idea.category}</Chip>}
-            {announcement?.status_sought && <Chip>Role · {announcement.status_sought}</Chip>}
+            {announcement?.status_sought && <Chip>{t("profile.role")} · {announcement.status_sought}</Chip>}
             {announcement?.language && <Chip>{announcement.language}</Chip>}
           </div>
           <h2 className="cm-sora mt-3 text-[22px] font-bold leading-8" style={{ color: "#F7FAFF" }}>
-            {title || `${kind} details`}
+            {title || `${kind} ${t("profile.detailsSuffix")}`}
           </h2>
           <p className="mt-2 text-[14px] leading-[22px]" style={{ color: "#B8C4E5" }}>
             {illustration?.description ||
@@ -3361,18 +3418,18 @@ function DetailsModal({
               option?.description ||
               project?.synopsis ||
               (isSponsorship
-                ? "Détail complet du service de parrainage."
-                : "Vue complète de cette publication.")}
+                ? t("profile.sponsorshipFullDetail")
+                : t("profile.fullPublicationView"))}
           </p>
           {isSponsorship && (
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Stat label="Format" value={option?.format ?? title} />
-              <Stat label="Plateformes" value={option?.platforms.join(" · ") || "—"} />
-              <Stat label="Durée" value={option?.duration ?? "—"} />
-              <Stat label="Paiement" value={option?.paymentMode ?? "—"} />
-              <Stat label="Prix" value={option ? `${option.price} €` : "—"} />
+              <Stat label={t("profile.format")} value={option?.format ?? title} />
+              <Stat label={t("profile.platforms")} value={option?.platforms.join(" · ") || "—"} />
+              <Stat label={t("profile.duration")} value={option?.duration ?? "—"} />
+              <Stat label={t("profile.payment")} value={option?.paymentMode ?? "—"} />
+              <Stat label={t("profile.price")} value={option ? `${option.price} €` : "—"} />
               <Stat
-                label="Chapitres"
+                label={t("profile.chapters")}
                 value={option?.chaptersMin || option?.chaptersMax ? `${option?.chaptersMin ?? 0}–${option?.chaptersMax ?? "∞"}` : "—"}
               />
             </div>
@@ -3385,11 +3442,11 @@ function DetailsModal({
           )}
           {project && (
             <div className="mt-5">
-              <MetaLabel>Genre et sous-genres</MetaLabel>
+              <MetaLabel>{t("profile.genreAndSubgenres")}</MetaLabel>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {project.genres.map((genre) => <Chip key={genre}>{genre}</Chip>)}
                 {(project.subgenres ?? []).map((subgenre) => <Chip key={subgenre} tone="info">{subgenre}</Chip>)}
-                {project.genres.length === 0 && (project.subgenres ?? []).length === 0 && <Chip>Aucun genre renseigné</Chip>}
+                {project.genres.length === 0 && (project.subgenres ?? []).length === 0 && <Chip>{t("profile.noGenreSet")}</Chip>}
               </div>
             </div>
           )}
@@ -3398,7 +3455,7 @@ function DetailsModal({
 
       {(announcement?.description || idea?.description) && (
         <div className="mt-8">
-          <SectionTitle title="Détails" subtitle="Description complète." />
+          <SectionTitle title={t("profile.detailsTitle")} subtitle={t("profile.fullDescription")} />
           <div
             className="rounded-[18px] p-5 text-[14px] leading-[22px]"
             style={{ background: "#08112B", border: "1px solid rgba(133,154,206,0.18)", color: "#B8C4E5" }}
@@ -3411,7 +3468,7 @@ function DetailsModal({
       {/* Commentaires réels, comme sur les pages Illustration / Idées */}
       {(illustration || idea) && (
         <div className="mt-8">
-          <SectionTitle title="Commentaires" subtitle="Les retours de la communauté." />
+          <SectionTitle title={t("profile.comments")} subtitle={t("profile.communityFeedback")} />
           <CommentsPanel
             entityType={illustration ? "illustration" : "idea"}
             entityId={illustration ? illustration.id : idea!.id}

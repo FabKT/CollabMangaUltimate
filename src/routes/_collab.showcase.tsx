@@ -9,6 +9,7 @@ import {
   LayoutGrid, Rows3, Columns3, Heart,
   UserPlus, ZoomIn, ZoomOut, Palette,
 } from "lucide-react";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_collab/showcase")({
   component: IllustrationsPage,
@@ -243,9 +244,17 @@ type Art = {
   imageUrl?: string; imageUrls?: string[]; description?: string; authorId?: string; avatarUrl?: string;
 };
 
+const AVAILABILITY_KEY: Record<Art["availability"], TranslationKey> = {
+  "Available now": "showcase.availableNow",
+  "Open to projects": "showcase.openToProjects",
+  Limited: "showcase.limited",
+  "Not available": "showcase.notAvailable",
+};
+
 /* ---------------- Page ---------------- */
 function IllustrationsPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [view, setView] = useState<"masonry" | "grid" | "compact">("masonry");
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [openArt, setOpenArt] = useState<Art | null>(null);
@@ -285,7 +294,7 @@ function IllustrationsPage() {
       })
       .catch((error: unknown) => {
         setRealArts([]);
-        setPageError(error instanceof Error ? error.message : "La galerie n'a pas pu être chargée.");
+        setPageError(error instanceof Error ? error.message : t("showcase.galleryLoadFailed"));
       });
   };
   useEffect(() => {
@@ -318,7 +327,7 @@ function IllustrationsPage() {
         else next.add(key);
         return next;
       });
-      setPageError(error instanceof Error ? error.message : "Le favori n'a pas pu être enregistré.");
+      setPageError(error instanceof Error ? error.message : t("showcase.favoriteFailed"));
     });
   }
 
@@ -339,9 +348,9 @@ function IllustrationsPage() {
         {/* Header */}
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 24 }}>
           <div>
-            <h1 style={{ ...sora, fontSize: 28, fontWeight: 700, lineHeight: "36px", margin: 0, color: C.text }}>Illustrations</h1>
+            <h1 style={{ ...sora, fontSize: 28, fontWeight: 700, lineHeight: "36px", margin: 0, color: C.text }}>{t("showcase.title")}</h1>
             <p style={{ ...manrope, fontSize: 14, fontWeight: 500, lineHeight: "22px", color: C.text2, margin: "8px 0 0", maxWidth: 640 }}>
-              Discover manga artists, evaluate their visual style, and invite them to collaborate on original projects.
+              {t("showcase.subtitle")}
             </p>
           </div>
         </header>
@@ -357,10 +366,10 @@ function IllustrationsPage() {
           {/* Gallery header — view switch only */}
           <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ ...manrope, fontSize: 12, color: C.muted, fontWeight: 600, marginRight: 4 }}>View</span>
-              <IconBtn active={view === "masonry"} onClick={() => setView("masonry")} title="Masonry"><Rows3 size={16} /></IconBtn>
-              <IconBtn active={view === "grid"} onClick={() => setView("grid")} title="Grid"><LayoutGrid size={16} /></IconBtn>
-              <IconBtn active={view === "compact"} onClick={() => setView("compact")} title="Compact"><Columns3 size={16} /></IconBtn>
+              <span style={{ ...manrope, fontSize: 12, color: C.muted, fontWeight: 600, marginRight: 4 }}>{t("showcase.view")}</span>
+              <IconBtn active={view === "masonry"} onClick={() => setView("masonry")} title={t("showcase.masonry")}><Rows3 size={16} /></IconBtn>
+              <IconBtn active={view === "grid"} onClick={() => setView("grid")} title={t("showcase.grid")}><LayoutGrid size={16} /></IconBtn>
+              <IconBtn active={view === "compact"} onClick={() => setView("compact")} title={t("showcase.compact")}><Columns3 size={16} /></IconBtn>
             </div>
           </div>
 
@@ -372,9 +381,9 @@ function IllustrationsPage() {
                 textAlign: "center", background: C.panel,
               }}
             >
-              <div style={{ ...sora, fontSize: 20, fontWeight: 700 }}>Aucune illustration publiée</div>
+              <div style={{ ...sora, fontSize: 20, fontWeight: 700 }}>{t("showcase.noArtworkYet")}</div>
               <p style={{ ...manrope, fontSize: 14, color: C.text2, marginTop: 8 }}>
-                La galerie se remplit à mesure que les artistes publient. Publie la première depuis le bouton « Upload Artwork ».
+                {t("showcase.noArtworkYetText")}
               </p>
             </div>
           ) : (
@@ -393,6 +402,7 @@ function IllustrationsPage() {
                   key={a.id} art={a} masonry={view === "masonry"} compact={view === "compact"}
                   liked={saved.has(a.title)} onLike={() => toggleSave(a)}
                   onOpen={() => setOpenArt(a)}
+                  t={t}
                 />
               ))}
             </div>
@@ -411,15 +421,16 @@ function IllustrationsPage() {
             if (openArt.authorId) {
               void startConversationWith(openArt.authorId)
                 .then((conversation) => navigate({ to: "/messages", search: { conversation } }))
-                .catch((error: unknown) => setPageError(error instanceof Error ? error.message : "La conversation n'a pas pu être ouverte."));
-            } else setPageError("Cette illustration n'est pas reliée à un profil utilisateur.");
+                .catch((error: unknown) => setPageError(error instanceof Error ? error.message : t("showcase.conversationFailed")));
+            } else setPageError(t("showcase.noProfileLinked"));
           }}
           saved={saved.has(openArt.title)}
           onSave={() => toggleSave(openArt)}
           onOpenArt={(a) => setOpenArt(a)}
+          t={t}
         />
       )}
-      {invite && <RealInviteModal art={invite} onClose={() => setInvite(null)} />}
+      {invite && <RealInviteModal art={invite} onClose={() => setInvite(null)} t={t} />}
 
       {/* Responsive */}
       <style>{`
@@ -441,10 +452,10 @@ function IllustrationsPage() {
 
 /* ---------------- Card ---------------- */
 function ArtCard({
-  art, masonry, compact, liked, onLike, onOpen,
+  art, masonry, compact, liked, onLike, onOpen, t,
 }: {
   art: Art; masonry?: boolean; compact?: boolean; liked: boolean;
-  onLike: () => void; onOpen: () => void;
+  onLike: () => void; onOpen: () => void; t: (key: TranslationKey) => string;
 }) {
   return (
     <div
@@ -493,13 +504,13 @@ function ArtCard({
           {/* view details + like + comment */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1 }}>
-              <Btn variant="secondary" size="sm" full onClick={onOpen}>View Details</Btn>
+              <Btn variant="secondary" size="sm" full onClick={onOpen}>{t("showcase.viewDetails")}</Btn>
             </div>
             <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", gap: 8 }}>
-              <IconBtn title={liked ? "Unlike" : "Like"} active={liked} onClick={onLike}>
+              <IconBtn title={liked ? t("showcase.unlike") : t("showcase.like")} active={liked} onClick={onLike}>
                 <Heart size={15} fill={liked ? C.neon : "none"} />
               </IconBtn>
-              <IconBtn title="Comment" onClick={onOpen}><MessageSquare size={15} /></IconBtn>
+              <IconBtn title={t("showcase.comment")} onClick={onOpen}><MessageSquare size={15} /></IconBtn>
             </span>
           </div>
         </div>
@@ -550,10 +561,11 @@ function ModalHeader({ title, onClose, subtitle }: { title: string; subtitle?: s
 
 /* ---------------- Detail Modal ---------------- */
 function DetailModal({
-  art, works = [], onClose, onInvite, onContact, saved, onSave, onOpenArt,
+  art, works = [], onClose, onInvite, onContact, saved, onSave, onOpenArt, t,
 }: {
   art: Art; works?: Art[]; onClose: () => void; onInvite: () => void; onContact: () => void;
   saved: boolean; onSave: () => void; onOpenArt?: (a: Art) => void;
+  t: (key: TranslationKey) => string;
 }) {
   const [tab, setTab] = useState<"profile" | "comments">("profile");
   const [activeImage, setActiveImage] = useState(0);
@@ -565,12 +577,12 @@ function DetailModal({
         {/* Left: viewer */}
         <div style={{ background: C.stage, padding: 24, display: "flex", flexDirection: "column", gap: 16, position: "relative", minHeight: 520 }}>
           <div style={{ position: "absolute", top: 16, left: 16, display: "flex", gap: 8, zIndex: 2 }}>
-            <IconBtn title="Previous" onClick={() => setActiveImage((index) => (index - 1 + images.length) % Math.max(images.length, 1))}><ChevronLeft size={16} /></IconBtn>
-            <IconBtn title="Next" onClick={() => setActiveImage((index) => (index + 1) % Math.max(images.length, 1))}><ChevronRight size={16} /></IconBtn>
+            <IconBtn title={t("showcase.previous")} onClick={() => setActiveImage((index) => (index - 1 + images.length) % Math.max(images.length, 1))}><ChevronLeft size={16} /></IconBtn>
+            <IconBtn title={t("showcase.next")} onClick={() => setActiveImage((index) => (index + 1) % Math.max(images.length, 1))}><ChevronRight size={16} /></IconBtn>
           </div>
           <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 8, zIndex: 2 }}>
-            <IconBtn title="Zoom out"><ZoomOut size={16} /></IconBtn>
-            <IconBtn title="Zoom in"><ZoomIn size={16} /></IconBtn>
+            <IconBtn title={t("showcase.zoomOut")}><ZoomOut size={16} /></IconBtn>
+            <IconBtn title={t("showcase.zoomIn")}><ZoomIn size={16} /></IconBtn>
           </div>
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
             <div style={{ width: "100%", maxWidth: 560 }}>
@@ -599,10 +611,10 @@ function DetailModal({
               <h2 style={{ ...sora, fontSize: 18, fontWeight: 800, lineHeight: "26px", margin: 0 }}>{art.title}</h2>
               <div style={{ ...manrope, fontSize: 12, color: C.muted, marginTop: 3 }}>{art.type}</div>
             </div>
-            <IconBtn title="Close" onClick={onClose}><X size={16} /></IconBtn>
+            <IconBtn title={t("showcase.close")} onClick={onClose}><X size={16} /></IconBtn>
           </div>
 
-          <div className="cm-popup-tabs" role="tablist" aria-label="Détails de l'illustration" style={{ width: "100%" }}>
+          <div className="cm-popup-tabs" role="tablist" aria-label={t("showcase.detailsAria")} style={{ width: "100%" }}>
             <button
               type="button"
               role="tab"
@@ -612,7 +624,7 @@ function DetailModal({
               className="cm-popup-tab"
               style={{ flex: 1 }}
             >
-              Profil
+              {t("showcase.profile")}
             </button>
             <button
               type="button"
@@ -623,7 +635,7 @@ function DetailModal({
               className="cm-popup-tab"
               style={{ flex: 1 }}
             >
-              Commentaires
+              {t("showcase.comments")}
             </button>
           </div>
 
@@ -642,30 +654,30 @@ function DetailModal({
               }}>{art.artist.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}</div>}
               <div>
                 <div style={{ ...manrope, fontSize: 14, fontWeight: 800, color: C.text }}>{art.artist}</div>
-                <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginTop: 2 }}>Artist</div>
+                <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginTop: 2 }}>{t("showcase.artist")}</div>
               </div>
             </div>
-            <Chip tone={art.availability === "Available now" ? "neon" : "info"}>{art.availability}</Chip>
+            <Chip tone={art.availability === "Available now" ? "neon" : "info"}>{t(AVAILABILITY_KEY[art.availability])}</Chip>
           </div>
 
           {/* Actions */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <Btn variant="primary" icon={<UserPlus size={16} />} onClick={onInvite}>Invite to Project</Btn>
-            <Btn variant="secondary" icon={<MessageSquare size={16} />} onClick={onContact}>Contact Artist</Btn>
+            <Btn variant="primary" icon={<UserPlus size={16} />} onClick={onInvite}>{t("showcase.inviteToProject")}</Btn>
+            <Btn variant="secondary" icon={<MessageSquare size={16} />} onClick={onContact}>{t("showcase.contactArtist")}</Btn>
             <Btn variant="ghost" icon={saved ? <BookmarkCheck size={16} color={C.neon} /> : <Bookmark size={16} />} onClick={onSave}>
-              {saved ? "Saved" : "Save Artwork"}
+              {saved ? t("showcase.saved") : t("showcase.saveArtwork")}
             </Btn>
           </div>
 
-          <Section title="Artwork description">
+          <Section title={t("showcase.artworkDescription")}>
             <p style={{ ...manrope, fontSize: 14, color: C.text2, lineHeight: "22px", margin: 0 }}>
-              {art.description || "Aucune description fournie."}
+              {art.description || t("showcase.noDescription")}
             </p>
           </Section>
 
-          <Section title="More from this artist">
+          <Section title={t("showcase.moreFromArtist")}>
             {works.length === 0 ? (
-              <p style={{ ...manrope, fontSize: 13, color: C.muted, margin: 0 }}>Aucune autre illustration de cet artiste pour l'instant.</p>
+              <p style={{ ...manrope, fontSize: 13, color: C.muted, margin: 0 }}>{t("showcase.noMoreFromArtist")}</p>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                 {works.slice(0, 8).map((w) => (
@@ -682,7 +694,7 @@ function DetailModal({
           </Section>
             </>
           ) : (
-            <Section title="Commentaires">
+            <Section title={t("showcase.comments")}>
               <CommentsPanel entityType="illustration" entityId={art.id} />
             </Section>
           )}
@@ -702,7 +714,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 
-function RealInviteModal({ art, onClose }: { art: Art; onClose: () => void }) {
+function RealInviteModal({ art, onClose, t }: { art: Art; onClose: () => void; t: (key: TranslationKey) => string }) {
   const [projects, setProjects] = useState<Array<{ id: string; title: string }>>([]);
   const [projectId, setProjectId] = useState("");
   const [role, setRole] = useState(ROLES[0]);
@@ -717,20 +729,20 @@ function RealInviteModal({ art, onClose }: { art: Art; onClose: () => void }) {
         setProjectId(rows[0]?.id ?? "");
       })
       .catch((loadError: unknown) =>
-        setError(loadError instanceof Error ? loadError.message : "Les projets n'ont pas pu être chargés."),
+        setError(loadError instanceof Error ? loadError.message : t("showcase.projectsLoadFailed")),
       );
-  }, []);
+  }, [t]);
 
   const submit = async () => {
-    if (!art.authorId) return setError("Ce profil artiste n'est pas relié à un compte utilisateur.");
-    if (!projectId) return setError("Sélectionne d'abord un projet.");
+    if (!art.authorId) return setError(t("showcase.noAuthorProfile"));
+    if (!projectId) return setError(t("showcase.selectProjectFirst"));
     setSending(true);
     setError(null);
     try {
       await sendProjectInvitationDb({ projectId, recipient: art.authorId, role, message: message.trim() || undefined });
       onClose();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "L'invitation n'a pas pu être envoyée.");
+      setError(submitError instanceof Error ? submitError.message : t("showcase.invitationFailed"));
     } finally {
       setSending(false);
     }
@@ -738,26 +750,26 @@ function RealInviteModal({ art, onClose }: { art: Art; onClose: () => void }) {
 
   return (
     <ModalShell onClose={onClose} width={640}>
-      <ModalHeader title="Inviter au projet" subtitle={`Envoyer une invitation à ${art.artist}`} onClose={onClose} />
+      <ModalHeader title={t("showcase.inviteToProject")} subtitle={`${t("showcase.inviteSubtitle")} ${art.artist}`} onClose={onClose} />
       <div style={{ padding: 24, display: "grid", gap: 18, overflowY: "auto" }}>
-        <Field label="Projet manga">
+        <Field label={t("showcase.projectLabel")}>
           <select
             value={projectId}
             onChange={(event) => setProjectId(event.target.value)}
             style={{ width: "100%", minHeight: 44, borderRadius: 12, border: `1px solid ${C.borderStrong}`, background: C.input, color: C.text, padding: "0 12px", fontSize: 14 }}
           >
-            <option value="">Sélectionner un projet</option>
+            <option value="">{t("showcase.selectProject")}</option>
             {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
           </select>
         </Field>
-        <Field label="Rôle proposé"><Select value={role} onChange={setRole} options={ROLES} /></Field>
-        <Field label="Message"><Textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Présente le projet et le rôle attendu." /></Field>
-        {projects.length === 0 && !error && <p style={{ margin: 0, color: C.warning, fontSize: 13 }}>Crée d'abord un projet pour envoyer une invitation.</p>}
+        <Field label={t("showcase.roleLabel")}><Select value={role} onChange={setRole} options={ROLES} /></Field>
+        <Field label={t("showcase.messageLabel")}><Textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t("showcase.invitePlaceholder")} /></Field>
+        {projects.length === 0 && !error && <p style={{ margin: 0, color: C.warning, fontSize: 13 }}>{t("showcase.createProjectFirst")}</p>}
         {error && <p style={{ margin: 0, color: C.danger, fontSize: 13, fontWeight: 700 }}>{error}</p>}
       </div>
       <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Btn variant="secondary" onClick={onClose}>Annuler</Btn>
-        <Btn variant="primary" icon={<Send size={16} />} onClick={() => void submit()}>{sending ? "Envoi…" : "Envoyer l'invitation"}</Btn>
+        <Btn variant="secondary" onClick={onClose}>{t("showcase.cancel")}</Btn>
+        <Btn variant="primary" icon={<Send size={16} />} onClick={() => void submit()}>{sending ? t("showcase.sending") : t("showcase.sendInvitation")}</Btn>
       </div>
     </ModalShell>
   );
