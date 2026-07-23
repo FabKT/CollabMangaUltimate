@@ -23,14 +23,13 @@ if (supabaseUrl && supabaseKey) {
   const defaultStorageKey = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
   const legacyTabStorageKeyName = "collabmanga.supabase.tab-storage-key";
   const stableSessionKey = "collabmanga.supabase.auth-session";
+  const persistentSessionKey = "collabmanga.supabase.persistent-auth-session";
   // Supabase uses storageKey for its cross-tab channel. It must be fresh on
   // every page load because browsers clone sessionStorage when a tab is
-  // duplicated. The adapter below maps this volatile key to a stable key
-  // inside the current tab so reloads still preserve that tab's session.
+  // duplicated. Each tab keeps an independent session, while localStorage
+  // preserves the most recently authenticated session for future visits.
   const tabStorageKey =
-    typeof window === "undefined"
-      ? defaultStorageKey
-      : `collabmanga-auth-${crypto.randomUUID()}`;
+    typeof window === "undefined" ? defaultStorageKey : `collabmanga-auth-${crypto.randomUUID()}`;
 
   const storage =
     typeof window === "undefined"
@@ -50,9 +49,11 @@ if (supabaseUrl && supabaseKey) {
             const sharedSession =
               (legacyKey ? window.sessionStorage.getItem(legacyKey) : null) ??
               window.sessionStorage.getItem(key) ??
+              window.localStorage.getItem(persistentSessionKey) ??
               (key === tabStorageKey ? window.localStorage.getItem(defaultStorageKey) : null);
             if (sharedSession !== null) {
               window.sessionStorage.setItem(stableKey, sharedSession);
+              window.localStorage.setItem(persistentSessionKey, sharedSession);
               if (legacyKey) window.sessionStorage.removeItem(legacyKey);
               window.sessionStorage.removeItem(key);
               if (key === tabStorageKey) window.localStorage.removeItem(defaultStorageKey);
@@ -62,9 +63,11 @@ if (supabaseUrl && supabaseKey) {
           },
           setItem(key: string, value: string) {
             window.sessionStorage.setItem(key.replace(tabStorageKey, stableSessionKey), value);
+            window.localStorage.setItem(persistentSessionKey, value);
           },
           removeItem(key: string) {
             window.sessionStorage.removeItem(key.replace(tabStorageKey, stableSessionKey));
+            window.localStorage.removeItem(persistentSessionKey);
           },
         };
 
@@ -72,6 +75,7 @@ if (supabaseUrl && supabaseKey) {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: true,
       storageKey: tabStorageKey,
       storage,
     },
