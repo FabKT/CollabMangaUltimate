@@ -24,6 +24,8 @@ export type SponsorOption = {
   projectId?: string;
   ownerAvatarUrl?: string | null;
   ownerBannerUrl?: string | null;
+  /** Couverture du projet à l'origine de l'option (mode "project"). */
+  projectCoverUrl?: string | null;
 };
 
 const LEGACY_KEY = "collabmanga.sponsorOptions.v1";
@@ -88,22 +90,49 @@ export async function listSponsorOptions(
     window.localStorage.setItem(LEGACY_OWNER_KEY, userId);
     return listSponsorOptions(ownerId);
   }
-  return (data ?? [])
-    .map((row) => {
-      const owner = row.owner as {
-        display_name?: string | null;
-        username?: string | null;
-        avatar_url?: string | null;
-        banner_url?: string | null;
-      } | null;
-      return {
-        ...(row.data as SponsorOption),
-        ownerId: row.owner_id,
-        ownerName: owner?.display_name || owner?.username || (row.data as SponsorOption).ownerName,
-        ownerAvatarUrl: owner?.avatar_url ?? null,
-        ownerBannerUrl: owner?.banner_url ?? null,
-      };
-    });
+  const mapped = (data ?? []).map((row) => {
+    const owner = row.owner as {
+      display_name?: string | null;
+      username?: string | null;
+      avatar_url?: string | null;
+      banner_url?: string | null;
+    } | null;
+    return {
+      ...(row.data as SponsorOption),
+      ownerId: row.owner_id,
+      ownerName: owner?.display_name || owner?.username || (row.data as SponsorOption).ownerName,
+      ownerAvatarUrl: owner?.avatar_url ?? null,
+      ownerBannerUrl: owner?.banner_url ?? null,
+    };
+  });
+
+  // Récupère la couverture des projets pour les annonces "project" publiées avant
+  // que la couverture ne soit stockée sur l'option (rétro-compatibilité).
+  const missingCover = mapped.filter(
+    (option) => option.mode === "project" && option.projectId && !option.projectCoverUrl,
+  );
+  if (missingCover.length > 0) {
+    const projectIds = [...new Set(missingCover.map((option) => option.projectId!))];
+    const { data: projectRows } = await sb
+      .from("studio_projects")
+      .select("id, data")
+      .in("id", projectIds)
+      .eq("catalog_visible", true);
+    const coverById = new Map<string, string | null>();
+    for (const row of (projectRows ?? []) as Array<{
+      id: string;
+      data: { coverDataUrl?: string | null } | null;
+    }>) {
+      coverById.set(row.id, row.data?.coverDataUrl ?? null);
+    }
+    for (const option of mapped) {
+      if (option.mode === "project" && option.projectId && !option.projectCoverUrl) {
+        option.projectCoverUrl = coverById.get(option.projectId) ?? null;
+      }
+    }
+  }
+
+  return mapped;
 }
 
 async function persistOption(option: SponsorOption, userId: string) {

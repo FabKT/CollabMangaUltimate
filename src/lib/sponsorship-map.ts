@@ -17,12 +17,17 @@ export type StudioSponsorshipLike = {
   paymentMode: string;
 };
 
-export function announcementFromStudioSponsorship(s: StudioSponsorshipLike, ownerName: string): Announcement {
+export function announcementFromStudioSponsorship(
+  s: StudioSponsorshipLike,
+  ownerName: string,
+  coverUrl?: string | null,
+): Announcement {
   return {
     id: s.id,
     mode: "project",
     title: s.title,
     ownerName,
+    coverUrl: coverUrl ?? null,
     category: "",
     shortDescription: s.description || s.title,
     fullDescription: s.description || s.title,
@@ -68,6 +73,7 @@ export function announcementFromOption(o: SponsorOption): Announcement {
     projectId: o.projectId,
     ownerAvatarUrl: o.ownerAvatarUrl,
     ownerBannerUrl: o.ownerBannerUrl,
+    coverUrl: o.projectCoverUrl ?? null,
     category: "",
     shortDescription: o.description || o.format,
     fullDescription: o.description || o.format,

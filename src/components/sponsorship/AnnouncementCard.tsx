@@ -46,7 +46,7 @@ export function AnnouncementCard({
       {a.mode === "creator" ? (
         <CreatorHero announcement={a} />
       ) : (
-        <Thumb accent={a.accent} label={a.category || a.sponsorshipType} className="aspect-video" platforms={a.platforms} />
+        <Thumb accent={a.accent} label={a.category || a.sponsorshipType} className="aspect-video" platforms={a.platforms} imageUrl={a.coverUrl} />
       )}
 
       <div className="flex flex-1 flex-col gap-4 p-5">

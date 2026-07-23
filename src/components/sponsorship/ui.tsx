@@ -145,25 +145,42 @@ export function Thumb({
   label,
   className,
   platforms,
+  imageUrl,
 }: {
   accent: string;
   label: string;
   className?: string;
   platforms?: Platform[];
+  /** Si fourni (ex. couverture d'un projet), affiche l'image au lieu du dégradé + libellé. */
+  imageUrl?: string | null;
 }) {
   return (
     <div
       className={cn("relative w-full overflow-hidden bg-cm-details", className)}
-      style={{
-        background: `radial-gradient(120% 120% at 15% 10%, color-mix(in oklab, ${accent} 22%, transparent), transparent 55%), linear-gradient(135deg, #0a1330, #060d22)`,
-      }}
+      style={
+        imageUrl
+          ? undefined
+          : {
+              background: `radial-gradient(120% 120% at 15% 10%, color-mix(in oklab, ${accent} 22%, transparent), transparent 55%), linear-gradient(135deg, #0a1330, #060d22)`,
+            }
+      }
       aria-hidden
     >
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="font-sora text-[13px] font-extrabold uppercase tracking-[0.14em] text-cm-muted">
-          {label}
-        </span>
-      </div>
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="font-sora text-[13px] font-extrabold uppercase tracking-[0.14em] text-cm-muted">
+            {label}
+          </span>
+        </div>
+      )}
       {platforms && platforms.length > 0 && (
         <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">
           {platforms.slice(0, 3).map((p) => (

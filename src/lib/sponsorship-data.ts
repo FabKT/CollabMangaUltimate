@@ -32,6 +32,8 @@ export interface Announcement {
   projectId?: string;
   ownerAvatarUrl?: string | null;
   ownerBannerUrl?: string | null;
+  /** Couverture du projet à l'origine de l'annonce (annonces mode "project"). */
+  coverUrl?: string | null;
   category: string;
   shortDescription: string;
   fullDescription: string;

@@ -94,6 +94,7 @@ export function DetailDialog({
                       label="Projet"
                       className="h-40 rounded-[18px]"
                       platforms={a.platforms}
+                      imageUrl={a.coverUrl}
                     />
                   )}
                   <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.06em] text-cm-muted">

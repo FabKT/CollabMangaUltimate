@@ -775,6 +775,7 @@ function ProjectWorkspace({
                   description: sponsorship.description,
                   ownerName: project.title,
                   projectId: project.id,
+                  projectCoverUrl: project.coverDataUrl ?? null,
                 });
                 updateProject((p) => ({
                   ...p,
@@ -1742,7 +1743,7 @@ function ParrainageTab({
 
       {detail && (
         <DetailDialog
-          announcement={announcementFromStudioSponsorship(detail, project.title)}
+          announcement={announcementFromStudioSponsorship(detail, project.title, project.coverDataUrl ?? null)}
           hideActions
           onOpenChange={(o) => { if (!o) setDetail(null); }}
           onContact={() => {}}
