@@ -10,8 +10,14 @@ import {
 } from "@/lib/stripe-server";
 import { PLANS, TERMS_VERSION, isPlanId, type PlanId } from "@/lib/billing-plans";
 
+function databaseError(context: string, error: { message: string } | null): void {
+  if (error) throw new Error(`${context}: ${error.message}`);
+}
+
 /** Vérifie le jeton d'accès Supabase envoyé par le client et renvoie l'utilisateur. */
-async function requireUser(accessToken: string): Promise<{ id: string; email: string | undefined }> {
+async function requireUser(
+  accessToken: string,
+): Promise<{ id: string; email: string | undefined }> {
   const sb = getServiceSupabase();
   const { data, error } = await sb.auth.getUser(accessToken);
   if (error || !data.user) throw new Error("Session invalide : reconnecte-toi.");
@@ -21,14 +27,25 @@ async function requireUser(accessToken: string): Promise<{ id: string; email: st
 async function ensureCustomer(userId: string, email: string | undefined): Promise<string> {
   const sb = getServiceSupabase();
   const stripe = getStripe();
-  const { data: sub } = await sb.from("subscriptions").select("stripe_customer_id").eq("user_id", userId).maybeSingle();
+  const { data: sub, error: readError } = await sb
+    .from("subscriptions")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  databaseError("Lecture du client de facturation impossible", readError);
   if (sub?.stripe_customer_id) return sub.stripe_customer_id;
 
   const customer = await stripe.customers.create({ email, metadata: { user_id: userId } });
-  await sb.from("subscriptions").upsert(
-    { user_id: userId, stripe_customer_id: customer.id, status: "incomplete", updated_at: new Date().toISOString() },
+  const { error: writeError } = await sb.from("subscriptions").upsert(
+    {
+      user_id: userId,
+      stripe_customer_id: customer.id,
+      status: "incomplete",
+      updated_at: new Date().toISOString(),
+    },
     { onConflict: "user_id" },
   );
+  databaseError("Enregistrement du client de facturation impossible", writeError);
   return customer.id;
 }
 
@@ -65,18 +82,31 @@ export const startCheckout = createServerFn({ method: "POST" })
     const customerId = await ensureCustomer(user.id, user.email);
 
     // État actuel : décide entre premier abonnement, montée immédiate ou baisse programmée.
-    const { data: sub } = await sb
+    const { data: sub, error: subscriptionReadError } = await sb
       .from("subscriptions")
       .select("id, plan, status, stripe_subscription_id")
       .eq("user_id", user.id)
       .maybeSingle();
+    databaseError("Lecture de l'abonnement impossible", subscriptionReadError);
 
     const hasActive = sub?.status === "active" && sub?.stripe_subscription_id;
     const currentPlan = sub?.plan as PlanId | undefined;
+    if (sub?.stripe_subscription_id && (sub.status === "past_due" || sub.status === "incomplete")) {
+      throw new Error(
+        "Un paiement est en attente ou a échoué. Ouvre Billing pour régulariser cet abonnement avant d'en créer un autre.",
+      );
+    }
+    if (hasActive && currentPlan === plan) {
+      throw new Error("Ce plan est déjà actif.");
+    }
 
     // Consentement enregistré avant tout paiement (§26).
-    const consentType = !hasActive ? "initial" : PLANS[plan].amountCents > PLANS[currentPlan ?? "starter"].amountCents ? "upgrade" : "downgrade";
-    await sb.from("billing_consents").insert({
+    const consentType = !hasActive
+      ? "initial"
+      : PLANS[plan].amountCents > PLANS[currentPlan ?? "starter"].amountCents
+        ? "upgrade"
+        : "downgrade";
+    const { error: consentError } = await sb.from("billing_consents").insert({
       user_id: user.id,
       consent_type: consentType,
       plan,
@@ -84,15 +114,18 @@ export const startCheckout = createServerFn({ method: "POST" })
       terms_text: consentText(plan, consentType),
       ip: data.ip ?? null,
     });
+    databaseError("Enregistrement du consentement impossible", consentError);
 
     // Montée en gamme immédiate : facturation complète tout de suite, cycle réinitialisé (§9-§13).
     if (hasActive && consentType === "upgrade" && sub?.stripe_subscription_id) {
       const subscription = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
       const itemId = subscription.items.data[0]?.id;
+      if (!itemId) throw new Error("L'abonnement Stripe ne contient aucun produit.");
       await stripe.subscriptions.update(sub.stripe_subscription_id, {
         items: [{ id: itemId, price: priceIdForPlan(plan) }],
         proration_behavior: "none",
         billing_cycle_anchor: "now",
+        payment_behavior: "error_if_incomplete",
         metadata: { user_id: user.id },
       });
       return { mode: "immediate" as const, url: `${base}/ai/plan?upgraded=1` };
@@ -102,12 +135,20 @@ export const startCheckout = createServerFn({ method: "POST" })
     if (hasActive && consentType === "downgrade" && sub?.stripe_subscription_id) {
       const subscription = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
       const itemId = subscription.items.data[0]?.id;
+      if (!itemId) throw new Error("L'abonnement Stripe ne contient aucun produit.");
       await stripe.subscriptions.update(sub.stripe_subscription_id, {
         items: [{ id: itemId, price: priceIdForPlan(plan) }],
         proration_behavior: "none",
         metadata: { user_id: user.id },
       });
-      await sb.from("subscriptions").update({ scheduled_downgrade_plan: plan, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+      const { error: scheduleError } = await sb
+        .from("subscriptions")
+        .update({
+          scheduled_downgrade_plan: plan,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+      databaseError("Enregistrement de la baisse de gamme impossible", scheduleError);
       return { mode: "scheduled" as const, url: `${base}/ai/plan?downgrade=1` };
     }
 
@@ -135,13 +176,19 @@ export const getMyBilling = createServerFn({ method: "POST" })
     const user = await requireUser(data.accessToken);
     const sb = getServiceSupabase();
 
-    const { data: sub } = await sb.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle();
-    const { data: period } = await sb
+    const { data: sub, error: subError } = await sb
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    databaseError("Lecture de l'abonnement impossible", subError);
+    const { data: period, error: periodError } = await sb
       .from("subscription_periods")
       .select("*")
       .eq("user_id", user.id)
       .eq("tech_status", "active")
       .maybeSingle();
+    databaseError("Lecture du quota impossible", periodError);
 
     const quota = period?.quota_initial ?? 0;
     const used = period?.credits_used ?? 0;
@@ -179,11 +226,46 @@ export const cancelMySubscription = createServerFn({ method: "POST" })
     const user = await requireUser(data.accessToken);
     const sb = getServiceSupabase();
     const stripe = getStripe();
-    const { data: sub } = await sb.from("subscriptions").select("stripe_subscription_id").eq("user_id", user.id).maybeSingle();
+    const { data: sub, error: readError } = await sb
+      .from("subscriptions")
+      .select("stripe_subscription_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    databaseError("Lecture de l'abonnement impossible", readError);
     if (!sub?.stripe_subscription_id) throw new Error("Aucun abonnement actif.");
     await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
-    await sb.from("subscriptions").update({ cancel_at_period_end: true, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+    const { error: updateError } = await sb
+      .from("subscriptions")
+      .update({
+        cancel_at_period_end: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+    databaseError("Mise à jour de l'abonnement impossible", updateError);
     return { ok: true };
+  });
+
+/** Ouvre le portail Stripe sécurisé pour les factures et moyens de paiement. */
+export const openBillingPortal = createServerFn({ method: "POST" })
+  .validator((data: unknown) => tokenSchema.extend({ origin: z.string().optional() }).parse(data))
+  .handler(async ({ data }) => {
+    if (!isStripeConfigured()) throw new Error("Stripe n'est pas configuré.");
+    const user = await requireUser(data.accessToken);
+    const sb = getServiceSupabase();
+    const { data: sub, error } = await sb
+      .from("subscriptions")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    databaseError("Lecture du compte de facturation impossible", error);
+    if (!sub?.stripe_customer_id) {
+      throw new Error("Aucun compte de facturation n'est encore associé à ce profil.");
+    }
+    const session = await getStripe().billingPortal.sessions.create({
+      customer: sub.stripe_customer_id,
+      return_url: `${returnBase(data.origin)}/ai/plan`,
+    });
+    return { url: session.url };
   });
 
 function consentText(plan: PlanId, type: "initial" | "upgrade" | "downgrade"): string {

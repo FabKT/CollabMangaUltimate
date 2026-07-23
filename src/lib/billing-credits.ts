@@ -126,13 +126,16 @@ export async function withCredits<
   try {
     const result = await run();
     const produced = result?.imageUrl || result?.imageDataUrl ? 1 : 0;
-    await sb.rpc("settle_credits", {
+    const settled = await sb.rpc("settle_credits", {
       p_generation_id: generationId,
       p_images_produced: produced,
       p_openai_cost_cents: produced * estimatedImageCostCents(),
       p_openai_request_id: null,
       p_usage_data: result?.model ? { model: result.model } : {},
     });
+    if (settled.error) {
+      throw new Error(`Impossible de finaliser le crédit: ${settled.error.message}`);
+    }
     if (produced === 0)
       return {
         ok: false,
@@ -143,7 +146,12 @@ export async function withCredits<
     return { ok: true, result };
   } catch (error) {
     // Échec → restitution du crédit réservé.
-    await sb.rpc("release_credits", { p_generation_id: generationId });
+    const released = await sb.rpc("release_credits", { p_generation_id: generationId });
+    if (released.error) {
+      throw new Error(
+        `${errorMessage(error, "Échec de génération")}. Restitution du crédit impossible: ${released.error.message}`,
+      );
+    }
     throw error;
   }
 }

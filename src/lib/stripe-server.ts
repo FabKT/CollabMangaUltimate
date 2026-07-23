@@ -19,6 +19,10 @@ import Stripe from "stripe";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PLANS, type PlanId, type PlanConfig } from "./billing-plans";
 
+function databaseError(context: string, error: { message: string } | null): void {
+  if (error) throw new Error(`${context}: ${error.message}`);
+}
+
 function env(name: string): string | undefined {
   if (typeof process !== "undefined" && process.env[name]) return process.env[name];
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
@@ -190,17 +194,25 @@ async function onCheckoutCompleted(
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
   const subscriptionId =
     typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+  const subscription = subscriptionId ? await stripe.subscriptions.retrieve(subscriptionId) : null;
+  const status =
+    subscription?.status === "active" || subscription?.status === "trialing"
+      ? "active"
+      : subscription?.status === "past_due"
+        ? "past_due"
+        : "incomplete";
 
-  await sb.from("subscriptions").upsert(
+  const { error } = await sb.from("subscriptions").upsert(
     {
       user_id: userId,
       stripe_customer_id: customerId,
       stripe_subscription_id: subscriptionId,
-      status: "active",
+      status,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
   );
+  databaseError("Enregistrement de l'abonnement Checkout impossible", error);
   // Le quota est attribué par invoice.paid (paiement réellement confirmé, §4).
 }
 
@@ -249,11 +261,12 @@ async function onInvoicePaid(
   if (!userId) throw new Error("Impossible d'associer la facture à un utilisateur.");
 
   // Plan courant AVANT mise à jour → sert à déterminer le motif de clôture.
-  const { data: before } = await sb
+  const { data: before, error: beforeError } = await sb
     .from("subscriptions")
     .select("id, plan")
     .eq("user_id", userId)
     .maybeSingle();
+  databaseError("Lecture de l'abonnement avant paiement impossible", beforeError);
   const previousPlan = before?.plan as PlanId | undefined;
   let closeReason: "renewal" | "upgrade" | "downgrade" = "renewal";
   if (previousPlan && previousPlan !== plan.id) {
@@ -262,7 +275,7 @@ async function onInvoicePaid(
   }
 
   // Enregistre / met à jour la ligne d'abonnement (purge un éventuel downgrade programmé désormais appliqué).
-  await sb.from("subscriptions").upsert(
+  const { error: subscriptionError } = await sb.from("subscriptions").upsert(
     {
       user_id: userId,
       stripe_customer_id: customerId,
@@ -275,11 +288,13 @@ async function onInvoicePaid(
     },
     { onConflict: "user_id" },
   );
-  const { data: subRow } = await sb
+  databaseError("Mise à jour de l'abonnement payé impossible", subscriptionError);
+  const { data: subRow, error: subRowError } = await sb
     .from("subscriptions")
     .select("id")
     .eq("user_id", userId)
     .single();
+  databaseError("Lecture de l'abonnement payé impossible", subRowError);
 
   const line = invoice.lines?.data?.[0];
   const periodEndUnix = line?.period?.end ?? subEndUnix(subscription);
@@ -287,7 +302,7 @@ async function onInvoicePaid(
     (periodEndUnix ?? Math.floor(Date.now() / 1000) + 30 * 86400) * 1000,
   ).toISOString();
 
-  const { data: newPeriodId } = await sb.rpc("open_paid_period", {
+  const { data: newPeriodId, error: periodError } = await sb.rpc("open_paid_period", {
     p_user_id: userId,
     p_subscription_id: subRow?.id ?? null,
     p_plan: plan.id,
@@ -298,14 +313,17 @@ async function onInvoicePaid(
     p_invoice_id: invoice.id,
     p_close_reason: closeReason,
   });
+  databaseError("Attribution du quota payé impossible", periodError);
+  if (!newPeriodId) throw new Error("Attribution du quota payé sans identifiant de période.");
 
   // Frais Stripe réels de cette facture → injectés dans la période (marge exacte).
   const feeCents = await stripeFeeForInvoice(stripe, invoice);
   if (newPeriodId && feeCents > 0) {
-    await sb
+    const { error: feeError } = await sb
       .from("subscription_periods")
       .update({ stripe_fees_cents: feeCents })
       .eq("id", newPeriodId);
+    databaseError("Enregistrement des frais Stripe impossible", feeError);
   }
 }
 
@@ -340,17 +358,18 @@ async function onInvoiceFailed(sb: SupabaseClient, invoice: Stripe.Invoice): Pro
   const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
   if (!customerId) return;
   // Aucun quota, aucune période : on marque seulement l'abonnement en impayé (§7/§8).
-  await sb
+  const { error } = await sb
     .from("subscriptions")
     .update({ status: "past_due", updated_at: new Date().toISOString() })
     .eq("stripe_customer_id", customerId);
+  databaseError("Mise à jour de l'impayé impossible", error);
 }
 
 async function onSubscriptionUpdated(
   sb: SupabaseClient,
   subscription: Stripe.Subscription,
 ): Promise<void> {
-  await sb
+  const { error } = await sb
     .from("subscriptions")
     .update({
       cancel_at_period_end: subscription.cancel_at_period_end ?? false,
@@ -359,25 +378,31 @@ async function onSubscriptionUpdated(
           ? "active"
           : subscription.status === "past_due"
             ? "past_due"
-            : "canceled",
+            : subscription.status === "canceled" ||
+                subscription.status === "unpaid" ||
+                subscription.status === "incomplete_expired"
+              ? "canceled"
+              : "incomplete",
       updated_at: new Date().toISOString(),
     })
     .eq("stripe_subscription_id", subscription.id);
+  databaseError("Synchronisation de l'abonnement impossible", error);
 }
 
 async function onSubscriptionDeleted(
   sb: SupabaseClient,
   subscription: Stripe.Subscription,
 ): Promise<void> {
-  await sb
+  const { error } = await sb
     .from("subscriptions")
     .update({ status: "canceled", updated_at: new Date().toISOString() })
     .eq("stripe_subscription_id", subscription.id);
+  databaseError("Enregistrement de la résiliation impossible", error);
 }
 
 async function onDispute(sb: SupabaseClient, dispute: Stripe.Dispute): Promise<void> {
   const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
-  await sb.from("billing_disputes").upsert(
+  const { error } = await sb.from("billing_disputes").upsert(
     {
       stripe_dispute_id: dispute.id,
       stripe_charge_id: chargeId,
@@ -388,14 +413,16 @@ async function onDispute(sb: SupabaseClient, dispute: Stripe.Dispute): Promise<v
     },
     { onConflict: "stripe_dispute_id" },
   );
+  databaseError("Enregistrement du litige impossible", error);
 }
 
 async function userIdForCustomer(sb: SupabaseClient, customerId: string): Promise<string | null> {
-  const { data } = await sb
+  const { data, error } = await sb
     .from("subscriptions")
     .select("user_id")
     .eq("stripe_customer_id", customerId)
     .single();
+  databaseError("Association du client Stripe impossible", error);
   return data?.user_id ?? null;
 }
 

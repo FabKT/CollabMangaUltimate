@@ -4,7 +4,12 @@ import { PageHeader, Panel, Card, SectionTitle, Chip } from "@/components/cma/La
 import { Check, Sparkles, Receipt, X, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { PLANS, PLAN_ORDER, type PlanId } from "@/lib/billing-plans";
-import { startCheckout, getMyBilling, cancelMySubscription } from "@/server-functions/stripe-billing";
+import {
+  startCheckout,
+  getMyBilling,
+  cancelMySubscription,
+  openBillingPortal,
+} from "@/server-functions/stripe-billing";
 
 export const Route = createFileRoute("/ai/plan")({
   head: () => ({ meta: [{ title: "Plan & Images — CollabManga AI" }] }),
@@ -61,30 +66,40 @@ function PlanImages() {
   // Bannière selon le retour de Stripe (redirections Checkout).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("success")) setNotice("Paiement confirmé — ton quota sera crédité dès la confirmation Stripe (quelques secondes).");
-    else if (params.get("upgraded")) setNotice("Montée en gamme effectuée : ton nouveau quota est disponible.");
-    else if (params.get("downgrade")) setNotice("Baisse de gamme programmée : elle prendra effet au prochain renouvellement.");
-    else if (params.get("canceled")) setNotice("Paiement annulé — aucun changement n'a été appliqué.");
+    if (params.get("success"))
+      setNotice(
+        "Paiement confirmé — ton quota sera crédité dès la confirmation Stripe (quelques secondes).",
+      );
+    else if (params.get("upgraded"))
+      setNotice("Montée en gamme effectuée : ton nouveau quota est disponible.");
+    else if (params.get("downgrade"))
+      setNotice("Baisse de gamme programmée : elle prendra effet au prochain renouvellement.");
+    else if (params.get("canceled"))
+      setNotice("Paiement annulé — aucun changement n'a été appliqué.");
     if (params.toString()) window.history.replaceState({}, "", "/ai/plan");
   }, []);
 
-  const currentPlan = (billing?.configured && billing.subscription?.plan) || null;
+  const subscription = billing?.configured ? billing.subscription : null;
+  const currentPlan = subscription?.status === "active" ? subscription.plan : null;
   const period = billing?.configured ? billing.period : null;
 
   // Attend que le webhook ait appliqué le nouveau plan (montée en gamme immédiate).
-  const pollUntilPlan = async (target: PlanId) => {
+  const pollUntilPlan = async (target: PlanId): Promise<boolean> => {
     const token = await accessToken();
-    if (!token) return;
+    if (!token) return false;
     for (let i = 0; i < 12; i++) {
       await new Promise((r) => setTimeout(r, 1200));
       try {
         const res = await getMyBilling({ data: { accessToken: token } });
         setBilling(res);
-        if (res.configured && res.subscription?.plan === target) return;
+        if (res.configured && res.subscription?.plan === target && res.period?.plan === target) {
+          return true;
+        }
       } catch {
         /* on continue */
       }
     }
+    return false;
   };
 
   const startPlan = async (plan: PlanId) => {
@@ -97,7 +112,9 @@ function PlanImages() {
         setBusy(false);
         return;
       }
-      const res = await startCheckout({ data: { plan, accessToken: token, origin: window.location.origin } });
+      const res = await startCheckout({
+        data: { plan, accessToken: token, origin: window.location.origin },
+      });
       if (res.mode === "checkout" && res.url) {
         window.location.href = res.url;
         return;
@@ -106,8 +123,12 @@ function PlanImages() {
         // Montée en gamme : la carte enregistrée a été débitée. On attend le webhook.
         setConfirmPlan(null);
         setNotice("Paiement en cours de traitement…");
-        await pollUntilPlan(plan);
-        setNotice(`Plan mis à jour : ${PLANS[plan].label} — ${PLANS[plan].quota} crédits disponibles.`);
+        const confirmed = await pollUntilPlan(plan);
+        setNotice(
+          confirmed
+            ? `Plan mis à jour : ${PLANS[plan].label} — ${PLANS[plan].quota} crédits disponibles.`
+            : "Le paiement est encore en cours de confirmation. Aucun nouveau crédit ne sera utilisable avant la confirmation Stripe.",
+        );
       } else {
         setConfirmPlan(null);
         setNotice("Baisse de gamme programmée : elle prendra effet au prochain renouvellement.");
@@ -134,11 +155,30 @@ function PlanImages() {
       const token = await accessToken();
       if (token) {
         await cancelMySubscription({ data: { accessToken: token } });
-        setNotice("Renouvellement annulé : ton accès reste actif jusqu'à la fin de la période payée.");
+        setNotice(
+          "Renouvellement annulé : ton accès reste actif jusqu'à la fin de la période payée.",
+        );
         refresh();
       }
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Échec de l'annulation.");
+    }
+    setBusy(false);
+  };
+
+  const openPortal = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const token = await accessToken();
+      if (!token) throw new Error("Connecte-toi pour gérer ta facturation.");
+      const { url } = await openBillingPortal({
+        data: { accessToken: token, origin: window.location.origin },
+      });
+      window.location.href = url;
+      return;
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Impossible d'ouvrir la facturation.");
     }
     setBusy(false);
   };
@@ -156,84 +196,192 @@ function PlanImages() {
         description="Gère ton abonnement CollabManga AI et ton quota d'images générées."
         actions={
           <>
-            <button className="cma-btn-secondary"><Receipt size={16} /> Billing</button>
+            <button
+              className="cma-btn-secondary"
+              onClick={() => void openPortal()}
+              disabled={busy || !subscription}
+            >
+              <Receipt size={16} /> Billing
+            </button>
             {currentPlan && !billing?.subscription?.cancelAtPeriodEnd && (
-              <button className="cma-btn-secondary" onClick={() => setConfirmCancel(true)} disabled={busy}>Annuler le renouvellement</button>
+              <button
+                className="cma-btn-secondary"
+                onClick={() => setConfirmCancel(true)}
+                disabled={busy}
+              >
+                Annuler le renouvellement
+              </button>
             )}
           </>
         }
       />
 
       {notice && (
-        <div className="mb-6 rounded-[14px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.35)", color: "var(--neon)" }}>
+        <div
+          className="mb-6 rounded-[14px] px-4 py-3 text-[13px] font-semibold"
+          style={{
+            background: "rgba(57,255,136,0.10)",
+            border: "1px solid rgba(57,255,136,0.35)",
+            color: "var(--neon)",
+          }}
+        >
           {notice}
         </div>
       )}
 
       {billing && !billing.configured && (
-        <div className="mb-6 rounded-[14px] px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(255,184,77,0.10)", border: "1px solid rgba(255,184,77,0.35)", color: "var(--warning)" }}>
+        <div
+          className="mb-6 rounded-[14px] px-4 py-3 text-[13px] font-semibold"
+          style={{
+            background: "rgba(255,184,77,0.10)",
+            border: "1px solid rgba(255,184,77,0.35)",
+            color: "var(--warning)",
+          }}
+        >
           Paiements pas encore activés : les clés Stripe doivent être configurées côté serveur.
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)] gap-6 mb-6">
         <Panel>
-          <SectionTitle right={currentPlan ? <span className="cma-chip cma-chip-active">Active</span> : undefined}>Current plan</SectionTitle>
+          <SectionTitle
+            right={
+              currentPlan && period ? (
+                <span className="cma-chip cma-chip-active">Active</span>
+              ) : undefined
+            }
+          >
+            Current plan
+          </SectionTitle>
           {loading ? (
-            <div className="text-[13px]" style={{ color: "var(--text-muted)" }}>Chargement…</div>
+            <div className="text-[13px]" style={{ color: "var(--text-muted)" }}>
+              Chargement…
+            </div>
           ) : currentPlan ? (
             <>
               <div className="flex items-end justify-between flex-wrap gap-4">
                 <div>
-                  <div className="text-[12px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Plan</div>
-                  <div style={{ font: "700 28px/36px var(--font-display)" }}>{PLANS[currentPlan].label}</div>
+                  <div
+                    className="text-[12px] uppercase tracking-wider"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Plan
+                  </div>
+                  <div style={{ font: "700 28px/36px var(--font-display)" }}>
+                    {PLANS[currentPlan].label}
+                  </div>
                   <div className="text-[13px] mt-1" style={{ color: "var(--text-secondary)" }}>
                     {PLANS[currentPlan].quota} images incluses par mois
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[12px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Price</div>
-                  <div style={{ font: "700 28px/36px var(--font-display)" }}>{PLANS[currentPlan].priceEuros.toFixed(2)} €<span className="text-[13px]" style={{ color: "var(--text-muted)" }}> / mois</span></div>
+                  <div
+                    className="text-[12px] uppercase tracking-wider"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Price
+                  </div>
+                  <div style={{ font: "700 28px/36px var(--font-display)" }}>
+                    {PLANS[currentPlan].priceEuros.toFixed(2)} €
+                    <span className="text-[13px]" style={{ color: "var(--text-muted)" }}>
+                      {" "}
+                      / mois
+                    </span>
+                  </div>
                 </div>
               </div>
               <div className="mt-6">
-                <div className="flex items-center justify-between text-[13px]" style={{ color: "var(--text-secondary)" }}>
+                <div
+                  className="flex items-center justify-between text-[13px]"
+                  style={{ color: "var(--text-secondary)" }}
+                >
                   <span>Crédits restants cette période</span>
-                  <span><strong style={{ color: "var(--text-primary)" }}>{period?.remaining ?? PLANS[currentPlan].quota}</strong> / {period?.quota ?? PLANS[currentPlan].quota}</span>
+                  <span>
+                    <strong style={{ color: "var(--text-primary)" }}>
+                      {period?.remaining ?? 0}
+                    </strong>{" "}
+                    / {period?.quota ?? PLANS[currentPlan].quota}
+                  </span>
                 </div>
-                <div className="mt-2" style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.06)" }}>
-                  <div style={{ width: `${remainingPct}%`, height: "100%", borderRadius: 999, background: "var(--neon)", boxShadow: "0 0 10px rgba(57,255,136,0.5)" }} />
+                <div
+                  className="mt-2"
+                  style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.06)" }}
+                >
+                  <div
+                    style={{
+                      width: `${remainingPct}%`,
+                      height: "100%",
+                      borderRadius: 999,
+                      background: "var(--neon)",
+                      boxShadow: "0 0 10px rgba(57,255,136,0.5)",
+                    }}
+                  />
                 </div>
                 {period && (
-                  <div className="mt-2 flex items-center justify-between text-[12px]" style={{ color: "var(--text-muted)" }}>
-                    <span>{period.used} générée{period.used > 1 ? "s" : ""}</span>
-                    <span>Renouvellement : {new Date(period.renewalAt).toLocaleDateString("fr-FR")}</span>
+                  <div
+                    className="mt-2 flex items-center justify-between text-[12px]"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    <span>
+                      {period.used} générée{period.used > 1 ? "s" : ""}
+                    </span>
+                    <span>
+                      Renouvellement : {new Date(period.renewalAt).toLocaleDateString("fr-FR")}
+                    </span>
                   </div>
                 )}
                 {billing?.subscription?.cancelAtPeriodEnd && (
-                  <div className="mt-2 text-[12px] font-semibold" style={{ color: "var(--warning)" }}>
+                  <div
+                    className="mt-2 text-[12px] font-semibold"
+                    style={{ color: "var(--warning)" }}
+                  >
                     Renouvellement annulé — accès jusqu'à la fin de la période.
                   </div>
                 )}
                 {billing?.subscription?.scheduledDowngrade && (
-                  <div className="mt-1 text-[12px] font-semibold" style={{ color: "var(--text-muted)" }}>
-                    Passage à {PLANS[billing.subscription.scheduledDowngrade].label} au prochain renouvellement.
+                  <div
+                    className="mt-1 text-[12px] font-semibold"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Passage à {PLANS[billing.subscription.scheduledDowngrade].label} au prochain
+                    renouvellement.
+                  </div>
+                )}
+                {!period && (
+                  <div
+                    className="mt-2 text-[12px] font-semibold"
+                    style={{ color: "var(--warning)" }}
+                  >
+                    Paiement en cours de confirmation : aucun crédit n'est encore disponible.
                   </div>
                 )}
               </div>
             </>
           ) : (
             <div className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
-              Aucun abonnement actif. Choisis un plan ci-dessous pour commencer à générer des images.
+              {subscription?.status === "past_due" || subscription?.status === "incomplete"
+                ? "Un paiement est en attente ou a échoué. Ouvre Billing pour le régulariser."
+                : "Aucun abonnement actif. Choisis un plan ci-dessous pour commencer à générer des images."}
             </div>
           )}
         </Panel>
 
         <Panel>
           <SectionTitle>Ce qui consomme une image</SectionTitle>
-          <ul className="flex flex-col gap-2 text-[13px]" style={{ color: "var(--text-secondary)" }}>
-            {["Génération d'une planche manga", "Génération d'une carte de personnage", "Variante de transfert de style", "Finalisation Raw to Final", "Génération de décor"].map((t) => (
-              <li key={t} className="flex items-center gap-2"><Check size={14} color="var(--neon)" /> {t}</li>
+          <ul
+            className="flex flex-col gap-2 text-[13px]"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            {[
+              "Génération d'une planche manga",
+              "Génération d'une carte de personnage",
+              "Variante de transfert de style",
+              "Finalisation Raw to Final",
+              "Génération de décor",
+            ].map((t) => (
+              <li key={t} className="flex items-center gap-2">
+                <Check size={14} color="var(--neon)" /> {t}
+              </li>
             ))}
           </ul>
         </Panel>
@@ -248,26 +396,59 @@ function PlanImages() {
           return (
             <Card key={id} padding={24} selected={featured}>
               <div className="flex items-center justify-between">
-                <div className="text-[12px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{PLAN_TAGLINE[id]}</div>
+                <div
+                  className="text-[12px] uppercase tracking-wider"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {PLAN_TAGLINE[id]}
+                </div>
                 {isCurrent && <Chip active>Current</Chip>}
               </div>
-              <div className="mt-2" style={{ font: "700 22px/28px var(--font-display)" }}>{p.label}</div>
-              <div className="mt-4 flex items-baseline gap-2">
-                <span style={{ font: "700 32px/36px var(--font-display)", color: "var(--text-primary)" }}>{p.priceEuros.toFixed(2)} €</span>
-                <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>/ mois</span>
+              <div className="mt-2" style={{ font: "700 22px/28px var(--font-display)" }}>
+                {p.label}
               </div>
-              <div className="text-[13px] mt-1 font-bold" style={{ color: "var(--neon)" }}>{p.quota} images / mois</div>
-              <ul className="mt-5 flex flex-col gap-2 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+              <div className="mt-4 flex items-baseline gap-2">
+                <span
+                  style={{
+                    font: "700 32px/36px var(--font-display)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {p.priceEuros.toFixed(2)} €
+                </span>
+                <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>
+                  / mois
+                </span>
+              </div>
+              <div className="text-[13px] mt-1 font-bold" style={{ color: "var(--neon)" }}>
+                {p.quota} images / mois
+              </div>
+              <ul
+                className="mt-5 flex flex-col gap-2 text-[13px]"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 {PLAN_FEATURES[id].map((f) => (
-                  <li key={f} className="flex items-center gap-2"><Check size={14} color="var(--neon)" /> {f}</li>
+                  <li key={f} className="flex items-center gap-2">
+                    <Check size={14} color="var(--neon)" /> {f}
+                  </li>
                 ))}
               </ul>
               <button
-                className={featured ? "cma-btn-primary w-full justify-center mt-6" : "cma-btn-secondary w-full justify-center mt-6"}
+                className={
+                  featured
+                    ? "cma-btn-primary w-full justify-center mt-6"
+                    : "cma-btn-secondary w-full justify-center mt-6"
+                }
                 disabled={busy || isCurrent}
                 onClick={() => onChoose(id)}
               >
-                {isCurrent ? "Plan actuel" : currentPlan ? (PLANS[id].amountCents > PLANS[currentPlan].amountCents ? "Passer à ce plan" : "Rétrograder") : "Choisir ce plan"}
+                {isCurrent
+                  ? "Plan actuel"
+                  : currentPlan
+                    ? PLANS[id].amountCents > PLANS[currentPlan].amountCents
+                      ? "Passer à ce plan"
+                      : "Rétrograder"
+                    : "Choisir ce plan"}
               </button>
             </Card>
           );
@@ -276,8 +457,14 @@ function PlanImages() {
 
       <Panel>
         <SectionTitle>Billing history</SectionTitle>
-        <div className="grid grid-cols-[1fr_140px_140px_120px] gap-4 px-1 pb-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-default)" }}>
-          <div>Description</div><div>Date</div><div>Amount</div><div className="text-right">Invoice</div>
+        <div
+          className="grid grid-cols-[1fr_140px_140px_120px] gap-4 px-1 pb-3 text-[12px] font-bold uppercase tracking-wider"
+          style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-default)" }}
+        >
+          <div>Description</div>
+          <div>Date</div>
+          <div>Amount</div>
+          <div className="text-right">Invoice</div>
         </div>
         <div className="px-1 py-4 text-[13px]" style={{ color: "var(--text-secondary)" }}>
           L'historique de facturation détaillé apparaîtra ici après tes paiements.
@@ -314,21 +501,54 @@ function PlanImages() {
 }
 
 function ConfirmDialog({
-  title, message, confirmLabel, busy, onCancel, onConfirm,
+  title,
+  message,
+  confirmLabel,
+  busy,
+  onCancel,
+  onConfirm,
 }: {
-  title: string; message: string; confirmLabel: string; busy: boolean; onCancel: () => void; onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={onCancel}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[480px] rounded-[22px] p-6" style={{ background: "var(--panel, #0B1430)", border: "1px solid var(--border-strong, rgba(133,154,206,0.28))" }}>
+    <div
+      className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[480px] rounded-[22px] p-6"
+        style={{
+          background: "var(--panel, #0B1430)",
+          border: "1px solid var(--border-strong, rgba(133,154,206,0.28))",
+        }}
+      >
         <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2"><AlertTriangle size={18} color="var(--warning)" /><h3 className="text-[18px] font-bold">{title}</h3></div>
-          <button onClick={onCancel} aria-label="Fermer" style={{ color: "var(--text-muted)" }}><X size={18} /></button>
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} color="var(--warning)" />
+            <h3 className="text-[18px] font-bold">{title}</h3>
+          </div>
+          <button onClick={onCancel} aria-label="Fermer" style={{ color: "var(--text-muted)" }}>
+            <X size={18} />
+          </button>
         </div>
-        <p className="text-[14px] leading-[22px]" style={{ color: "var(--text-secondary)" }}>{message}</p>
+        <p className="text-[14px] leading-[22px]" style={{ color: "var(--text-secondary)" }}>
+          {message}
+        </p>
         <div className="mt-6 flex items-center justify-end gap-2">
-          <button className="cma-btn-secondary" onClick={onCancel} disabled={busy}>Retour</button>
-          <button className="cma-btn-primary" onClick={onConfirm} disabled={busy}>{busy ? "Traitement…" : confirmLabel}</button>
+          <button className="cma-btn-secondary" onClick={onCancel} disabled={busy}>
+            Retour
+          </button>
+          <button className="cma-btn-primary" onClick={onConfirm} disabled={busy}>
+            {busy ? "Traitement…" : confirmLabel}
+          </button>
         </div>
       </div>
     </div>
@@ -336,34 +556,75 @@ function ConfirmDialog({
 }
 
 function UpgradeConfirm({
-  from, to, remaining, busy, onCancel, onConfirm,
+  from,
+  to,
+  remaining,
+  busy,
+  onCancel,
+  onConfirm,
 }: {
-  from: PlanId; to: PlanId; remaining: number; busy: boolean; onCancel: () => void; onConfirm: () => void;
+  from: PlanId;
+  to: PlanId;
+  remaining: number;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
   const p = PLANS[to];
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={onCancel}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[520px] rounded-[22px] p-6" style={{ background: "var(--panel, #0B1430)", border: "1px solid var(--border-strong, rgba(133,154,206,0.28))" }}>
+    <div
+      className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[520px] rounded-[22px] p-6"
+        style={{
+          background: "var(--panel, #0B1430)",
+          border: "1px solid var(--border-strong, rgba(133,154,206,0.28))",
+        }}
+      >
         <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2"><AlertTriangle size={18} color="var(--warning)" /><h3 className="text-[18px] font-bold">Confirmer la montée en gamme</h3></div>
-          <button onClick={onCancel} aria-label="Fermer" style={{ color: "var(--text-muted)" }}><X size={18} /></button>
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} color="var(--warning)" />
+            <h3 className="text-[18px] font-bold">Confirmer la montée en gamme</h3>
+          </div>
+          <button onClick={onCancel} aria-label="Fermer" style={{ color: "var(--text-muted)" }}>
+            <X size={18} />
+          </button>
         </div>
         <p className="text-[14px] leading-[22px]" style={{ color: "var(--text-secondary)" }}>
-          Vous disposez actuellement de <strong style={{ color: "var(--text-primary)" }}>{remaining} crédits {PLANS[from].label}</strong>.
-          En passant immédiatement au plan <strong style={{ color: "var(--text-primary)" }}>{p.label}</strong>, ces {remaining} crédits expireront.
-          Vous paierez <strong style={{ color: "var(--text-primary)" }}>{p.priceEuros.toFixed(2)} €</strong> aujourd'hui et recevrez
-          immédiatement <strong style={{ color: "var(--text-primary)" }}>{p.quota} crédits</strong>.
-          Votre abonnement sera ensuite renouvelé chaque mois à la date d'aujourd'hui au tarif de {p.priceEuros.toFixed(2)} €.
+          Vous disposez actuellement de{" "}
+          <strong style={{ color: "var(--text-primary)" }}>
+            {remaining} crédits {PLANS[from].label}
+          </strong>
+          . En passant immédiatement au plan{" "}
+          <strong style={{ color: "var(--text-primary)" }}>{p.label}</strong>, ces {remaining}{" "}
+          crédits expireront. Vous paierez{" "}
+          <strong style={{ color: "var(--text-primary)" }}>{p.priceEuros.toFixed(2)} €</strong>{" "}
+          aujourd'hui et recevrez immédiatement{" "}
+          <strong style={{ color: "var(--text-primary)" }}>{p.quota} crédits</strong>. Votre
+          abonnement sera ensuite renouvelé chaque mois à la date d'aujourd'hui au tarif de{" "}
+          {p.priceEuros.toFixed(2)} €.
         </p>
-        <ul className="mt-4 flex flex-col gap-1.5 text-[13px]" style={{ color: "var(--text-muted)" }}>
+        <ul
+          className="mt-4 flex flex-col gap-1.5 text-[13px]"
+          style={{ color: "var(--text-muted)" }}
+        >
           <li>• Débit immédiat sur ta carte enregistrée (pas de nouvelle page de paiement).</li>
           <li>• Aucun report des crédits actuels.</li>
           <li>• Aucun remboursement de l'ancien plan.</li>
           <li>• Nouvelle date de renouvellement = aujourd'hui.</li>
         </ul>
         <div className="mt-6 flex items-center justify-end gap-2">
-          <button className="cma-btn-secondary" onClick={onCancel} disabled={busy}>Annuler</button>
-          <button className="cma-btn-primary" onClick={onConfirm} disabled={busy}>{busy ? "Traitement…" : `Payer ${p.priceEuros.toFixed(2)} €`}</button>
+          <button className="cma-btn-secondary" onClick={onCancel} disabled={busy}>
+            Annuler
+          </button>
+          <button className="cma-btn-primary" onClick={onConfirm} disabled={busy}>
+            {busy ? "Traitement…" : `Payer ${p.priceEuros.toFixed(2)} €`}
+          </button>
         </div>
       </div>
     </div>
