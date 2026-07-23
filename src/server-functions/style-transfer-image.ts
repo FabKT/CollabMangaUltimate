@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
 import { buildStylePlan } from "@/lib/ai-style-plans";
+import { fitPromptToApiLimit } from "@/lib/prompt-limit";
 
 /**
  * Style-transfer plan.
@@ -20,7 +21,7 @@ const RETRYABLE_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504, 520,
 const styleTransferInputSchema = z.object({
   baseImageDataUrl: z.string().min(1),
   styleId: z.string().default("current"),
-  styleName: z.string().default("Style actuel"),
+  styleName: z.string().default("Moderne"),
   styleDescription: z.string().default(""),
   customStyleImages: z.array(z.string()).default([]),
 });
@@ -133,6 +134,7 @@ export async function sendPulseNoteStyleTransfer(input: {
 }): Promise<StyleTransferResult> {
   const backendUrl = getBackendUrl();
   const appToken = getAppToken();
+  const boundedInput = { ...input, prompt: fitPromptToApiLimit(input.prompt) };
   if (!appToken) {
     throw new Error(
       "PULSENOTE_APP_TOKEN is not configured on the server. Add it to the deployment environment with the same value as APP_CLIENT_TOKEN in PulseNote.",
@@ -149,7 +151,7 @@ export async function sendPulseNoteStyleTransfer(input: {
           "x-app-id": "manga-forge",
           "x-app-token": appToken,
         },
-        body: JSON.stringify({ project: "manga-forge", ...input }),
+        body: JSON.stringify({ project: "manga-forge", ...boundedInput }),
         signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
       });
 
@@ -174,7 +176,7 @@ export async function sendPulseNoteStyleTransfer(input: {
       if (!imageUrl) throw new Error("PulseNote returned no restyled image.");
       return {
         imageUrl,
-        finalPrompt: payload.finalPrompt ?? input.prompt,
+        finalPrompt: payload.finalPrompt ?? boundedInput.prompt,
         model: payload.model ?? "gpt-image-2",
         size: payload.size ?? "unknown",
         createdAt: payload.createdAt ?? new Date().toISOString(),

@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message";
 import { LOCAL_MANGA_PAGE_PLAN } from "@/lib/ai-style-plans";
 import { isLocalAiServerMode } from "@/lib/local-ai-mode";
 import { buildStrictImageEditPrompt } from "@/lib/strict-image-edit-plan";
+import { fitPromptToApiLimit } from "@/lib/prompt-limit";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
@@ -339,7 +340,7 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
           hasTargetImage: Boolean(data.existingImageDataUrl),
         })
       : undefined;
-  const requestData =
+  const unboundedRequestData =
     data.operation === "edit"
       ? {
           ...data,
@@ -355,6 +356,13 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
               : data.editPrompt,
           }
         : data;
+  const requestData = {
+    ...unboundedRequestData,
+    prompt: fitPromptToApiLimit(unboundedRequestData.prompt),
+    editPrompt: unboundedRequestData.editPrompt
+      ? fitPromptToApiLimit(unboundedRequestData.editPrompt)
+      : unboundedRequestData.editPrompt,
+  };
   const body = JSON.stringify({
     project: "manga-forge",
     task: "manga_page_generation",

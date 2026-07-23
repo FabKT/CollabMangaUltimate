@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
 import { buildStylePlan } from "@/lib/ai-style-plans";
 import { isLocalAiServerMode } from "@/lib/local-ai-mode";
+import { fitPromptToApiLimit } from "@/lib/prompt-limit";
 
 /**
  * Character-card generation plan.
@@ -34,7 +35,7 @@ const characterInputSchema = z.object({
   identityImageDataUrl: z.string().min(1),
   identityReferenceName: z.string().optional(),
   styleId: z.string().default("current"),
-  styleName: z.string().default("Style actuel"),
+  styleName: z.string().default("Moderne"),
   styleDescription: z.string().default(""),
   styleImageDataUrl: z.string().optional(),
   styleReferenceImages: z.array(z.string()).default([]),
@@ -197,7 +198,7 @@ export async function requestPulseNoteCharacterImage(
     );
   }
 
-  const finalPrompt = buildCharacterCardPrompt(input);
+  const finalPrompt = fitPromptToApiLimit(buildCharacterCardPrompt(input));
   const localPlanEnabled = isLocalAiServerMode();
   const identityReferences = supportingIdentityReferences(input);
   const styleLibraryReferences = input.styleReferenceImages
@@ -220,7 +221,7 @@ export async function requestPulseNoteCharacterImage(
     body: JSON.stringify({
       project: "manga-forge",
       task: "character_card_generation",
-      prompt: localPlanEnabled ? finalPrompt : input.prompt,
+      prompt: localPlanEnabled ? finalPrompt : fitPromptToApiLimit(input.prompt),
       size: CHARACTER_IMAGE_SIZE,
       aspectRatio: "3:2",
       identityImageDataUrl: input.identityImageDataUrl,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
+import { fitPromptToApiLimit } from "@/lib/prompt-limit";
 
 /**
  * Decor / background generation plan.
@@ -25,7 +26,7 @@ const referenceSchema = z.object({
 const decorInputSchema = z.object({
   prompt: z.string().min(1),
   styleId: z.string().default("current"),
-  styleName: z.string().default("Style actuel"),
+  styleName: z.string().default("Moderne"),
   styleDescription: z.string().default(""),
   styleImageDataUrl: z.string().optional(),
   references: z.array(referenceSchema).default([]),
@@ -125,7 +126,7 @@ export async function requestPulseNoteDecorImage(
     );
   }
 
-  const finalPrompt = buildDecorPrompt(input);
+  const finalPrompt = fitPromptToApiLimit(buildDecorPrompt(input));
   const referenceImages = input.references
     .map((reference) => reference.imageDataUrl)
     .filter((url): url is string => Boolean(url));

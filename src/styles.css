@@ -198,14 +198,33 @@
     height: 10px;
   }
   ::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(6, 13, 36, 0.72);
+    border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(133, 154, 206, 0.18);
+    background: rgba(57, 255, 136, 0.28);
+    border: 2px solid rgba(6, 13, 36, 0.72);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(133, 154, 206, 0.3);
+    background: rgba(57, 255, 136, 0.48);
+  }
+  * {
+    scrollbar-color: rgba(57, 255, 136, 0.32) rgba(6, 13, 36, 0.72);
+  }
+}
+
+/* Navigation remains horizontal/top-based on phones and tablets, including
+   large tablets reporting a desktop-like CSS width. */
+@media (hover: none) and (pointer: coarse) {
+  .cm-desktop-sidebar {
+    display: none !important;
+  }
+  .cm-mobile-nav-bar {
+    display: flex !important;
+  }
+  .cm-mobile-nav-overlay {
+    display: block !important;
   }
 }
 

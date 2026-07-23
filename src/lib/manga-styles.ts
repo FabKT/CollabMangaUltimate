@@ -21,7 +21,7 @@ export type MangaStyle = {
 export const MANGA_STYLES: MangaStyle[] = [
   {
     id: "current",
-    name: "Style actuel",
+    name: "Moderne",
     description: "Shonen moderne : encrage net, trames dynamiques, N&B contrasté.",
     samplePrompt:
       "Full-body manga character turnaround, modern shonen manga style, clean crisp inking, dynamic screentones, high contrast black and white, expressive face, detailed hair, plain white background.",

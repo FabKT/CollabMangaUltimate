@@ -92,9 +92,9 @@ export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   return (
     <aside
-      className={`${forceVisible ? "flex" : "hidden md:flex"} flex-col shrink-0 sticky top-0 h-screen`}
+      className={`${forceVisible ? "flex" : "cm-desktop-sidebar hidden xl:flex"} flex-col shrink-0 overflow-hidden ${forceVisible ? "relative max-h-[calc(100dvh-24px)]" : "sticky top-0 h-screen"}`}
       style={{
-        width: 248,
+        width: forceVisible ? "100%" : 248,
         background: "var(--bg-sidebar)",
         borderRight: "1px solid rgba(133,154,206,0.16)",
         padding: "14px 10px",

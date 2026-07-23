@@ -2970,7 +2970,13 @@ function ChapterWorkspace({
               style={{ height: "min(72vh, 760px)" }}
             >
               {activeCand?.image ? (
-                <img src={activeCand.image} alt={`Page ${page.number}`} className="max-h-full max-w-full object-contain" />
+                <img
+                  src={activeCand.image}
+                  alt={`Page ${page.number}`}
+                  className="max-h-full max-w-full object-contain"
+                  decoding="async"
+                  fetchPriority="high"
+                />
               ) : page.validatedCandidateId ? (
                 <div className="flex flex-col items-center gap-3 text-center">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--neon-border)] bg-[var(--neon-soft)]"><Check className="h-6 w-6 text-[var(--neon)]" /></div>
@@ -3020,7 +3026,13 @@ function ChapterWorkspace({
                         </div>
                       ) : c.image ? (
                         <>
-                          <img src={c.image} alt={`${t("studio.candidate")} ${idx + 1}`} className="h-full w-full object-cover" />
+                          <img
+                            src={c.image}
+                            alt={`${t("studio.candidate")} ${idx + 1}`}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
                           {validated && <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-[var(--neon-soft)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--neon)]"><Check className="h-3 w-3" /> {t("studio.final")}</span>}
                         </>
                       ) : (
@@ -3146,6 +3158,20 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
   const prev = () => setIdx(i => Math.max(0, i - 1));
   const next = () => setIdx(i => Math.min(pages.length - 1, i + 1));
 
+  useEffect(() => {
+    for (const targetIndex of [idx, idx + 1]) {
+      const targetPage = pages[targetIndex];
+      const source = targetPage?.candidates.find(
+        (candidate) => candidate.id === targetPage.validatedCandidateId,
+      )?.image;
+      if (!source) continue;
+      const preload = new Image();
+      preload.decoding = "async";
+      preload.src = source;
+      void preload.decode().catch(() => undefined);
+    }
+  }, [idx, pages]);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/80 p-0 backdrop-blur-sm sm:p-6" onClick={onClose} role="dialog" aria-modal="true">
       <div
@@ -3162,7 +3188,13 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
 
         <div className="flex flex-1 items-center justify-center overflow-hidden bg-[var(--stage)] p-4">
           {validated?.image ? (
-            <img src={validated.image} alt={`Page ${page.number}`} className="max-h-full max-w-full object-contain" />
+            <img
+              src={validated.image}
+              alt={`Page ${page.number}`}
+              className="max-h-full max-w-full object-contain"
+              decoding="async"
+              fetchPriority="high"
+            />
           ) : (
             <div className="flex flex-col items-center gap-3 px-6 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--elevated)]"><FileImage className="h-6 w-6 text-[var(--text-muted)]" /></div>

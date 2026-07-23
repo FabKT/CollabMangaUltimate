@@ -18,7 +18,7 @@ import { buildStylePlan } from "@/lib/ai-style-plans";
 const plancheTransferInputSchema = z.object({
   baseImageDataUrl: z.string().min(1),
   styleId: z.string().default("current"),
-  styleName: z.string().default("Style actuel"),
+  styleName: z.string().default("Moderne"),
   styleDescription: z.string().default(""),
   customStyleImages: z.array(z.string()).default([]),
 });

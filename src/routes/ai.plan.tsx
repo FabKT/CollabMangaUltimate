@@ -20,11 +20,21 @@ export const Route = createFileRoute("/ai/plan")({
 type BillingState = Awaited<ReturnType<typeof getMyBilling>>;
 
 function planFeatures(t: (key: TranslationKey) => string): Record<PlanId, string[]> {
-  const perMonth = t("ai.imagesPerMonth");
+  const allFeatures = [
+    "Manga Page Creator",
+    t("nav.characterCreate"),
+    t("nav.styleTransfer"),
+    t("nav.rawFinal"),
+    t("nav.swap"),
+    t("nav.freeStudio"),
+    t("nav.imageEdit"),
+    t("nav.characterLibrary"),
+    t("nav.history"),
+  ];
   return {
-    starter: [`${PLANS.starter.quota} ${perMonth}`, "Manga Page Creator", "Character Studio", t("ai.assetLibrary")],
-    creator: [`${PLANS.creator.quota} ${perMonth}`, t("ai.priorityGeneration"), "Raw to Final", t("ai.styleTransfer")],
-    studio: [`${PLANS.studio.quota} ${perMonth}`, t("ai.maxPriority"), t("ai.advancedConsistency"), t("ai.teamLibrary")],
+    starter: allFeatures,
+    creator: allFeatures,
+    studio: allFeatures,
   };
 }
 const PLAN_TAGLINE_KEYS: Record<PlanId, TranslationKey> = {

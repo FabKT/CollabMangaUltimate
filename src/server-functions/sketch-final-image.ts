@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
+import { fitPromptToApiLimit } from "@/lib/prompt-limit";
 
 /**
  * Sketch-to-final plan.
@@ -27,7 +28,7 @@ const sketchFinalInputSchema = z
     sketchImageDataUrl: z.string().optional(),
     styleImageDataUrl: z.string().min(1),
     styleId: z.string().default("current"),
-    styleName: z.string().default("Style actuel"),
+    styleName: z.string().default("Moderne"),
     styleDescription: z.string().default(""),
     elementReferences: z.array(sketchReferenceSchema).default([]),
     references: z.array(sketchReferenceSchema).default([]),
@@ -283,7 +284,7 @@ export async function requestPulseNoteSketchFinal(
     );
   }
 
-  const finalPrompt = buildSketchFinalPrompt(input);
+  const finalPrompt = fitPromptToApiLimit(buildSketchFinalPrompt(input));
   const sketchImageDataUrl = input.sketchImageDataUrl || input.baseImageDataUrl;
   const references = [...input.elementReferences, ...input.references];
 

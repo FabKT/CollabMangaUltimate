@@ -160,9 +160,9 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
 
   return (
     <aside
-      className={`${forceVisible ? "flex" : "hidden md:flex"} flex-col shrink-0 sticky top-0 h-screen`}
+      className={`${forceVisible ? "flex" : "cm-desktop-sidebar hidden xl:flex"} flex-col shrink-0 overflow-hidden ${forceVisible ? "relative max-h-[calc(100dvh-24px)]" : "sticky top-0 h-screen"}`}
       style={{
-        width: 248,
+        width: forceVisible ? "100%" : 248,
         background: "var(--bg-sidebar)",
         borderRight: "1px solid rgba(133,154,206,0.16)",
         padding: "14px 10px",
@@ -263,7 +263,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto -mr-1 pr-1">
+      <nav className={`flex-1 overflow-y-auto -mr-1 pr-1 ${forceVisible ? "pt-2" : ""}`}>
         {renderedGroups.map((g, i) => (
           <div key={i} style={{ marginTop: i === 0 ? 0 : 14 }}>
             {g.title && (
