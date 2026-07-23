@@ -25,7 +25,7 @@ import {
   updateStudioProjectMember,
 } from "@/lib/studio-projects";
 import { addAnnouncement, sendProjectInvitationDb, updateAnnouncement } from "@/lib/db";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   formatMoney as formatSponsorshipMoney,
   STATUS_META as SPONSORSHIP_STATUS_META,
@@ -341,6 +341,7 @@ function ProgressBar({ value }: { value: number }) {
 /* ---------- Cover placeholder ---------- */
 
 function CoverPlaceholder({ title, className = "" }: { title: string; className?: string }) {
+  const { t } = useI18n();
   const initials = title.split(" ").map(w => w[0]).slice(0, 2).join("");
   return (
     <div className={`relative flex items-center justify-center overflow-hidden rounded-[14px] border border-[var(--border-default)] bg-gradient-to-br from-[#0E1736] via-[#0B1430] to-[#050B1D] ${className}`}>
@@ -348,7 +349,7 @@ function CoverPlaceholder({ title, className = "" }: { title: string; className?
       <div className="absolute inset-6 rounded-[8px] border border-dashed border-[var(--border-default)]" />
       <div className="relative z-10 flex flex-col items-center gap-2 px-3 text-center">
         <div className="font-display text-[28px] font-bold text-[var(--text-primary)]">{initials}</div>
-        <div className="tiny-meta text-[var(--text-muted)]">Cover pending</div>
+        <div className="tiny-meta text-[var(--text-muted)]">{t("mangaDetail.coverPending")}</div>
       </div>
       <div className="absolute right-2 top-2 rounded-md bg-black/40 px-1.5 py-0.5 tiny-meta text-[var(--text-muted)]">3:4</div>
     </div>
@@ -380,6 +381,7 @@ function PageHeader({
 /* ---------- STATE 1: Project selection ---------- */
 
 function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[]; onOpen: (id: string) => void; onCreate: () => void }) {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const [sortAscending, setSortAscending] = useState(true);
 
@@ -396,15 +398,15 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Mes projets"
-        description="Select a manga project, continue production, or create a new workspace."
-        actions={<PrimaryButton icon={Plus} onClick={onCreate}>Create Project</PrimaryButton>}
+        title={t("studio.myProjects")}
+        description={t("studio.projectSelectionDesc")}
+        actions={<PrimaryButton icon={Plus} onClick={onCreate}>{t("studio.createProjectBtn")}</PrimaryButton>}
       />
 
       {/* Control bar — search + sort only */}
       <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-4 shadow-[var(--shadow-panel)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <TextInput icon={Search} value={q} onChange={setQ} placeholder="Search manga projects…" className="sm:flex-1" />
+          <TextInput icon={Search} value={q} onChange={setQ} placeholder={t("studio.searchProjects")} className="sm:flex-1" />
           <SecondaryButton icon={ArrowUpDown} className="!h-10 !px-3" onClick={() => setSortAscending((value) => !value)}>
             {sortAscending ? "A–Z" : "Z–A"}
           </SecondaryButton>
@@ -414,9 +416,9 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
       {filtered.length === 0 ? (
         <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-12 text-center shadow-[var(--shadow-panel)]">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--border-strong)] bg-[var(--elevated)]"><BookOpen className="h-6 w-6 text-[var(--neon)]" /></div>
-          <h2 className="mt-5 font-display text-[20px] font-bold">No manga projects yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-[14px] text-[var(--text-secondary)]">Create your first manga workspace to start building chapters, pages, notes, and sponsorship announcements.</p>
-          <div className="mt-6 flex justify-center"><PrimaryButton icon={Plus} onClick={onCreate}>Create Project</PrimaryButton></div>
+          <h2 className="mt-5 font-display text-[20px] font-bold">{t("studio.noProjectsYetTitle")}</h2>
+          <p className="mx-auto mt-2 max-w-md text-[14px] text-[var(--text-secondary)]">{t("studio.noProjectsYetText")}</p>
+          <div className="mt-6 flex justify-center"><PrimaryButton icon={Plus} onClick={onCreate}>{t("studio.createProjectBtn")}</PrimaryButton></div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -433,10 +435,10 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
 type CollabLevel = "chef" | "editeur" | "collaborateur";
 type Collaborator = { id: string; name: string; role: string; level: CollabLevel; isCurrentUser?: boolean };
 
-const LEVEL_LABEL: Record<CollabLevel, string> = {
-  chef: "Chef",
-  editeur: "Éditeur",
-  collaborateur: "Collaborateur",
+const LEVEL_LABEL_KEY: Record<CollabLevel, TranslationKey> = {
+  chef: "studio.levelChef",
+  editeur: "studio.levelEditeur",
+  collaborateur: "studio.levelCollaborateur",
 };
 
 const defaultCollaborators = (): Collaborator[] => [
@@ -469,6 +471,7 @@ function StarRating({ value }: { value: number }) {
 }
 
 function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="group flex flex-col overflow-hidden rounded-[22px] border border-[var(--border-default)] bg-[var(--elevated)] p-4 shadow-[var(--shadow-card)] transition-all hover:border-[var(--neon-border)] hover:shadow-[var(--shadow-neon)]">
       {project.coverDataUrl ? (
@@ -479,7 +482,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
       <h3 className="mt-4 truncate text-[15px] font-bold">{project.title}</h3>
       <div className="mt-2"><StarRating value={project.rating ?? 0} /></div>
       <div className="mt-4">
-        <PrimaryButton onClick={onOpen} className="!h-10 w-full justify-center !px-3">Open</PrimaryButton>
+        <PrimaryButton onClick={onOpen} className="!h-10 w-full justify-center !px-3">{t("studio.open")}</PrimaryButton>
       </div>
     </div>
   );
@@ -506,6 +509,7 @@ function ProjectWorkspace({
   onDeleteProject: () => void;
   onLeaveProject: () => void;
 }) {
+  const { t, locale } = useI18n();
   const [tab, setTab] = useState<ProjectTab>("Chapters");
   const isMobile = useIsMobile();
   const [modal, setModal] = useState<"chapter" | "note" | "parrainage" | "recruit" | null>(null);
@@ -513,16 +517,17 @@ function ProjectWorkspace({
   const tabsRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const level = myLevel(project);
+  const deny = (key: TranslationKey) => `${t("studio.denyPrefix")} ${t(key)}`;
   const openManagedModal = (kind: "chapter" | "note" | "parrainage" | "recruit") => {
     if (level === "collaborateur") {
-      onWorkflow("Action non autorisée pour ton statut : un collaborateur peut uniquement ajouter des images aux pages.");
+      onWorkflow(deny("studio.denyImagesOnly"));
       return;
     }
     setModal(kind);
   };
   const openNote = (date?: string) => {
     if (level === "collaborateur") {
-      onWorkflow("Action non autorisée pour ton statut : un collaborateur ne peut pas créer de note.");
+      onWorkflow(deny("studio.denyCreateNote"));
       return;
     }
     setNoteDate(date);
@@ -531,13 +536,13 @@ function ProjectWorkspace({
   const onCoverFile = (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
     if (level === "collaborateur") {
-      onWorkflow("Action non autorisée pour ton statut : un collaborateur ne peut pas modifier la couverture.");
+      onWorkflow(deny("studio.denyCannotEditCover"));
       return;
     }
     void readImageFile(file).then((coverDataUrl) => {
       updateProject((p) => ({ ...p, coverDataUrl, updated: "À l'instant" }));
-      onWorkflow("Couverture mise à jour.");
-    }).catch(() => onWorkflow("La couverture n'a pas pu être importée."));
+      onWorkflow(t("studio.coverUpdatedMsg"));
+    }).catch(() => onWorkflow(t("studio.coverImportFailedMsg")));
   };
   const openCalendar = () => {
     setTab("Calendar");
@@ -556,17 +561,17 @@ function ProjectWorkspace({
     <div className="flex flex-col gap-6">
       <div className="hidden md:block">
         <PageHeader
-          back={{ label: "Back to Projects", onClick: onBack }}
-          eyebrow={<span className="tiny-meta text-[var(--neon)]">Project workspace</span>}
+          back={{ label: t("studio.backToProjects"), onClick: onBack }}
+          eyebrow={<span className="tiny-meta text-[var(--neon)]">{t("studio.projectWorkspace")}</span>}
           title={project.title}
-          description={`${project.status} · ${project.chaptersCount} chapters · ${project.validatedPages}/${project.totalPages} pages validated`}
-          actions={<PrimaryButton icon={Plus} onClick={() => openManagedModal("chapter")}>Add Chapter</PrimaryButton>}
+          description={`${project.status} · ${project.chaptersCount} ${locale === "fr" ? "chapitres" : "chapters"} · ${project.validatedPages}/${project.totalPages} ${t("studio.pagesWord")} ${t("studio.validatedWord")}`}
+          actions={<PrimaryButton icon={Plus} onClick={() => openManagedModal("chapter")}>{t("studio.addChapter")}</PrimaryButton>}
         />
       </div>
 
       <div className="md:hidden">
         <button type="button" onClick={onBack} className="btn-ghost -ml-2 mb-2 h-10">
-          <ArrowLeft className="h-4 w-4" /> Back to Projects
+          <ArrowLeft className="h-4 w-4" /> {t("studio.backToProjects")}
         </button>
         <section className="overflow-hidden rounded-[18px] border border-[var(--border-default)] bg-[var(--panel)] shadow-[var(--shadow-panel)]">
           <h1 className="px-4 py-3 font-display text-[22px] font-extrabold leading-7">{project.title}</h1>
@@ -592,7 +597,7 @@ function ProjectWorkspace({
             ) : (
               <CoverPlaceholder title={project.title} className="aspect-[3/4] w-full max-w-[200px]" />
             )}
-            <SecondaryButton icon={Upload} className="!h-10 !px-3" onClick={() => coverInputRef.current?.click()}>Replace Cover</SecondaryButton>
+            <SecondaryButton icon={Upload} className="!h-10 !px-3" onClick={() => coverInputRef.current?.click()}>{t("studio.replaceCover")}</SecondaryButton>
             <input
               ref={coverInputRef}
               type="file"
@@ -606,22 +611,22 @@ function ProjectWorkspace({
           {/* Center: info */}
           <div className="flex min-w-0 flex-col gap-4">
             <div>
-              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Project name</div>
+              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">{t("studio.projectName")}</div>
               <div className="font-display text-[20px] font-bold leading-7">{project.title}</div>
             </div>
             <div>
-              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Synopsis</div>
+              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">{t("studio.synopsis")}</div>
               <p className="text-[14px] leading-[22px] text-[var(--text-secondary)]">{project.synopsis}</p>
             </div>
             <div>
-              <div className="tiny-meta mb-2 text-[var(--text-muted)]">Genres</div>
+              <div className="tiny-meta mb-2 text-[var(--text-muted)]">{t("studio.genres")}</div>
               <div className="flex flex-wrap gap-2">
                 {project.genres.map(g => <Chip key={g} label={g} active />)}
               </div>
             </div>
             {(project.subgenres && project.subgenres.length > 0) && (
               <div>
-                <div className="tiny-meta mb-2 text-[var(--text-muted)]">Sous-genres</div>
+                <div className="tiny-meta mb-2 text-[var(--text-muted)]">{t("studio.subgenres")}</div>
                 <div className="flex flex-wrap gap-2">
                   {project.subgenres.map(g => <Chip key={g} label={g} />)}
                 </div>
@@ -632,22 +637,22 @@ function ProjectWorkspace({
           {/* Right: stats + quick actions */}
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-2">
-              <StatBox label="Chapitres" value={project.chaptersCount} />
-              <StatBox label="Parrainages" value={project.sponsorships.length} />
-              <StatBox label="Collaborateurs" value={projectCollaborators(project).length} />
+              <StatBox label={t("studio.chapters")} value={project.chaptersCount} />
+              <StatBox label={t("studio.sponsorships")} value={project.sponsorships.length} />
+              <StatBox label={t("studio.collaborators")} value={projectCollaborators(project).length} />
               <div className="rounded-[16px] border border-[var(--border-default)] bg-[var(--elevated)] p-3">
                 <div className="flex items-center gap-1 font-display text-[20px] font-bold leading-7 text-[var(--warning)]">
                   <Star className="h-4 w-4" fill="var(--warning)" />
                   {(project.rating ?? 0).toFixed(1)}
                 </div>
-                <div className="tiny-meta text-[var(--text-muted)]">Note</div>
+                <div className="tiny-meta text-[var(--text-muted)]">{t("studio.rating")}</div>
               </div>
             </div>
             <div className="mt-1 grid gap-2">
-              <SecondaryButton icon={Plus} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("chapter")}>Add Chapter</SecondaryButton>
-              <SecondaryButton icon={StickyNote} className="!h-10 justify-start !px-3" onClick={() => openNote()}>Add Note</SecondaryButton>
-              <SecondaryButton icon={Megaphone} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("parrainage")}>Add Sponsorship</SecondaryButton>
-              <SecondaryButton icon={CalendarIcon} className="!h-10 justify-start !px-3" onClick={openCalendar}>Open Calendar</SecondaryButton>
+              <SecondaryButton icon={Plus} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("chapter")}>{t("studio.addChapter")}</SecondaryButton>
+              <SecondaryButton icon={StickyNote} className="!h-10 justify-start !px-3" onClick={() => openNote()}>{t("studio.addNote")}</SecondaryButton>
+              <SecondaryButton icon={Megaphone} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("parrainage")}>{t("studio.addSponsorship")}</SecondaryButton>
+              <SecondaryButton icon={CalendarIcon} className="!h-10 justify-start !px-3" onClick={openCalendar}>{t("studio.openCalendar")}</SecondaryButton>
             </div>
           </div>
         </div>
@@ -660,6 +665,16 @@ function ProjectWorkspace({
           onChange={setTab}
           items={isMobile ? ["Information", "Chapters", "Notes", "Calendar", "Recrutement", "Parrainage", "Collaborateurs", "Settings"] : ["Chapters", "Notes", "Calendar", "Recrutement", "Parrainage", "Collaborateurs", "Settings"]}
           icons={{ Information: Info, Recrutement: Megaphone, Parrainage: Handshake, Collaborateurs: Users }}
+          labels={{
+            Information: t("studio.tabInformation"),
+            Chapters: t("studio.tabChapters"),
+            Notes: t("studio.tabNotes"),
+            Calendar: t("studio.tabCalendar"),
+            Recrutement: t("studio.tabRecruitment"),
+            Parrainage: t("studio.tabSponsorship"),
+            Collaborateurs: t("studio.tabCollaborators"),
+            Settings: t("studio.tabSettings"),
+          }}
         />
 
         {tab === "Information" && (
@@ -669,26 +684,26 @@ function ProjectWorkspace({
               <StarRating value={project.rating ?? 0} />
             </div>
             <div className="mt-5">
-              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Synopsis</div>
+              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">{t("studio.synopsis")}</div>
               <p className="text-[14px] leading-[22px] text-[var(--text-secondary)]">{project.synopsis}</p>
             </div>
             <div className="mt-5">
-              <div className="tiny-meta mb-2 text-[var(--text-muted)]">Genres</div>
+              <div className="tiny-meta mb-2 text-[var(--text-muted)]">{t("studio.genres")}</div>
               <div className="flex flex-wrap gap-2">
                 {project.genres.map(genre => <Chip key={genre} label={genre} active />)}
                 {(project.subgenres ?? []).map(genre => <Chip key={genre} label={genre} />)}
               </div>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2">
-              <StatBox label="Chapitres" value={project.chaptersCount} />
-              <StatBox label="Pages validées" value={project.validatedPages} />
-              <StatBox label="Parrainages" value={project.sponsorships.length} />
-              <StatBox label="Collaborateurs" value={projectCollaborators(project).length} />
+              <StatBox label={t("studio.chapters")} value={project.chaptersCount} />
+              <StatBox label={t("studio.validatedPages")} value={project.validatedPages} />
+              <StatBox label={t("studio.sponsorships")} value={project.sponsorships.length} />
+              <StatBox label={t("studio.collaborators")} value={projectCollaborators(project).length} />
             </div>
             <div className="mt-5 grid gap-2">
-              <SecondaryButton icon={Upload} className="!h-10 justify-start !px-3" onClick={() => coverInputRef.current?.click()}>Replace Cover</SecondaryButton>
-              <SecondaryButton icon={Plus} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("chapter")}>Add Chapter</SecondaryButton>
-              <SecondaryButton icon={StickyNote} className="!h-10 justify-start !px-3" onClick={() => openNote()}>Add Note</SecondaryButton>
+              <SecondaryButton icon={Upload} className="!h-10 justify-start !px-3" onClick={() => coverInputRef.current?.click()}>{t("studio.replaceCover")}</SecondaryButton>
+              <SecondaryButton icon={Plus} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("chapter")}>{t("studio.addChapter")}</SecondaryButton>
+              <SecondaryButton icon={StickyNote} className="!h-10 justify-start !px-3" onClick={() => openNote()}>{t("studio.addNote")}</SecondaryButton>
             </div>
             <input
               ref={coverInputRef}
@@ -720,7 +735,7 @@ function ProjectWorkspace({
               updated: "À l'instant",
             }));
             setModal(null);
-            onWorkflow(`Chapitre « ${chapter.title} » ajouté.`);
+            onWorkflow(`${t("studio.chapterTitleField")} « ${chapter.title} ${t("studio.chapterAddedSuffix")}`);
           }}
         />
       )}
@@ -731,7 +746,7 @@ function ProjectWorkspace({
           onAdd={(note) => {
             updateProject((p) => ({ ...p, notes: [note, ...p.notes], updated: "À l'instant" }));
             setModal(null);
-            onWorkflow("Note ajoutée.");
+            onWorkflow(t("studio.noteAddedMsg"));
           }}
         />
       )}
@@ -760,9 +775,9 @@ function ProjectWorkspace({
                   updated: "À l'instant",
                 }));
                 setModal(null);
-                onWorkflow("Annonce de parrainage publiée.");
+                onWorkflow(t("studio.sponsorshipPublishedMsg"));
               } catch (error) {
-                onWorkflow(error instanceof Error ? error.message : "L'annonce n'a pas pu être publiée.");
+                onWorkflow(error instanceof Error ? error.message : t("studio.announcementPublishFailedMsg"));
               }
             })();
           }}
@@ -793,9 +808,9 @@ function ProjectWorkspace({
                   updated: "À l'instant",
                 }));
                 setModal(null);
-                onWorkflow("Annonce de recrutement publiée.");
+                onWorkflow(t("studio.recruitAnnouncementPublishedMsg"));
               } catch (error) {
-                onWorkflow(error instanceof Error ? error.message : "L'annonce n'a pas pu être publiée.");
+                onWorkflow(error instanceof Error ? error.message : t("studio.announcementPublishFailedMsg"));
               }
             })();
           }}
@@ -814,7 +829,7 @@ function StatBox({ label, value, accent }: { label: string; value: number; accen
   );
 }
 
-function Tabs<T extends string>({ value, onChange, items, icons }: { value: T; onChange: (v: T) => void; items: T[]; icons?: Record<string, React.ComponentType<{ className?: string }>> }) {
+function Tabs<T extends string>({ value, onChange, items, icons, labels }: { value: T; onChange: (v: T) => void; items: T[]; icons?: Record<string, React.ComponentType<{ className?: string }>>; labels?: Record<string, string> }) {
   return (
     <div className="scrollbar-thin flex gap-1 overflow-x-auto rounded-[16px] border border-[var(--border-default)] bg-[var(--panel)] p-1.5">
       {items.map(item => {
@@ -823,7 +838,7 @@ function Tabs<T extends string>({ value, onChange, items, icons }: { value: T; o
         return (
           <button key={item} onClick={() => onChange(item)} className={`inline-flex items-center gap-2 h-[38px] shrink-0 rounded-[12px] px-4 text-[13px] font-bold transition-colors ${active ? "bg-[var(--neon-soft)] text-[var(--neon)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
             {Icon && <Icon className="h-4 w-4" />}
-            {item}
+            {labels?.[item] ?? item}
           </button>
         );
       })}
@@ -846,11 +861,12 @@ function ChaptersTab({
   updateProject?: (updater: (p: Project) => Project) => void;
   onWorkflow?: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [editChapter, setEditChapter] = useState<Chapter | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const canManage = myLevel(project) !== "collaborateur";
-  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur peut uniquement ajouter des images aux pages.");
+  const denyManage = () => onWorkflow?.(`${t("studio.denyPrefix")} ${t("studio.denyImagesOnly")}`);
   const visibleChapters = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("fr");
     return normalized
@@ -889,7 +905,7 @@ function ChaptersTab({
       totalPages: prev.totalPages + copy.pages.length,
       updated: "À l'instant",
     }));
-    onWorkflow?.(`Chapitre « ${ch.title} » dupliqué.`);
+    onWorkflow?.(`${t("studio.chapterTitleField")} « ${ch.title} ${t("studio.chapterDuplicatedSuffix")}`);
   };
 
   const deleteChapter = (ch: Chapter) => {
@@ -903,25 +919,25 @@ function ChaptersTab({
       updated: "À l'instant",
     }));
     setConfirmDeleteId(null);
-    onWorkflow?.(`Chapitre « ${ch.title} » supprimé.`);
+    onWorkflow?.(`${t("studio.chapterTitleField")} « ${ch.title} ${t("studio.chapterDeletedSuffix")}`);
   };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="font-display text-[18px] font-bold">Chapters</h2>
+        <h2 className="font-display text-[18px] font-bold">{t("studio.chaptersHeading")}</h2>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <TextInput icon={Search} value={query} onChange={setQuery} placeholder="Find a chapter…" className="w-full sm:w-64" />
-          <PrimaryButton icon={Plus} onClick={onAdd}>Add Chapter</PrimaryButton>
+          <TextInput icon={Search} value={query} onChange={setQuery} placeholder={t("studio.findChapter")} className="w-full sm:w-64" />
+          <PrimaryButton icon={Plus} onClick={onAdd}>{t("studio.addChapter")}</PrimaryButton>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4">
         {project.chapters.length === 0 && (
           <div className="rounded-[22px] border border-dashed border-[var(--border-strong)] bg-[var(--panel)] p-8 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--elevated)]"><Layers className="h-5 w-5 text-[var(--neon)]" /></div>
-            <h3 className="mt-4 font-display text-[18px] font-bold">No chapters yet</h3>
-            <p className="mt-1 text-[14px] text-[var(--text-secondary)]">Start production by adding the first chapter.</p>
-            <div className="mt-4 flex justify-center"><PrimaryButton icon={Plus} onClick={onAdd}>Add Chapter</PrimaryButton></div>
+            <h3 className="mt-4 font-display text-[18px] font-bold">{t("studio.noChaptersYetTitle")}</h3>
+            <p className="mt-1 text-[14px] text-[var(--text-secondary)]">{t("studio.noChaptersYetText")}</p>
+            <div className="mt-4 flex justify-center"><PrimaryButton icon={Plus} onClick={onAdd}>{t("studio.addChapter")}</PrimaryButton></div>
           </div>
         )}
         {visibleChapters.map(ch => {
@@ -940,23 +956,23 @@ function ChaptersTab({
                   </div>
                   <p className="mt-1 text-[13px] text-[var(--text-secondary)]">{ch.objective}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-4 tiny-meta text-[var(--text-muted)]">
-                    <span>{ch.pages.length} pages</span><span>•</span><span className="text-[var(--neon)]">{validated} validated</span><span>•</span><span>Edited {ch.updated}</span>
+                    <span>{ch.pages.length} {t("studio.pagesWord")}</span><span>•</span><span className="text-[var(--neon)]">{validated} {t("studio.validatedWord")}</span><span>•</span><span>{t("studio.editedPrefix")} {ch.updated}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 md:flex-col md:items-stretch">
-                  <PrimaryButton onClick={() => onOpenChapter(ch.id)} className="!h-10 !px-4">Open</PrimaryButton>
+                  <PrimaryButton onClick={() => onOpenChapter(ch.id)} className="!h-10 !px-4">{t("studio.open")}</PrimaryButton>
                   <div className="flex items-center gap-1.5">
-                    <IconButton ariaLabel="Edit" onClick={() => canManage ? setEditChapter(ch) : denyManage()}><Edit3 className="h-4 w-4" /></IconButton>
-                    <IconButton ariaLabel="Duplicate" onClick={() => duplicateChapter(ch)}><Copy className="h-4 w-4" /></IconButton>
+                    <IconButton ariaLabel={t("studio.edit")} onClick={() => canManage ? setEditChapter(ch) : denyManage()}><Edit3 className="h-4 w-4" /></IconButton>
+                    <IconButton ariaLabel={t("studio.duplicate")} onClick={() => duplicateChapter(ch)}><Copy className="h-4 w-4" /></IconButton>
                     {confirmDeleteId === ch.id ? (
                       <button
                         onClick={() => deleteChapter(ch)}
                         className="rounded-[12px] border border-[rgba(255,95,126,0.45)] bg-[rgba(255,95,126,0.12)] px-2.5 py-2 text-[12px] font-bold text-[var(--danger)]"
                       >
-                        Confirmer
+                        {t("studio.confirm")}
                       </button>
                     ) : (
-                      <IconButton ariaLabel="Delete" onClick={() => setConfirmDeleteId(ch.id)}><Trash2 className="h-4 w-4" /></IconButton>
+                      <IconButton ariaLabel={t("studio.delete")} onClick={() => setConfirmDeleteId(ch.id)}><Trash2 className="h-4 w-4" /></IconButton>
                     )}
                   </div>
                 </div>
@@ -966,7 +982,7 @@ function ChaptersTab({
         })}
         {project.chapters.length > 0 && visibleChapters.length === 0 && (
           <div className="rounded-[18px] border border-dashed border-[var(--border-strong)] bg-[var(--panel)] p-8 text-center text-[14px] text-[var(--text-muted)]">
-            Aucun chapitre ne correspond à cette recherche.
+            {t("studio.noSearchResultsChapters")}
           </div>
         )}
       </div>
@@ -998,26 +1014,27 @@ function EditChapterModal({
   onClose: () => void;
   onSave: (patch: Partial<Chapter>) => void;
 }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState(chapter.title);
   const [objective, setObjective] = useState(chapter.objective);
   const [status, setStatus] = useState<string[]>([chapter.status]);
   return (
     <StudioModal
-      title="Modifier le chapitre"
+      title={t("studio.editChapterTitle")}
       onClose={onClose}
       footer={
         <>
-          <GhostButton onClick={onClose}>Annuler</GhostButton>
+          <GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton>
           <PrimaryButton icon={Save} onClick={() => title.trim() && onSave({ title: title.trim(), objective: objective.trim(), status: (status[0] as ChapterStatus) || chapter.status })}>
-            Enregistrer
+            {t("studio.save")}
           </PrimaryButton>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <ModalField label="Titre du chapitre"><TextInput value={title} onChange={setTitle} placeholder="Titre" /></ModalField>
-        <ModalField label="Objectif"><textarea value={objective} onChange={(e) => setObjective(e.target.value)} className={modalTextarea} /></ModalField>
-        <ChoiceRow label="Statut" defaultValue={chapter.status} options={["Draft", "In progress", "Ready for review", "Published"]} onChange={setStatus} />
+        <ModalField label={t("studio.chapterTitleLabel")}><TextInput value={title} onChange={setTitle} placeholder={t("studio.title")} /></ModalField>
+        <ModalField label={t("studio.objective")}><textarea value={objective} onChange={(e) => setObjective(e.target.value)} className={modalTextarea} /></ModalField>
+        <ChoiceRow label={t("studio.status")} defaultValue={chapter.status} options={["Draft", "In progress", "Ready for review", "Published"]} onChange={setStatus} />
       </div>
     </StudioModal>
   );
@@ -1026,6 +1043,7 @@ function EditChapterModal({
 /* ----- Notes tab ----- */
 
 function EditNoteModal({ note, onClose, onSave }: { note: Note; onClose: () => void; onSave: (patch: Partial<Note>) => void }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [date, setDate] = useState(note.date ?? "");
@@ -1044,15 +1062,15 @@ function EditNoteModal({ note, onClose, onSave }: { note: Note; onClose: () => v
 
   return (
     <StudioModal
-      title="Modifier la note"
+      title={t("studio.editNoteTitle")}
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Save} onClick={submit}>Enregistrer</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton><PrimaryButton icon={Save} onClick={submit}>{t("studio.save")}</PrimaryButton></>}
     >
       <div className="flex flex-col gap-4">
-        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre de la note" /></ModalField>
-        <ModalField label="Contenu"><textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Contenu de la note…" className={modalTextarea} /></ModalField>
+        <ModalField label={t("studio.title")}><TextInput value={title} onChange={setTitle} placeholder={t("studio.noteTitlePlaceholder")} /></ModalField>
+        <ModalField label={t("studio.content")}><textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t("studio.noteContentPlaceholder")} className={modalTextarea} /></ModalField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ModalField label="Date liée">
+          <ModalField label={t("studio.linkedDate")}>
             <input
               type="date"
               value={date}
@@ -1060,7 +1078,7 @@ function EditNoteModal({ note, onClose, onSave }: { note: Note; onClose: () => v
               className="h-11 w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 text-[14px] text-[var(--text-primary)] outline-none transition-shadow focus:border-[var(--neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)] [color-scheme:dark]"
             />
           </ModalField>
-          <ChoiceRow label="Priorité" defaultValue={note.priority} options={["Low", "Medium", "High"]} onChange={setPriority} />
+          <ChoiceRow label={t("studio.priority")} defaultValue={note.priority} options={["Low", "Medium", "High"]} onChange={setPriority} />
         </div>
       </div>
     </StudioModal>
@@ -1078,6 +1096,7 @@ function NotesTab({
   updateProject?: (updater: (p: Project) => Project) => void;
   onWorkflow?: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState<string | null>(project.notes[0]?.id ?? null);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1090,7 +1109,7 @@ function NotesTab({
       ? project.notes.filter((item) => `${item.title} ${item.preview} ${item.content}`.toLocaleLowerCase("fr").includes(normalized))
       : project.notes;
   }, [project.notes, query]);
-  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas modifier les notes.");
+  const denyManage = () => onWorkflow?.(`${t("studio.denyPrefix")} ${t("studio.denyEditNotes")}`);
 
   useEffect(() => {
     if (selected && project.notes.some((item) => item.id === selected)) return;
@@ -1101,7 +1120,7 @@ function NotesTab({
     if (!canManage) return denyManage();
     if (!note) return;
     updateProject?.((p) => ({ ...p, notes: p.notes.map((n) => (n.id === note.id ? { ...n, ...patch } : n)), updated: "À l'instant" }));
-    onWorkflow?.("Note mise à jour.");
+    onWorkflow?.(t("studio.noteUpdatedMsg"));
     setEditing(false);
   };
 
@@ -1109,7 +1128,7 @@ function NotesTab({
     if (!canManage) return denyManage();
     if (!note) return;
     updateProject?.((p) => ({ ...p, notes: p.notes.filter((n) => n.id !== note.id), updated: "À l'instant" }));
-    onWorkflow?.("Note supprimée.");
+    onWorkflow?.(t("studio.noteDeletedMsg"));
     setSelected(null);
     setConfirmDelete(false);
   };
@@ -1118,24 +1137,24 @@ function NotesTab({
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_1fr]">
       <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-4 shadow-[var(--shadow-panel)]">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-[18px] font-bold">Notes</h2>
-          <PrimaryButton icon={Plus} className="!h-9 !px-3" onClick={onAdd}>New</PrimaryButton>
+          <h2 className="font-display text-[18px] font-bold">{t("studio.tabNotes")}</h2>
+          <PrimaryButton icon={Plus} className="!h-9 !px-3" onClick={onAdd}>{t("studio.new")}</PrimaryButton>
         </div>
-        <TextInput icon={Search} value={query} onChange={setQuery} placeholder="Search notes…" className="mb-3" />
+        <TextInput icon={Search} value={query} onChange={setQuery} placeholder={t("studio.searchNotes")} className="mb-3" />
         <div className="flex flex-col gap-2">
           {visibleNotes.map(n => (
             <button key={n.id} onClick={() => { setSelected(n.id); setEditing(false); setConfirmDelete(false); }} className={`rounded-[14px] border p-3 text-left transition-colors ${selected === n.id ? "border-[var(--neon-border)] bg-[var(--neon-soft)]" : "border-[var(--border-default)] bg-[var(--elevated)] hover:border-[var(--border-strong)]"}`}>
               <div className="truncate text-[14px] font-bold">{n.title}</div>
               <p className="mt-1 line-clamp-2 text-[13px] text-[var(--text-secondary)]">{n.preview}</p>
               <div className="mt-2 flex items-center gap-3 tiny-meta text-[var(--text-muted)]">
-                {n.date ? <span className="inline-flex items-center gap-1"><CalendarIcon className="h-3 w-3" />{n.date}</span> : <span>Date to define</span>}
+                {n.date ? <span className="inline-flex items-center gap-1"><CalendarIcon className="h-3 w-3" />{n.date}</span> : <span>{t("studio.dateToDefine")}</span>}
                 <span>•</span>
                 <span className={n.priority === "High" ? "text-[var(--warning)]" : ""}>{n.priority}</span>
               </div>
             </button>
           ))}
           {project.notes.length > 0 && visibleNotes.length === 0 && (
-            <p className="px-2 py-4 text-center text-[13px] text-[var(--text-muted)]">Aucune note ne correspond à cette recherche.</p>
+            <p className="px-2 py-4 text-center text-[13px] text-[var(--text-muted)]">{t("studio.noSearchResultsNotes")}</p>
           )}
         </div>
       </div>
@@ -1144,34 +1163,34 @@ function NotesTab({
           <div className="flex flex-col gap-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="tiny-meta text-[var(--text-muted)]">Note</div>
+                <div className="tiny-meta text-[var(--text-muted)]">{t("studio.tabNotes")}</div>
                 <h3 className="mt-1 font-display text-[20px] font-bold">{note.title}</h3>
               </div>
               <div className="flex items-center gap-2">
-                <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canManage ? setEditing(true) : denyManage()}>Edit</SecondaryButton>
+                <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canManage ? setEditing(true) : denyManage()}>{t("studio.edit")}</SecondaryButton>
                 {confirmDelete ? (
                   <>
-                    <DangerButton icon={Trash2} onClick={deleteNote}>Confirmer</DangerButton>
-                    <GhostButton onClick={() => setConfirmDelete(false)}>Annuler</GhostButton>
+                    <DangerButton icon={Trash2} onClick={deleteNote}>{t("studio.confirm")}</DangerButton>
+                    <GhostButton onClick={() => setConfirmDelete(false)}>{t("studio.cancel")}</GhostButton>
                   </>
                 ) : (
-                  <DangerButton icon={Trash2} onClick={() => setConfirmDelete(true)}>Delete</DangerButton>
+                  <DangerButton icon={Trash2} onClick={() => setConfirmDelete(true)}>{t("studio.delete")}</DangerButton>
                 )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <MetaField label="Linked date" value={note.date ?? "Date to define"} />
-              <MetaField label="Priority" value={note.priority} />
+              <MetaField label={t("studio.linkedDate")} value={note.date ?? t("studio.dateToDefine")} />
+              <MetaField label={t("studio.priority")} value={note.priority} />
             </div>
             <div>
-              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Content</div>
+              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">{t("studio.content")}</div>
               <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">
-                {note.content || note.preview || "Aucun contenu."}
+                {note.content || note.preview || t("studio.noContent")}
               </div>
             </div>
           </div>
         ) : (
-          <div className="flex h-full min-h-[240px] items-center justify-center text-[14px] text-[var(--text-muted)]">Select a note or create a new one.</div>
+          <div className="flex h-full min-h-[240px] items-center justify-center text-[14px] text-[var(--text-muted)]">{t("studio.selectNotePrompt")}</div>
         )}
       </div>
       {editing && note && (
@@ -1193,13 +1212,17 @@ function MetaField({ label, value }: { label: string; value: string }) {
 /* ----- Calendar tab ----- */
 
 function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (date: string) => void }) {
+  const { t, locale } = useI18n();
   const [monthOffset, setMonthOffset] = useState(0);
   const now = new Date();
   const base = new Date(now.getFullYear(), now.getMonth(), 1);
   const shown = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
   const year = shown.getFullYear();
   const month = shown.getMonth();
-  const monthName = shown.toLocaleString("fr-FR", { month: "long", year: "numeric" });
+  const monthName = shown.toLocaleString(locale === "fr" ? "fr-FR" : "en-US", { month: "long", year: "numeric" });
+  const weekdayLabels = locale === "fr"
+    ? ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -1223,16 +1246,16 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h2 className="font-display text-[18px] font-bold capitalize">{monthName}</h2>
-            <IconButton ariaLabel="Mois précédent" onClick={() => setMonthOffset(o => o - 1)}><ChevronLeft className="h-4 w-4" /></IconButton>
-            <IconButton ariaLabel="Mois suivant" onClick={() => setMonthOffset(o => o + 1)}><ChevronRight className="h-4 w-4" /></IconButton>
+            <IconButton ariaLabel={t("studio.prevMonth")} onClick={() => setMonthOffset(o => o - 1)}><ChevronLeft className="h-4 w-4" /></IconButton>
+            <IconButton ariaLabel={t("studio.nextMonth")} onClick={() => setMonthOffset(o => o + 1)}><ChevronRight className="h-4 w-4" /></IconButton>
             {monthOffset !== 0 && (
-              <button onClick={() => setMonthOffset(0)} className="text-[12px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Aujourd'hui</button>
+              <button onClick={() => setMonthOffset(0)} className="text-[12px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">{t("studio.today")}</button>
             )}
           </div>
-          <span className="tiny-meta text-[var(--text-muted)]">Clique le + pour ajouter, une note pour la consulter</span>
+          <span className="tiny-meta text-[var(--text-muted)]">{t("studio.calendarHint")}</span>
         </div>
         <div className="grid grid-cols-7 gap-1 tiny-meta text-[var(--text-muted)]">
-          {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d => <div key={d} className="p-2">{d}</div>)}
+          {weekdayLabels.map(d => <div key={d} className="p-2">{d}</div>)}
         </div>
         <div className="mt-1 grid grid-cols-7 gap-1">
           {cells.map((day, i) => {
@@ -1247,7 +1270,7 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
                   <span className="text-[12px] font-bold text-[var(--text-primary)]">{day}</span>
                   <button
                     type="button"
-                    aria-label={`Ajouter une note le ${dateStr(day)}`}
+                    aria-label={`${t("studio.addNoteOnPrefix")} ${dateStr(day)}`}
                     onClick={() => onAddNote(dateStr(day))}
                     className="rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:text-[var(--neon)] group-hover:opacity-100"
                   >
@@ -1283,7 +1306,7 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
                 onClick={() => setSelectedNoteId(null)}
                 className="text-[12px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
-                ← Upcoming
+                ← {t("studio.upcoming")}
               </button>
             </div>
             <div className="rounded-[14px] border border-[var(--neon-border)] bg-[var(--elevated)] p-4">
@@ -1292,18 +1315,18 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
                 <StatusChip label={selectedNote.priority} tone={selectedNote.priority === "High" ? "warn" : "info"} />
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-3 tiny-meta text-[var(--text-muted)]">
-                <span className="inline-flex items-center gap-1"><CalendarIcon className="h-3 w-3" />{selectedNote.date ?? "Sans date"}</span>
+                <span className="inline-flex items-center gap-1"><CalendarIcon className="h-3 w-3" />{selectedNote.date ?? t("studio.noDate")}</span>
                 <span>{selectedNote.category}</span>
                 <span>{selectedNote.status}</span>
               </div>
               <p className="mt-3 text-[13px] leading-5 text-[var(--text-secondary)]">
-                {selectedNote.content || selectedNote.preview || "Aucun contenu."}
+                {selectedNote.content || selectedNote.preview || t("studio.noContent")}
               </p>
             </div>
           </>
         ) : (
           <>
-            <h2 className="font-display text-[18px] font-bold">Upcoming</h2>
+            <h2 className="font-display text-[18px] font-bold">{t("studio.upcoming")}</h2>
             {events.map(ev => (
               <button
                 key={ev.id}
@@ -1320,7 +1343,7 @@ function CalendarTab({ project, onAddNote }: { project: Project; onAddNote: (dat
                 </div>
               </button>
             ))}
-            {events.length === 0 && <p className="text-[14px] text-[var(--text-muted)]">No deadlines yet.</p>}
+            {events.length === 0 && <p className="text-[14px] text-[var(--text-muted)]">{t("studio.noDeadlinesYet")}</p>}
           </>
         )}
       </div>
@@ -1342,6 +1365,7 @@ function AnnonceCard({
   onView?: () => void;
   onManage?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col rounded-[22px] border border-[var(--border-default)] bg-[var(--elevated)] p-5 shadow-[var(--shadow-card)]">
       <div className="flex items-start justify-between gap-3">
@@ -1365,14 +1389,15 @@ function AnnonceCard({
         ))}
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <SecondaryButton className="!h-10 !px-3" onClick={onView}>View Details</SecondaryButton>
-        <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={onManage}>Manage</PrimaryButton>
+        <SecondaryButton className="!h-10 !px-3" onClick={onView}>{t("profile.viewDetails")}</SecondaryButton>
+        <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={onManage}>{t("profile.manage")}</PrimaryButton>
       </div>
     </div>
   );
 }
 
 function EditRecruitModal({ recruit, onClose, onSave }: { recruit: RecruitAnnouncement; onClose: () => void; onSave: (patch: Partial<RecruitAnnouncement>) => void }) {
+  const { t } = useI18n();
   const [remuneration, setRemuneration] = useState(recruit.remunerated);
   const [title, setTitle] = useState(recruit.title);
   const [hook, setHook] = useState(recruit.hook);
@@ -1398,17 +1423,17 @@ function EditRecruitModal({ recruit, onClose, onSave }: { recruit: RecruitAnnoun
 
   return (
     <StudioModal
-      title="Modifier l'annonce de recrutement"
+      title={t("studio.editRecruitTitle")}
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Save} onClick={submit}>Enregistrer</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton><PrimaryButton icon={Save} onClick={submit}>{t("studio.save")}</PrimaryButton></>}
     >
       <div className="flex flex-col gap-6">
-        <ChoiceRow label="Langage" defaultValue={recruit.language} options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
-        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre" /></ModalField>
-        <ModalField label="Accroche"><TextInput value={hook} onChange={setHook} placeholder="Accroche" /></ModalField>
-        <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} className={modalTextarea} /></ModalField>
-        <ChoiceRow label="Statut recherché" defaultValue={recruit.role} options={COLLAB_ROLES} onChange={setRole} />
-        <ChoiceRow label="Statut de l'annonce" defaultValue={recruit.status} options={["Ouverte", "Brouillon"]} onChange={setStatus} />
+        <ChoiceRow label={t("studio.language")} defaultValue={recruit.language} options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
+        <ModalField label={t("studio.title")}><TextInput value={title} onChange={setTitle} placeholder={t("studio.title")} /></ModalField>
+        <ModalField label={t("studio.hook")}><TextInput value={hook} onChange={setHook} placeholder={t("studio.hook")} /></ModalField>
+        <ModalField label={t("studio.description")}><textarea value={description} onChange={(e) => setDescription(e.target.value)} className={modalTextarea} /></ModalField>
+        <ChoiceRow label={t("studio.roleSought")} defaultValue={recruit.role} options={COLLAB_ROLES} onChange={setRole} />
+        <ChoiceRow label={t("studio.announcementStatus")} defaultValue={recruit.status} options={["Ouverte", "Brouillon"]} onChange={setStatus} />
         <button
           type="button"
           role="switch"
@@ -1420,7 +1445,7 @@ function EditRecruitModal({ recruit, onClose, onSave }: { recruit: RecruitAnnoun
             background: remuneration ? "rgba(57,255,136,0.12)" : "var(--input-bg)",
           }}
         >
-          <span className="text-[13px] font-bold text-[var(--text-primary)]">Rémunération</span>
+          <span className="text-[13px] font-bold text-[var(--text-primary)]">{t("studio.remuneration")}</span>
           <span className="relative h-6 w-11 rounded-full border border-[var(--border-default)] bg-[var(--elevated)]">
             <span
               className="absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all"
@@ -1428,7 +1453,7 @@ function EditRecruitModal({ recruit, onClose, onSave }: { recruit: RecruitAnnoun
             />
           </span>
         </button>
-        <ChoiceRow label="Engagement" defaultValue={recruit.commitment} options={["Long terme", "Ponctuel"]} onChange={setEngagement} />
+        <ChoiceRow label={t("studio.engagement")} defaultValue={recruit.commitment} options={["Long terme", "Ponctuel"]} onChange={setEngagement} />
       </div>
     </StudioModal>
   );
@@ -1447,11 +1472,12 @@ function RecrutementTab({
   updateProject?: (updater: (p: Project) => Project) => void;
   onWorkflow?: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const recruit = project.recruits ?? [];
   const [detail, setDetail] = useState<RecruitAnnouncement | null>(null);
   const [editing, setEditing] = useState<RecruitAnnouncement | null>(null);
   const canManage = myLevel(project) !== "collaborateur";
-  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas gérer les annonces.");
+  const denyManage = () => onWorkflow?.(`${t("studio.denyPrefix")} ${t("studio.denyManageAnnouncements")}`);
   const saveRecruit = async (id: string, patch: Partial<RecruitAnnouncement>) => {
     if (!canManage) return denyManage();
     const current = recruit.find((item) => item.id === id);
@@ -1475,25 +1501,25 @@ function RecrutementTab({
       updated: "À l'instant",
     }));
       setEditing(null);
-      onWorkflow?.("Annonce de recrutement mise à jour.");
+      onWorkflow?.(t("studio.recruitUpdatedMsg"));
     } catch (error) {
-      onWorkflow?.(error instanceof Error ? error.message : "L'annonce publique n'a pas pu être mise à jour.");
+      onWorkflow?.(error instanceof Error ? error.message : t("studio.recruitUpdateFailedMsg"));
     }
   };
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-display text-[18px] font-bold">Annonces de recrutement</h2>
-          <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">Attirez de nouveaux collaborateurs pour rejoindre votre projet.</p>
+          <h2 className="font-display text-[18px] font-bold">{t("studio.recruitmentAnnouncements")}</h2>
+          <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">{t("studio.recruitmentDesc")}</p>
         </div>
-        <PrimaryButton icon={Plus} onClick={onAddRecruit}>Nouvelle annonce de recrutement</PrimaryButton>
+        <PrimaryButton icon={Plus} onClick={onAddRecruit}>{t("studio.newRecruitAnnouncement")}</PrimaryButton>
       </div>
       {recruit.length === 0 && (
         <div className="rounded-[22px] border border-dashed border-[var(--border-strong)] bg-[var(--panel)] p-8 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--elevated)]"><UserPlus className="h-5 w-5 text-[var(--neon)]" /></div>
-          <h3 className="mt-4 font-display text-[18px] font-bold">Aucune annonce de recrutement</h3>
-          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">Publiez une annonce pour attirer des collaborateurs sur ce projet.</p>
+          <h3 className="mt-4 font-display text-[18px] font-bold">{t("studio.noRecruitAnnouncementsTitle")}</h3>
+          <p className="mt-1 text-[14px] text-[var(--text-secondary)]">{t("studio.noRecruitAnnouncementsText")}</p>
         </div>
       )}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1505,9 +1531,9 @@ function RecrutementTab({
             statusTone={r.status === "Ouverte" ? "neon" : "neutral"}
             description={r.description}
             metas={[
-              { label: "Rôle", value: r.role },
-              { label: "Engagement", value: r.commitment },
-              { label: "Rémunération", value: r.compensation },
+              { label: t("profile.role"), value: r.role },
+              { label: t("studio.engagement"), value: r.commitment },
+              { label: t("studio.remuneration"), value: r.compensation },
             ]}
             remunerated={r.remunerated}
             onView={() => setDetail(r)}
@@ -1541,13 +1567,14 @@ function RecrutementTab({
 /* ----- Parrainage tab ----- */
 
 function EditParrainageModal({ sponsorship, onClose, onSave }: { sponsorship: Sponsorship; onClose: () => void; onSave: (patch: Partial<Sponsorship>) => void }) {
+  const { t } = useI18n();
   return (
     <ServiceFormModal
       open
       onClose={onClose}
       mode="project"
-      title="Modifier l'annonce de parrainage"
-      submitLabel="Enregistrer"
+      title={t("studio.editSponsorshipModalTitle")}
+      submitLabel={t("studio.save")}
       statusOptions={["Open", "Paused", "Draft", "Closed", "Archived"]}
       initial={{
         format: sponsorship.title,
@@ -1592,11 +1619,12 @@ function ParrainageTab({
   updateProject?: (updater: (p: Project) => Project) => void;
   onWorkflow?: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const linkedSponsorships = useLinkedSponsorships().filter((item) => item.projectId === project.id);
   const [detail, setDetail] = useState<Sponsorship | null>(null);
   const [editing, setEditing] = useState<Sponsorship | null>(null);
   const canManage = myLevel(project) !== "collaborateur";
-  const denyManage = () => onWorkflow?.("Action non autorisée pour ton statut : un collaborateur ne peut pas gérer les parrainages.");
+  const denyManage = () => onWorkflow?.(`${t("studio.denyPrefix")} ${t("studio.denyManageSponsorships")}`);
   const saveSponsorship = async (id: string, patch: Partial<Sponsorship>) => {
     if (!canManage) return denyManage();
     const current = project.sponsorships.find((item) => item.id === id);
@@ -1623,9 +1651,9 @@ function ParrainageTab({
       updated: "À l'instant",
     }));
       setEditing(null);
-      onWorkflow?.("Annonce de parrainage mise à jour.");
+      onWorkflow?.(t("studio.sponsorshipUpdatedMsg"));
     } catch (error) {
-      onWorkflow?.(error instanceof Error ? error.message : "L'annonce publique n'a pas pu être mise à jour.");
+      onWorkflow?.(error instanceof Error ? error.message : t("studio.sponsorshipUpdateFailedMsg"));
     }
   };
   return (
@@ -1634,10 +1662,10 @@ function ParrainageTab({
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-[18px] font-bold">Annonces de parrainage</h2>
-            <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">Faites la promotion de votre manga auprès de créateurs de contenu.</p>
+            <h2 className="font-display text-[18px] font-bold">{t("studio.sponsorshipAnnouncements")}</h2>
+            <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">{t("studio.sponsorshipDesc")}</p>
           </div>
-          <PrimaryButton icon={Megaphone} onClick={onAddParrainage}>Nouvelle annonce de parrainage</PrimaryButton>
+          <PrimaryButton icon={Megaphone} onClick={onAddParrainage}>{t("studio.newSponsorshipAnnouncement")}</PrimaryButton>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {project.sponsorships.map(s => (
@@ -1651,19 +1679,19 @@ function ParrainageTab({
               </div>
               <div className="mt-3 flex items-center gap-4">
                 <div className="font-display text-[20px] font-bold text-[var(--neon)]">{s.price} €</div>
-                <div className="tiny-meta text-[var(--text-muted)]">Qté {s.quantity} · {s.paymentMode}</div>
+                <div className="tiny-meta text-[var(--text-muted)]">{t("studio.qty")} {s.quantity} · {s.paymentMode}</div>
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-2">
-                <SecondaryButton className="!h-10 !px-3" onClick={() => setDetail(s)}>Voir détails</SecondaryButton>
-                <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canManage ? setEditing(s) : denyManage()}>Gérer</PrimaryButton>
+                <SecondaryButton className="!h-10 !px-3" onClick={() => setDetail(s)}>{t("profile.viewDetails")}</SecondaryButton>
+                <PrimaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canManage ? setEditing(s) : denyManage()}>{t("profile.manage")}</PrimaryButton>
               </div>
             </div>
           ))}
           {project.sponsorships.length === 0 && (
             <div className="col-span-full rounded-[22px] border border-dashed border-[var(--border-strong)] bg-[var(--panel)] p-8 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--elevated)]"><Megaphone className="h-5 w-5 text-[var(--neon)]" /></div>
-              <h3 className="mt-4 font-display text-[18px] font-bold">Aucune annonce de parrainage</h3>
-              <p className="mt-1 text-[14px] text-[var(--text-secondary)]">Publiez une annonce de parrainage pour faire la promotion de votre manga.</p>
+              <h3 className="mt-4 font-display text-[18px] font-bold">{t("studio.noSponsorshipAnnouncementsTitle")}</h3>
+              <p className="mt-1 text-[14px] text-[var(--text-secondary)]">{t("studio.noSponsorshipAnnouncementsText")}</p>
             </div>
           )}
         </div>
@@ -1672,11 +1700,11 @@ function ParrainageTab({
       {/* Parrainages du projet — réalisés / en cours */}
       <section className="flex flex-col gap-4">
         <div>
-          <h2 className="font-display text-[18px] font-bold">Parrainages du projet</h2>
-          <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">Parrainages réalisés ou en cours liés à ce projet.</p>
+          <h2 className="font-display text-[18px] font-bold">{t("studio.projectSponsorships")}</h2>
+          <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">{t("studio.projectSponsorshipsDesc")}</p>
         </div>
         {linkedSponsorships.length === 0 ? (
-          <p className="text-[14px] text-[var(--text-muted)]">Aucun parrainage pour l'instant.</p>
+          <p className="text-[14px] text-[var(--text-muted)]">{t("studio.noSponsorshipsYet")}</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {linkedSponsorships.map((item) => {
@@ -1695,7 +1723,7 @@ function ParrainageTab({
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <strong className="text-[15px] text-[var(--neon)]">{formatSponsorshipMoney(item.totalPrice, item.currency)}</strong>
                     <Link to="/sponsorship-hub/$id" params={{ id: item.id }} className="rounded-[12px] border border-[var(--border-default)] px-3 py-2 text-[12px] font-bold text-[var(--text-primary)] hover:border-[var(--neon-border)]">
-                      Ouvrir
+                      {t("studio.open")}
                     </Link>
                   </div>
                 </div>
@@ -1749,13 +1777,14 @@ function CollaborateursTab({
   updateProject?: (updater: (p: Project) => Project) => void;
   onLeaveProject?: () => void;
 }) {
+  const { t } = useI18n();
   const collabs = projectCollaborators(project);
   const me = myLevel(project);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const initials = (name: string) => name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
-  const deny = (message: string) => onWorkflow?.(`Action non autorisée pour ton statut : ${message}`);
+  const deny = (key: TranslationKey) => onWorkflow?.(`${t("studio.denyPrefix")} ${t(key)}`);
 
   const setCollabs = (updater: (list: Collaborator[]) => Collaborator[]) => {
     updateProject?.((p) => ({ ...p, collaborators: updater(projectCollaborators(p)), updated: "À l'instant" }));
@@ -1771,20 +1800,20 @@ function CollaborateursTab({
    *  Sur soi-même, la seule action possible est « Quitter le projet ». */
   const promote = async (target: Collaborator) => {
     setMenuFor(null);
-    if (target.isCurrentUser) return deny("utilise « Quitter le projet » pour agir sur toi-même.");
-    if (me === "collaborateur") return deny("un collaborateur ne peut pas promouvoir.");
+    if (target.isCurrentUser) return deny("studio.denySelfAction");
+    if (me === "collaborateur") return deny("studio.denyCannotPromote");
     if (target.level === "collaborateur") {
       try {
         await updateStudioProjectMember(project.id, target.id, "editeur");
         setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "editeur" } : c)));
-        onWorkflow?.(`${target.name} est maintenant éditeur.`);
+        onWorkflow?.(`${target.name} ${t("studio.nowEditorSuffix")}`);
       } catch (error) {
-        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié.");
+        onWorkflow?.(error instanceof Error ? error.message : t("profile.roleChangeFailed"));
       }
       return;
     }
     if (target.level === "editeur") {
-      if (me !== "chef") return deny("seul le chef peut promouvoir un éditeur.");
+      if (me !== "chef") return deny("studio.denyOnlyLeadPromoteEditor");
       // L'éditeur devient chef, l'ancien chef devient éditeur (un seul chef par projet).
       try {
         await transferStudioProjectOwnership(project.id, target.id);
@@ -1793,44 +1822,44 @@ function CollaborateursTab({
             c.id === target.id ? { ...c, level: "chef" } : c.level === "chef" ? { ...c, level: "editeur" } : c,
           ),
         );
-        onWorkflow?.(`${target.name} est maintenant le chef du projet — tu deviens éditeur.`);
+        onWorkflow?.(`${target.name} ${t("studio.nowLeadSuffix")}`);
       } catch (error) {
-        onWorkflow?.(error instanceof Error ? error.message : "Le projet n'a pas pu être transféré.");
+        onWorkflow?.(error instanceof Error ? error.message : t("studio.transferFailedMsg"));
       }
       return;
     }
-    deny("le chef ne peut pas être promu.");
+    deny("studio.denyLeadCannotBePromoted");
   };
 
   const demote = async (target: Collaborator) => {
     setMenuFor(null);
-    if (target.isCurrentUser) return deny("utilise « Quitter le projet » pour agir sur toi-même.");
-    if (me !== "chef") return deny("seul le chef peut rétrograder.");
+    if (target.isCurrentUser) return deny("studio.denySelfAction");
+    if (me !== "chef") return deny("studio.denyOnlyLeadDemote");
     if (target.level === "editeur") {
       try {
         await updateStudioProjectMember(project.id, target.id, "collaborateur");
         setCollabs((list) => list.map((c) => (c.id === target.id ? { ...c, level: "collaborateur" } : c)));
-        onWorkflow?.(`${target.name} est maintenant collaborateur.`);
+        onWorkflow?.(`${target.name} ${t("studio.nowCollaboratorSuffix")}`);
       } catch (error) {
-        onWorkflow?.(error instanceof Error ? error.message : "Le rôle n'a pas pu être modifié.");
+        onWorkflow?.(error instanceof Error ? error.message : t("profile.roleChangeFailed"));
       }
       return;
     }
-    deny("ce membre ne peut pas être rétrogradé.");
+    deny("studio.denyCannotBeDemoted");
   };
 
   const exclude = async (target: Collaborator) => {
     setMenuFor(null);
-    if (target.isCurrentUser) return deny("utilise « Quitter le projet » pour agir sur toi-même.");
-    if (target.level === "chef") return deny("le chef ne peut pas être exclu.");
-    if (me === "collaborateur") return deny("un collaborateur ne peut exclure personne.");
-    if (me === "editeur" && target.level === "editeur") return deny("un éditeur ne peut pas exclure un autre éditeur.");
+    if (target.isCurrentUser) return deny("studio.denySelfAction");
+    if (target.level === "chef") return deny("studio.denyLeadCannotBeExcluded");
+    if (me === "collaborateur") return deny("studio.denyCannotExclude");
+    if (me === "editeur" && target.level === "editeur") return deny("studio.denyEditorCannotExcludeEditor");
     try {
       await removeStudioProjectMember(project.id, target.id);
       setCollabs((list) => list.filter((c) => c.id !== target.id));
-      onWorkflow?.(`${target.name} a été exclu du projet.`);
+      onWorkflow?.(`${target.name} ${t("studio.excludedMemberSuffix")}`);
     } catch (error) {
-      onWorkflow?.(error instanceof Error ? error.message : "Le collaborateur n'a pas pu être retiré.");
+      onWorkflow?.(error instanceof Error ? error.message : t("studio.memberRemoveFailedMsg"));
     }
   };
 
@@ -1838,12 +1867,12 @@ function CollaborateursTab({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-display text-[18px] font-bold">Collaborateurs</h2>
+          <h2 className="font-display text-[18px] font-bold">{t("studio.tabCollaborators")}</h2>
           <p className="mt-0.5 text-[14px] text-[var(--text-secondary)]">
-            {collabs.length} personne{collabs.length > 1 ? "s" : ""} sur ce projet · ton statut : {LEVEL_LABEL[me]}
+            {collabs.length} {t("studio.peopleOnProject")} · {t("studio.yourStatus")} : {t(LEVEL_LABEL_KEY[me])}
           </p>
         </div>
-        <PrimaryButton icon={UserPlus} onClick={() => me === "collaborateur" ? deny("un collaborateur ne peut pas inviter.") : setInviteOpen(true)}>Inviter un collaborateur</PrimaryButton>
+        <PrimaryButton icon={UserPlus} onClick={() => me === "collaborateur" ? deny("studio.denyCannotInvite") : setInviteOpen(true)}>{t("studio.inviteCollaborator")}</PrimaryButton>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {collabs.map(c => (
@@ -1852,7 +1881,7 @@ function CollaborateursTab({
               to="/profile/$profileId"
               params={{ profileId: c.isCurrentUser ? "moi" : c.id }}
               className="flex min-w-0 flex-1 items-center gap-3"
-              title={`Voir le profil de ${c.name}`}
+              title={`${t("ideas.viewProfileOf")} ${c.name}`}
             >
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-gradient-to-br from-[#1a2960] to-[#0a1030] font-display text-[14px] font-bold">{initials(c.name)}</div>
               <div className="min-w-0 flex-1">
@@ -1860,8 +1889,8 @@ function CollaborateursTab({
                 <div className="truncate tiny-meta text-[var(--text-muted)]">{c.role}</div>
               </div>
             </Link>
-            <StatusChip label={LEVEL_LABEL[c.level]} tone={c.level === "chef" ? "neon" : c.level === "editeur" ? "info" : "neutral"} />
-            <IconButton ariaLabel={`Actions sur ${c.name}`} onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}>
+            <StatusChip label={t(LEVEL_LABEL_KEY[c.level])} tone={c.level === "chef" ? "neon" : c.level === "editeur" ? "info" : "neutral"} />
+            <IconButton ariaLabel={`${t("studio.actionsOnPrefix")} ${c.name}`} onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}>
               <MoreHorizontal className="h-4 w-4" />
             </IconButton>
             {menuFor === c.id && (
@@ -1870,18 +1899,18 @@ function CollaborateursTab({
               >
                 {c.isCurrentUser ? (
                   <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={leave}>
-                    Quitter le projet
+                    {t("studio.leaveProject")}
                   </button>
                 ) : (
                   <>
                     <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => void promote(c)}>
-                      Promouvoir
+                      {t("studio.promote")}
                     </button>
                     <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] hover:bg-white/[0.05]" onClick={() => void demote(c)}>
-                      Rétrograder
+                      {t("studio.demote")}
                     </button>
                     <button className="block w-full px-4 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-white/[0.05]" onClick={() => void exclude(c)}>
-                      Exclure du projet
+                      {t("studio.exclude")}
                     </button>
                   </>
                 )}
@@ -1916,6 +1945,7 @@ function InviteCollaboratorModal({
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [recipient, setRecipient] = useState("");
   const [role, setRole] = useState<string[]>(["Dessinateur"]);
   const [message, setMessage] = useState("");
@@ -1924,11 +1954,11 @@ function InviteCollaboratorModal({
 
   const submit = async () => {
     if (!recipient.trim()) {
-      setError("Indique un email ou un pseudo.");
+      setError(t("studio.emailOrPseudoRequired"));
       return;
     }
     if (existingRecipients.some((name) => name.toLocaleLowerCase("fr") === recipient.trim().toLocaleLowerCase("fr"))) {
-      setError("Cette personne fait déjà partie du projet.");
+      setError(t("studio.alreadyMember"));
       return;
     }
     setSaving(true);
@@ -1940,9 +1970,9 @@ function InviteCollaboratorModal({
         role: role[0] || "Dessinateur",
         message: message.trim() || undefined,
       });
-      onDone(`Invitation envoyée à ${recipient.trim()}. Elle rejoindra le projet après acceptation.`);
+      onDone(`${t("studio.invitationSentTo")} ${recipient.trim()}. ${t("studio.invitationSentSuffix")}`);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "L'invitation n'a pas pu être envoyée.");
+      setError(submitError instanceof Error ? submitError.message : t("showcase.invitationFailed"));
     } finally {
       setSaving(false);
     }
@@ -1950,14 +1980,14 @@ function InviteCollaboratorModal({
 
   return (
     <StudioModal
-      title="Inviter un collaborateur"
+      title={t("studio.inviteCollaborator")}
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={UserPlus} onClick={() => { if (!saving) void submit(); }}>{saving ? "Envoi…" : "Envoyer l'invitation"}</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton><PrimaryButton icon={UserPlus} onClick={() => { if (!saving) void submit(); }}>{saving ? t("profile.sending") : t("studio.sendInvitationBtn")}</PrimaryButton></>}
     >
       <div className="flex flex-col gap-5">
-        <ModalField label="Email ou pseudo"><TextInput value={recipient} onChange={setRecipient} placeholder="collaborateur@email.com ou @username" /></ModalField>
-        <ChoiceRow label="Rôle" defaultValue="Dessinateur" options={COLLAB_ROLES} onChange={setRole} />
-        <ModalField label="Message"><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Expliquez le rôle attendu, le rythme et les prochaines étapes." className={modalTextarea} /></ModalField>
+        <ModalField label={t("studio.emailOrUsername")}><TextInput value={recipient} onChange={setRecipient} placeholder={t("studio.emailOrUsernamePlaceholder")} /></ModalField>
+        <ChoiceRow label={t("profile.role")} defaultValue="Dessinateur" options={COLLAB_ROLES} onChange={setRole} />
+        <ModalField label={t("msg.message")}><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t("studio.inviteMessagePlaceholder")} className={modalTextarea} /></ModalField>
         {error && <p className="text-[13px] font-semibold text-[var(--danger)]">{error}</p>}
       </div>
     </StudioModal>
@@ -1969,6 +1999,7 @@ function InviteCollaboratorModal({
 /* ---------- Add modals ---------- */
 
 function StudioModal({ title, onClose, children, footer, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
+  const { t } = useI18n();
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -1995,7 +2026,7 @@ function StudioModal({ title, onClose, children, footer, wide = false }: { title
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-default)] px-6 py-4">
           <h3 className="font-display text-[18px] font-bold">{title}</h3>
-          <IconButton ariaLabel="Close" onClick={onClose}><X className="h-4 w-4" /></IconButton>
+          <IconButton ariaLabel={t("studio.close")} onClick={onClose}><X className="h-4 w-4" /></IconButton>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-6">{children}</div>
         {footer && (
@@ -2039,6 +2070,7 @@ function ModalField({ label, children }: { label: string; children: React.ReactN
 const modalTextarea = "min-h-[96px] w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)]";
 
 function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chapter: Chapter) => void }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [objective, setObjective] = useState("");
   const [pageCount, setPageCount] = useState("12");
@@ -2046,7 +2078,7 @@ function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chap
 
   const submit = () => {
     if (!title.trim()) {
-      setError("Le titre du chapitre est obligatoire.");
+      setError(t("studio.chapterTitleRequired"));
       return;
     }
     const count = Math.max(1, Math.min(60, Number(pageCount) || 12));
@@ -2055,7 +2087,7 @@ function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chap
       number: 0, // renuméroté à l'affichage via l'index
       title: title.trim(),
       status: "Draft",
-      objective: objective.trim() || "Objectif à définir.",
+      objective: objective.trim() || t("studio.objectiveToDefine"),
       pages: makeEmptyPages(count),
       updated: "À l'instant",
     });
@@ -2063,14 +2095,14 @@ function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chap
 
   return (
     <StudioModal
-      title="Ajouter un chapitre"
+      title={t("studio.addChapterTitle")}
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Ajouter le chapitre</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton><PrimaryButton icon={Plus} onClick={submit}>{t("studio.addChapterBtn")}</PrimaryButton></>}
     >
       <div className="flex flex-col gap-4">
-        <ModalField label="Titre du chapitre"><TextInput value={title} onChange={setTitle} placeholder="Titre du chapitre" /></ModalField>
-        <ModalField label="Objectif"><textarea value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Objectif du chapitre" className={modalTextarea} /></ModalField>
-        <ModalField label="Nombre de pages"><TextInput value={pageCount} onChange={setPageCount} placeholder="12" /></ModalField>
+        <ModalField label={t("studio.chapterTitleLabel")}><TextInput value={title} onChange={setTitle} placeholder={t("studio.chapterTitleLabel")} /></ModalField>
+        <ModalField label={t("studio.objective")}><textarea value={objective} onChange={(e) => setObjective(e.target.value)} placeholder={t("studio.objective")} className={modalTextarea} /></ModalField>
+        <ModalField label={t("studio.pageCount")}><TextInput value={pageCount} onChange={setPageCount} placeholder="12" /></ModalField>
         {error && <p className="text-[13px] font-semibold text-[var(--danger)]">{error}</p>}
       </div>
     </StudioModal>
@@ -2078,7 +2110,7 @@ function AddChapterModal({ onClose, onAdd }: { onClose: () => void; onAdd: (chap
 }
 
 function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCreate: (project: Project) => void }) {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   // La langue du projet démarre sur la langue du site choisie par l'utilisateur.
   const defaultLang = locale === "fr" ? "FR" : "ENG";
   const [title, setTitle] = useState("");
@@ -2097,18 +2129,18 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
     setCoverError("");
     void readImageFile(file)
       .then(setCoverDataUrl)
-      .catch(() => setCoverError("Cette image n'a pas pu être importée."));
+      .catch(() => setCoverError(t("studio.coverImportFailedShort")));
   };
 
   const submit = () => {
     if (!title.trim()) {
-      setFormError("Le titre du projet est obligatoire.");
+      setFormError(t("studio.projectTitleRequired"));
       return;
     }
     const project: Project = {
       id: `prj-${crypto.randomUUID()}`,
       title: title.trim(),
-      synopsis: synopsis.trim() || "Synopsis à compléter.",
+      synopsis: synopsis.trim() || t("profile.synopsisTodo"),
       status: "Draft",
       chaptersCount: 0,
       validatedPages: 0,
@@ -2139,10 +2171,10 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
 
   return (
     <StudioModal
-      title="Créer un projet"
+      title={t("studio.createProjectTitle")}
       wide
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Créer le projet</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton><PrimaryButton icon={Plus} onClick={submit}>{t("profile.createProjectButton")}</PrimaryButton></>}
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
@@ -2152,26 +2184,26 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
             className="flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-[18px] border border-dashed border-[var(--border-strong)] bg-[var(--input-bg)] transition-colors hover:border-[var(--neon-border)]"
           >
             {coverDataUrl ? (
-              <img src={coverDataUrl} alt="Aperçu de la couverture" className="h-full w-full object-cover" />
+              <img src={coverDataUrl} alt={t("studio.coverPreviewAlt")} className="h-full w-full object-cover" />
             ) : (
-              <span className="flex flex-col items-center gap-2 text-[var(--text-secondary)]"><Upload className="h-6 w-6" /><span className="text-[14px] font-bold">Importer une couverture</span></span>
+              <span className="flex flex-col items-center gap-2 text-[var(--text-secondary)]"><Upload className="h-6 w-6" /><span className="text-[14px] font-bold">{t("studio.uploadCoverAria")}</span></span>
             )}
           </button>
           <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { chooseCover(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} />
           {coverError && <p className="mt-2 text-[13px] font-semibold text-[var(--danger)]">{coverError}</p>}
         </div>
         <div className="flex flex-col gap-5">
-          <ModalField label="Titre du projet"><TextInput value={title} onChange={setTitle} placeholder="Nom du manga" /></ModalField>
-          <ModalField label="Synopsis"><textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Résumé court du projet, ton, objectif principal." className={modalTextarea} /></ModalField>
-          <ChoiceRow label="Langue du projet" defaultValue={defaultLang} options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
-          <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
+          <ModalField label={t("profile.projectName")}><TextInput value={title} onChange={setTitle} placeholder={t("profile.projectName")} /></ModalField>
+          <ModalField label={t("studio.synopsis")}><textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder={t("profile.synopsis")} className={modalTextarea} /></ModalField>
+          <ChoiceRow label={t("studio.projectLanguage")} defaultValue={defaultLang} options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
+          <ChoiceRow multi label={t("profile.genreLabel")} options={["Shonen", "Seinen", "Shojo", "Josei"]} onChange={setGenres} />
           <ChoiceRow
             multi
-            label="Sous-genres"
+            label={t("studio.subgenres")}
             options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
             onChange={setSubgenres}
           />
-          <ModalField label="Note de production"><textarea value={productionNote} onChange={(e) => setProductionNote(e.target.value)} placeholder="Indiquez ce dont l'équipe aura besoin pour démarrer." className={modalTextarea} /></ModalField>
+          <ModalField label={t("studio.productionNote")}><textarea value={productionNote} onChange={(e) => setProductionNote(e.target.value)} placeholder={t("studio.productionNotePlaceholder")} className={modalTextarea} /></ModalField>
           {formError && <p className="text-[13px] font-semibold text-[var(--danger)]">{formError}</p>}
         </div>
       </div>
@@ -2180,6 +2212,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
 }
 
 function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; defaultDate?: string; onAdd: (note: Note) => void }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [date, setDate] = useState(defaultDate ?? "");
@@ -2188,7 +2221,7 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
 
   const submit = () => {
     if (!title.trim()) {
-      setError("Le titre de la note est obligatoire.");
+      setError(t("studio.noteTitleRequired"));
       return;
     }
     onAdd({
@@ -2205,15 +2238,15 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
 
   return (
     <StudioModal
-      title="Ajouter une note"
+      title={t("studio.addNoteTitle")}
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Ajouter la note</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton><PrimaryButton icon={Plus} onClick={submit}>{t("studio.addNoteBtn")}</PrimaryButton></>}
     >
       <div className="flex flex-col gap-4">
-        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre de la note" /></ModalField>
-        <ModalField label="Contenu"><textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Contenu de la note…" className={modalTextarea} /></ModalField>
+        <ModalField label={t("studio.title")}><TextInput value={title} onChange={setTitle} placeholder={t("studio.noteTitlePlaceholder")} /></ModalField>
+        <ModalField label={t("studio.content")}><textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t("studio.noteContentPlaceholder")} className={modalTextarea} /></ModalField>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ModalField label="Date liée">
+          <ModalField label={t("studio.linkedDate")}>
             {/* Mini calendrier natif + saisie chiffrée, stylé selon le design du site. */}
             <input
               type="date"
@@ -2222,7 +2255,7 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
               className="h-11 w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 text-[14px] text-[var(--text-primary)] outline-none transition-shadow focus:border-[var(--neon)] focus:shadow-[0_0_0_3px_rgba(57,255,136,0.10)] [color-scheme:dark]"
             />
           </ModalField>
-          <ChoiceRow label="Priorité" defaultValue="Medium" options={["Low", "Medium", "High"]} onChange={setPriority} />
+          <ChoiceRow label={t("studio.priority")} defaultValue="Medium" options={["Low", "Medium", "High"]} onChange={setPriority} />
         </div>
         {error && <p className="text-[13px] font-semibold text-[var(--danger)]">{error}</p>}
       </div>
@@ -2231,13 +2264,14 @@ function AddNoteModal({ onClose, defaultDate, onAdd }: { onClose: () => void; de
 }
 
 function AddParrainageModal({ onClose, onAdd }: { onClose: () => void; onAdd: (sponsorship: Sponsorship) => void }) {
+  const { t } = useI18n();
   // Popup service unifié (le même que sur la page profil).
   return (
     <ServiceFormModal
       open
       onClose={onClose}
       mode="project"
-      title="Nouvelle annonce de parrainage"
+      title={t("studio.newSponsorshipModalTitle")}
       onSubmit={(values) => {
         onAdd({
           id: `s-${Date.now()}`,
@@ -2260,6 +2294,7 @@ function AddParrainageModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s
 }
 
 function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recruit: RecruitAnnouncement) => void }) {
+  const { t } = useI18n();
   const [remuneration, setRemuneration] = useState(false);
   const [title, setTitle] = useState("");
   const [hook, setHook] = useState("");
@@ -2286,16 +2321,16 @@ function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recr
 
   return (
     <StudioModal
-      title="Nouvelle annonce de recrutement"
+      title={t("studio.newRecruitModalTitle")}
       onClose={onClose}
-      footer={<><GhostButton onClick={onClose}>Annuler</GhostButton><PrimaryButton icon={Plus} onClick={submit}>Confirmer</PrimaryButton></>}
+      footer={<><GhostButton onClick={onClose}>{t("studio.cancel")}</GhostButton><PrimaryButton icon={Plus} onClick={submit}>{t("studio.confirm")}</PrimaryButton></>}
     >
       <div className="flex flex-col gap-6">
-        <ChoiceRow label="Langage" defaultValue="FR" options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
-        <ModalField label="Titre"><TextInput value={title} onChange={setTitle} placeholder="Titre" /></ModalField>
-        <ModalField label="Accroche"><TextInput value={hook} onChange={setHook} placeholder="Accroche" /></ModalField>
-        <ModalField label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className={modalTextarea} /></ModalField>
-        <ChoiceRow label="Statut recherché" defaultValue="Scénariste" options={COLLAB_ROLES} onChange={setRole} />
+        <ChoiceRow label={t("studio.language")} defaultValue="FR" options={["FR", "ENG", "ES", "IT", "JP"]} onChange={setLanguage} />
+        <ModalField label={t("studio.title")}><TextInput value={title} onChange={setTitle} placeholder={t("studio.title")} /></ModalField>
+        <ModalField label={t("studio.hook")}><TextInput value={hook} onChange={setHook} placeholder={t("studio.hook")} /></ModalField>
+        <ModalField label={t("studio.description")}><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("studio.description")} className={modalTextarea} /></ModalField>
+        <ChoiceRow label={t("studio.roleSought")} defaultValue="Scénariste" options={COLLAB_ROLES} onChange={setRole} />
         <button
           type="button"
           role="switch"
@@ -2307,7 +2342,7 @@ function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recr
             background: remuneration ? "rgba(57,255,136,0.12)" : "var(--input-bg)",
           }}
         >
-          <span className="text-[13px] font-bold text-[var(--text-primary)]">Rémunération</span>
+          <span className="text-[13px] font-bold text-[var(--text-primary)]">{t("studio.remuneration")}</span>
           <span className="relative h-6 w-11 rounded-full border border-[var(--border-default)] bg-[var(--elevated)]">
             <span
               className="absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all"
@@ -2315,7 +2350,7 @@ function AddRecruitModal({ onClose, onAdd }: { onClose: () => void; onAdd: (recr
             />
           </span>
         </button>
-        <ChoiceRow label="Engagement" defaultValue="Long terme" options={["Long terme", "Ponctuel"]} onChange={setEngagement} />
+        <ChoiceRow label={t("studio.engagement")} defaultValue="Long terme" options={["Long terme", "Ponctuel"]} onChange={setEngagement} />
       </div>
     </StudioModal>
   );
@@ -2334,6 +2369,7 @@ function SettingsTab({
   onWorkflow: (message: string) => void;
   onLeaveProject?: () => void;
 }) {
+  const { t } = useI18n();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -2345,14 +2381,14 @@ function SettingsTab({
   const catalogVisible = project.catalogVisible ?? false;
   const level = myLevel(project);
   const canEdit = level !== "collaborateur";
-  const denyEdit = () => onWorkflow("Action non autorisée pour ton statut : un collaborateur peut uniquement ajouter des images aux pages.");
+  const denyEdit = () => onWorkflow(`${t("studio.denyPrefix")} ${t("studio.denyImagesOnly")}`);
 
   const saveEdits = () => {
     if (!canEdit) return denyEdit();
     if (!title.trim()) return;
     updateProject((p) => ({ ...p, title: title.trim(), synopsis: synopsis.trim(), genres, subgenres, updated: "À l'instant" }));
     setEditing(false);
-    onWorkflow("Paramètres du projet enregistrés.");
+    onWorkflow(t("studio.settingsSavedMsg"));
   };
 
   const onCoverChosen = (file: File | undefined) => {
@@ -2360,8 +2396,8 @@ function SettingsTab({
     if (!canEdit) return denyEdit();
     void readImageFile(file).then((coverDataUrl) => {
       updateProject((p) => ({ ...p, coverDataUrl, updated: "À l'instant" }));
-      onWorkflow("Couverture mise à jour.");
-    }).catch(() => onWorkflow("La couverture n'a pas pu être importée."));
+      onWorkflow(t("studio.coverUpdatedMsg"));
+    }).catch(() => onWorkflow(t("studio.coverImportFailedMsg")));
   };
 
   return (
@@ -2369,30 +2405,30 @@ function SettingsTab({
       <div className="flex flex-col gap-4">
         <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-[18px] font-bold">Projet</h3>
+            <h3 className="font-display text-[18px] font-bold">{t("studio.project")}</h3>
             {editing ? (
               <div className="flex items-center gap-2">
-                <GhostButton onClick={() => { setEditing(false); setTitle(project.title); setSynopsis(project.synopsis); setGenres(project.genres); setSubgenres(project.subgenres ?? []); }}>Annuler</GhostButton>
-                <PrimaryButton icon={Save} className="!h-10 !px-3" onClick={saveEdits}>Enregistrer</PrimaryButton>
+                <GhostButton onClick={() => { setEditing(false); setTitle(project.title); setSynopsis(project.synopsis); setGenres(project.genres); setSubgenres(project.subgenres ?? []); }}>{t("studio.cancel")}</GhostButton>
+                <PrimaryButton icon={Save} className="!h-10 !px-3" onClick={saveEdits}>{t("studio.save")}</PrimaryButton>
               </div>
             ) : (
-              <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canEdit ? setEditing(true) : denyEdit()}>Modifier</SecondaryButton>
+              <SecondaryButton icon={Edit3} className="!h-10 !px-3" onClick={() => canEdit ? setEditing(true) : denyEdit()}>{t("studio.edit")}</SecondaryButton>
             )}
           </div>
           {editing ? (
             <div className="flex flex-col gap-3">
               <div>
-                <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Titre</div>
-                <TextInput value={title} onChange={setTitle} placeholder="Titre du projet" />
+                <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">{t("studio.title")}</div>
+                <TextInput value={title} onChange={setTitle} placeholder={t("profile.projectName")} />
               </div>
               <div>
-                <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Synopsis</div>
+                <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">{t("studio.synopsis")}</div>
                 <textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} className={modalTextarea} />
               </div>
-              <ChoiceRow multi label="Genre" options={["Shonen", "Seinen", "Shojo", "Josei"]} defaultValues={genres} onChange={setGenres} />
+              <ChoiceRow multi label={t("profile.genreLabel")} options={["Shonen", "Seinen", "Shojo", "Josei"]} defaultValues={genres} onChange={setGenres} />
               <ChoiceRow
                 multi
-                label="Sous-genres"
+                label={t("studio.subgenres")}
                 options={["Action", "Aventure", "Comédie", "Drame", "Fantastique", "Science-fiction", "Romance", "Slice of life", "Horreur", "Mystère", "Historique", "Sport", "Isekai", "Psychologique", "Mecha"]}
                 defaultValues={subgenres}
                 onChange={setSubgenres}
@@ -2401,11 +2437,11 @@ function SettingsTab({
           ) : (
             <div className="flex flex-col divide-y divide-[var(--border-default)]">
               {[
-                { label: "Titre", value: project.title },
-                { label: "Statut", value: project.status },
-                { label: "Genres", value: project.genres.join(", ") || "—" },
-                { label: "Sous-genres", value: (project.subgenres ?? []).join(", ") || "—" },
-                { label: "Chapitres", value: String(project.chapters.length) },
+                { label: t("studio.title"), value: project.title },
+                { label: t("studio.status"), value: project.status },
+                { label: t("studio.genres"), value: project.genres.join(", ") || "—" },
+                { label: t("studio.subgenres"), value: (project.subgenres ?? []).join(", ") || "—" },
+                { label: t("studio.chapters"), value: String(project.chapters.length) },
               ].map(i => (
                 <div key={i.label} className="flex items-center justify-between py-3">
                   <span className="text-[13px] font-semibold text-[var(--text-secondary)]">{i.label}</span>
@@ -2417,16 +2453,16 @@ function SettingsTab({
         </div>
 
         <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
-          <h3 className="font-display text-[18px] font-bold">Couverture</h3>
+          <h3 className="font-display text-[18px] font-bold">{t("studio.coverHeading")}</h3>
           <div className="mt-3 flex items-center gap-4">
             {project.coverDataUrl ? (
-              <img src={project.coverDataUrl} alt="Couverture" className="aspect-[3/4] w-24 rounded-[12px] border border-[var(--border-default)] object-cover" />
+              <img src={project.coverDataUrl} alt={t("studio.coverHeading")} className="aspect-[3/4] w-24 rounded-[12px] border border-[var(--border-default)] object-cover" />
             ) : (
               <CoverPlaceholder title={project.title} className="aspect-[3/4] w-24" />
             )}
             <div className="flex flex-col gap-2">
               <SecondaryButton icon={Upload} className="!h-10 !px-3" onClick={() => coverInputRef.current?.click()}>
-                {project.coverDataUrl ? "Remplacer la couverture" : "Uploader une couverture"}
+                {project.coverDataUrl ? t("studio.replaceCover") : t("studio.uploadCoverBtn")}
               </SecondaryButton>
               <input
                 ref={coverInputRef}
@@ -2441,11 +2477,11 @@ function SettingsTab({
       </div>
       <div className="flex flex-col gap-4">
         <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
-          <h3 className="font-display text-[18px] font-bold">Statut du projet</h3>
+          <h3 className="font-display text-[18px] font-bold">{t("studio.projectStatusHeading")}</h3>
           <p className="mt-1 text-[14px] text-[var(--text-secondary)]">
             {hasPublishedChapter(project)
-              ? "Contrôle la visibilité du projet dans le catalogue public."
-              : "Publie au moins un chapitre pour rendre le projet visible dans le catalogue."}
+              ? t("studio.catalogVisibilityDesc1")
+              : t("studio.catalogVisibilityDesc2")}
           </p>
           <button
             type="button"
@@ -2454,11 +2490,11 @@ function SettingsTab({
             disabled={!hasPublishedChapter(project) || project.status === "Finished"}
             onClick={() => {
               if (myLevel(project) !== "chef") {
-                onWorkflow("Action non autorisée pour ton statut : seul le chef peut modifier la visibilité du projet.");
+                onWorkflow(`${t("studio.denyPrefix")} ${t("studio.denyOnlyLeadVisibility")}`);
                 return;
               }
               updateProject((p) => ({ ...p, catalogVisible: !catalogVisible, updated: "À l'instant" }));
-              onWorkflow(catalogVisible ? "Projet masqué du catalogue (Paused)." : "Projet visible dans le catalogue (In progress).");
+              onWorkflow(catalogVisible ? `${t("studio.hiddenFromCatalog")} (Paused).` : `${t("studio.visibleInCatalog")} (In progress).`);
             }}
             className="mt-4 flex w-full items-center justify-between rounded-[14px] border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
             style={{
@@ -2467,7 +2503,7 @@ function SettingsTab({
             }}
           >
             <span className="text-[13px] font-bold text-[var(--text-primary)]">
-              {catalogVisible ? "Visible dans le catalogue" : "Masqué du catalogue"}
+              {catalogVisible ? t("studio.visibleInCatalog") : t("studio.hiddenFromCatalog")}
             </span>
             <span className="relative h-6 w-11 rounded-full border border-[var(--border-default)] bg-[var(--elevated)]">
               <span
@@ -2481,12 +2517,12 @@ function SettingsTab({
             <div className="mt-3 flex items-center justify-between rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] px-4 py-3">
               <div>
                 <div className="text-[13px] font-bold text-[var(--text-primary)]">
-                  {project.status === "Finished" ? "Projet terminé (Finished)" : "Marquer comme terminé"}
+                  {project.status === "Finished" ? t("studio.finishedTitle") : t("studio.markAsFinished")}
                 </div>
                 <div className="tiny-meta mt-0.5 text-[var(--text-muted)]">
                   {project.status === "Finished"
-                    ? "Le projet reste visible dans le catalogue."
-                    : "Le projet sera considéré comme terminé et restera visible."}
+                    ? t("studio.finishedDesc1")
+                    : t("studio.finishedDesc2")}
                 </div>
               </div>
               {project.status === "Finished" ? (
@@ -2494,78 +2530,78 @@ function SettingsTab({
                   className="!h-9 !px-3"
                   onClick={() => {
                     if (level !== "chef") {
-                      onWorkflow("Action non autorisée pour ton statut : seul le chef peut reprendre la production.");
+                      onWorkflow(`${t("studio.denyPrefix")} ${t("studio.denyOnlyLeadResume")}`);
                       return;
                     }
                     updateProject((p) => ({ ...p, status: p.catalogVisible ? "In progress" : "Paused", updated: "À l'instant" }));
-                    onWorkflow("Production reprise.");
+                    onWorkflow(t("studio.resume"));
                   }}
                 >
-                  Reprendre
+                  {t("studio.resume")}
                 </SecondaryButton>
               ) : (
                 <PrimaryButton
                   className="!h-9 !px-3"
                   onClick={() => {
                     if (level !== "chef") {
-                      onWorkflow("Action non autorisée pour ton statut : seul le chef peut terminer le projet.");
+                      onWorkflow(`${t("studio.denyPrefix")} ${t("studio.denyOnlyLeadFinish")}`);
                       return;
                     }
                     updateProject((p) => ({ ...p, status: "Finished", catalogVisible: true, updated: "À l'instant" }));
-                    onWorkflow("Projet marqué comme terminé.");
+                    onWorkflow(t("studio.finishedTitle"));
                   }}
                 >
-                  Finished
+                  {t("studio.finishedBtn")}
                 </PrimaryButton>
               )}
             </div>
           )}
         </div>
         <div className="rounded-[22px] border border-[rgba(255,184,77,0.35)] bg-[rgba(255,184,77,0.05)] p-5">
-          <h3 className="font-display text-[18px] font-bold text-[var(--warning)]">Quitter le projet</h3>
+          <h3 className="font-display text-[18px] font-bold text-[var(--warning)]">{t("studio.leaveProject")}</h3>
           <p className="mt-1 text-[14px] text-[var(--text-secondary)]">
             {confirmLeave
               ? myLevel(project) === "chef"
-                ? "Confirme : l'éditeur le plus ancien (ou à défaut le collaborateur le plus ancien) deviendra chef à ta place."
-                : "Confirme : tu perdras l'accès à ce projet."
-              : "Tu ne feras plus partie de ce projet. Si tu es chef, le rôle sera transmis automatiquement."}
+                ? t("studio.leaveConfirmChef")
+                : t("studio.leaveConfirmOther")
+              : t("studio.leaveDesc")}
           </p>
           <div className="mt-4 flex items-center gap-2">
             {confirmLeave ? (
               <>
-                <DangerButton icon={Undo2} onClick={() => leaveProjectAction(updateProject, onWorkflow, onLeaveProject)}>Confirmer</DangerButton>
-                <GhostButton onClick={() => setConfirmLeave(false)}>Annuler</GhostButton>
+                <DangerButton icon={Undo2} onClick={() => leaveProjectAction(updateProject, onWorkflow, onLeaveProject)}>{t("studio.confirm")}</DangerButton>
+                <GhostButton onClick={() => setConfirmLeave(false)}>{t("studio.cancel")}</GhostButton>
               </>
             ) : (
-              <SecondaryButton icon={Undo2} onClick={() => setConfirmLeave(true)}>Quitter le projet</SecondaryButton>
+              <SecondaryButton icon={Undo2} onClick={() => setConfirmLeave(true)}>{t("studio.leaveProject")}</SecondaryButton>
             )}
           </div>
         </div>
         <div className="rounded-[22px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.05)] p-5">
-          <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-[var(--danger)]" /><h3 className="font-display text-[18px] font-bold text-[var(--danger)]">Danger zone</h3></div>
+          <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-[var(--danger)]" /><h3 className="font-display text-[18px] font-bold text-[var(--danger)]">{t("studio.dangerZone")}</h3></div>
           <p className="mt-1 text-[14px] text-[var(--text-secondary)]">
             {confirmDelete
-              ? "Confirme la suppression : tous les chapitres, pages et notes seront définitivement perdus."
-              : "Deleting the project removes all chapters, pages and notes permanently."}
+              ? t("studio.deleteConfirmText")
+              : t("studio.deleteWarningText")}
           </p>
           <div className="mt-4 flex items-center gap-2">
             {confirmDelete ? (
               <>
-                <DangerButton icon={Trash2} onClick={onDeleteProject}>Supprimer définitivement</DangerButton>
-                <GhostButton onClick={() => setConfirmDelete(false)}>Annuler</GhostButton>
+                <DangerButton icon={Trash2} onClick={onDeleteProject}>{t("studio.deletePermanently")}</DangerButton>
+                <GhostButton onClick={() => setConfirmDelete(false)}>{t("studio.cancel")}</GhostButton>
               </>
             ) : (
               <DangerButton
                 icon={Trash2}
                 onClick={() => {
                   if (myLevel(project) !== "chef") {
-                    onWorkflow("Action non autorisée pour ton statut : seul le chef peut supprimer le projet.");
+                    onWorkflow(`${t("studio.denyPrefix")} ${t("studio.denyOnlyLeadDelete")}`);
                     return;
                   }
                   setConfirmDelete(true);
                 }}
               >
-                Delete Project
+                {t("studio.deleteProjectBtn")}
               </DangerButton>
             )}
           </div>
@@ -2592,6 +2628,7 @@ function ChapterWorkspace({
   onSavePageNote: (pageId: string, noteId: string | undefined, note: Omit<Note, "id" | "category" | "status">) => string;
   onWorkflow: (message: string) => void;
 }) {
+  const { t, locale } = useI18n();
   const [pageIndex, setPageIndex] = useState(0);
   const [pages, setPages] = useState<PageItem[]>(chapter.pages);
   const page = pages[pageIndex];
@@ -2633,18 +2670,18 @@ function ChapterWorkspace({
   // Permissions par niveau : le collaborateur peut seulement AJOUTER des images.
   const level = myLevel(project);
   const [permNotice, setPermNotice] = useState<string | null>(null);
-  const deny = (message: string) => {
-    setPermNotice(`Action non autorisée pour ton statut : ${message}`);
+  const deny = (key: TranslationKey) => {
+    setPermNotice(`${t("studio.denyPrefix")} ${t(key)}`);
     window.setTimeout(() => setPermNotice(null), 3200);
   };
 
   const setPublished = (value: boolean) => {
     if (level === "collaborateur") {
-      deny("un collaborateur ne peut pas publier un chapitre.");
+      deny("studio.denyCannotPublish");
       return;
     }
     if (value && pages.some((item) => !item.validatedCandidateId)) {
-      deny("toutes les pages doivent avoir une image validée avant la publication.");
+      deny("studio.denyAllPagesValidated");
       return;
     }
     setPublishedState(value);
@@ -2665,12 +2702,12 @@ function ChapterWorkspace({
   const validateSelected = () => {
     if (!selectedCand) return;
     if (level === "collaborateur") {
-      deny("un collaborateur ne peut pas valider la sélection d'une image.");
+      deny("studio.denyCannotValidateSelection");
       return;
     }
     const candidate = page.candidates.find((item) => item.id === selectedCand);
     if (!candidate?.image) {
-      deny("sélectionne d'abord une image importée.");
+      deny("studio.denySelectImageFirst");
       return;
     }
     setPage(p => ({
@@ -2686,7 +2723,7 @@ function ChapterWorkspace({
     if (level === "collaborateur") {
       const target = page.candidates.find((c) => c.id === candId);
       if (target?.image) {
-        deny("un collaborateur ne peut pas remplacer une image déjà ajoutée.");
+        deny("studio.denyCannotReplace");
         return;
       }
     }
@@ -2714,8 +2751,8 @@ function ChapterWorkspace({
           ...images.slice(1).map((image) => ({ ...newCandidate(), status: "Imported" as CandidateStatus, image })),
         ],
       }));
-      onWorkflow(`${images.length} image${images.length > 1 ? "s" : ""} importée${images.length > 1 ? "s" : ""}.`);
-    }).catch(() => deny("une ou plusieurs images n'ont pas pu être importées."));
+      onWorkflow(`${images.length} image${images.length > 1 ? "s" : ""} ${t("studio.imagesImportedSuffix")}`);
+    }).catch(() => deny("studio.denyImportFailed"));
   };
 
   const importFirstEmpty = () => {
@@ -2732,7 +2769,7 @@ function ChapterWorkspace({
 
   const removeCand = (candId: string) => {
     if (level === "collaborateur") {
-      deny("un collaborateur ne peut pas retirer une image.");
+      deny("studio.denyCannotRemoveImage");
       return;
     }
     setPage(p => {
@@ -2763,7 +2800,7 @@ function ChapterWorkspace({
   };
 
   const addPage = () => {
-    if (level === "collaborateur") return deny("un collaborateur ne peut pas ajouter de page.");
+    if (level === "collaborateur") return deny("studio.denyCannotAddPage");
     const nextIndex = pages.length;
     setPages(prev => {
       const num = prev.length ? Math.max(...prev.map(p => p.number)) + 1 : 1;
@@ -2773,7 +2810,7 @@ function ChapterWorkspace({
   };
 
   const duplicatePage = () => {
-    if (level === "collaborateur") return deny("un collaborateur ne peut pas dupliquer de page.");
+    if (level === "collaborateur") return deny("studio.denyCannotDuplicatePage");
     setPages(prev => {
       const src = prev[pageIndex];
       const num = Math.max(...prev.map(p => p.number)) + 1;
@@ -2793,34 +2830,34 @@ function ChapterWorkspace({
   };
 
   const deletePage = () => {
-    if (level === "collaborateur") return deny("un collaborateur ne peut pas supprimer de page.");
+    if (level === "collaborateur") return deny("studio.denyCannotDeletePage");
     if (pages.length <= 1) return;
     setPages(prev => prev.filter((_, i) => i !== pageIndex));
     setPageIndex(i => Math.max(0, Math.min(i, pages.length - 2)));
   };
 
   const pageStatus: { label: string; tone: "neutral" | "neon" | "warn" } = page.validatedCandidateId
-    ? { label: "Validated", tone: "neon" }
-    : page.candidates.some(c => c.status !== "Empty") ? { label: "Needs selection", tone: "warn" } : { label: "No image", tone: "neutral" };
+    ? { label: t("studio.validated"), tone: "neon" }
+    : page.candidates.some(c => c.status !== "Empty") ? { label: t("studio.needsSelection"), tone: "warn" } : { label: t("studio.noImage"), tone: "neutral" };
   const validatedCand = page.candidates.find(c => c.id === page.validatedCandidateId) ?? null;
   // The candidate shown large: the one currently selected, otherwise the validated one.
   const activeCand = (selectedCand ? page.candidates.find(c => c.id === selectedCand) : null) ?? validatedCand;
 
   const savePageNote = () => {
-    if (level === "collaborateur") return deny("un collaborateur ne peut pas modifier les notes.");
+    if (level === "collaborateur") return deny("studio.denyEditNotes");
     if (!noteTitle.trim() && !noteContent.trim()) {
-      deny("ajoute un titre ou un contenu avant d'enregistrer la note.");
+      deny("studio.denyNoteContentRequired");
       return;
     }
     const noteId = onSavePageNote(page.id, page.noteRef, {
-      title: noteTitle.trim() || `Note — page ${page.number}`,
+      title: noteTitle.trim() || `${t("studio.notePagePrefix")} ${page.number}`,
       preview: (noteContent.trim() || noteTitle.trim()).slice(0, 120),
       content: noteContent.trim(),
       date: noteDate || undefined,
       priority: notePriority,
     });
     setPage((current) => ({ ...current, noteRef: noteId, updated: "À l'instant" }));
-    onWorkflow("Note de page enregistrée.");
+    onWorkflow(t("studio.pageNoteSavedMsg"));
   };
 
   return (
@@ -2832,21 +2869,21 @@ function ChapterWorkspace({
         </div>
       )}
       <PageHeader
-        back={{ label: `Back to ${project.title}`, onClick: onBack }}
-        eyebrow={<span className="tiny-meta text-[var(--neon)]">Chapter workspace</span>}
-        title={`Chapter ${String(chapter.number).padStart(2, "0")} — ${chapter.title}`}
+        back={{ label: `${t("studio.backToPrefix")} ${project.title}`, onClick: onBack }}
+        eyebrow={<span className="tiny-meta text-[var(--neon)]">{t("studio.chapterWorkspace")}</span>}
+        title={`${locale === "fr" ? "Chapitre" : "Chapter"} ${String(chapter.number).padStart(2, "0")} — ${chapter.title}`}
         description={chapter.objective}
         actions={
           <>
-            <StatusChip label={published ? "Published" : "In progress"} tone={published ? "neon" : "warn"} />
-            <SecondaryButton icon={Play} onClick={() => setPreviewOpen(true)}>Preview Chapter</SecondaryButton>
-            <SecondaryButton icon={Upload} onClick={importFirstEmpty}>Import Images</SecondaryButton>
+            <StatusChip label={published ? t("studio.publishedStatus") : t("studio.inProgressStatus")} tone={published ? "neon" : "warn"} />
+            <SecondaryButton icon={Play} onClick={() => setPreviewOpen(true)}>{t("studio.previewChapter")}</SecondaryButton>
+            <SecondaryButton icon={Upload} onClick={importFirstEmpty}>{t("studio.importImagesBtn")}</SecondaryButton>
             {published ? (
-              <SecondaryButton icon={Undo2} onClick={() => setPublished(false)}>Annuler la publication</SecondaryButton>
+              <SecondaryButton icon={Undo2} onClick={() => setPublished(false)}>{t("studio.unpublish")}</SecondaryButton>
             ) : (
-              <PrimaryButton icon={Rocket} onClick={() => setPublished(true)}>Publier le chapitre</PrimaryButton>
+              <PrimaryButton icon={Rocket} onClick={() => setPublished(true)}>{t("studio.publish")}</PrimaryButton>
             )}
-            <SecondaryButton icon={Save} onClick={() => onWorkflow("Chapitre enregistré automatiquement.")}>Save Chapter</SecondaryButton>
+            <SecondaryButton icon={Save} onClick={() => onWorkflow(t("studio.autoSavedMsg"))}>{t("studio.saveChapter")}</SecondaryButton>
           </>
         }
       />
@@ -2854,18 +2891,18 @@ function ChapterWorkspace({
       {/* Chapter summary */}
       <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-          <MetaField label="Chapter title" value={chapter.title} />
-          <MetaField label="Status" value={chapter.status} />
-          <MetaField label="Pages" value={String(pages.length)} />
-          <MetaField label="Validated" value={`${validatedCount}/${pages.length}`} />
-          <MetaField label="Last edited" value={chapter.updated} />
+          <MetaField label={t("studio.chapterTitleField")} value={chapter.title} />
+          <MetaField label={t("studio.status")} value={chapter.status} />
+          <MetaField label={t("studio.pages")} value={String(pages.length)} />
+          <MetaField label={t("studio.validated")} value={`${validatedCount}/${pages.length}`} />
+          <MetaField label={t("studio.lastEdited")} value={chapter.updated} />
         </div>
       </div>
 
       {/* Pagination */}
       <div className="rounded-[16px] border border-[var(--border-default)] bg-[var(--panel)] p-3 shadow-[var(--shadow-card)]">
         <div className="flex items-center gap-2">
-          <IconButton ariaLabel="Previous page" onClick={() => setPageIndex(i => Math.max(0, i - 1))}><ChevronLeft className="h-4 w-4" /></IconButton>
+          <IconButton ariaLabel={t("studio.previousPage")} onClick={() => setPageIndex(i => Math.max(0, i - 1))}><ChevronLeft className="h-4 w-4" /></IconButton>
           <div className="scrollbar-thin flex flex-1 items-center gap-1.5 overflow-x-auto">
             {pages.map((p, i) => {
               const active = i === pageIndex;
@@ -2878,27 +2915,27 @@ function ChapterWorkspace({
               );
             })}
           </div>
-          <IconButton ariaLabel="Next page" onClick={() => setPageIndex(i => Math.min(pages.length - 1, i + 1))}><ChevronRight className="h-4 w-4" /></IconButton>
+          <IconButton ariaLabel={t("studio.nextPage")} onClick={() => setPageIndex(i => Math.min(pages.length - 1, i + 1))}><ChevronRight className="h-4 w-4" /></IconButton>
           <div className="ml-2 hidden items-center gap-1.5 md:flex">
-            <SecondaryButton icon={Plus} className="!h-9 !px-3" onClick={addPage}>Add Page</SecondaryButton>
-            <IconButton ariaLabel="Duplicate page" onClick={duplicatePage}><Copy className="h-4 w-4" /></IconButton>
-            <IconButton ariaLabel="Delete page" onClick={deletePage}><Trash2 className="h-4 w-4" /></IconButton>
+            <SecondaryButton icon={Plus} className="!h-9 !px-3" onClick={addPage}>{t("studio.addPage")}</SecondaryButton>
+            <IconButton ariaLabel={t("studio.duplicate")} onClick={duplicatePage}><Copy className="h-4 w-4" /></IconButton>
+            <IconButton ariaLabel={t("studio.delete")} onClick={deletePage}><Trash2 className="h-4 w-4" /></IconButton>
           </div>
         </div>
         <div className="mt-3 flex items-center justify-end gap-1.5 md:hidden">
-          <SecondaryButton icon={Plus} className="!h-9 !px-3" onClick={addPage}>Add Page</SecondaryButton>
-          <IconButton ariaLabel="Duplicate page" onClick={duplicatePage}><Copy className="h-4 w-4" /></IconButton>
-          <IconButton ariaLabel="Delete page" onClick={deletePage}><Trash2 className="h-4 w-4" /></IconButton>
+          <SecondaryButton icon={Plus} className="!h-9 !px-3" onClick={addPage}>{t("studio.pageDetails") === "Page details" ? "Add Page" : "Ajouter une page"}</SecondaryButton>
+          <IconButton ariaLabel={t("studio.duplicate")} onClick={duplicatePage}><Copy className="h-4 w-4" /></IconButton>
+          <IconButton ariaLabel={t("studio.delete")} onClick={deletePage}><Trash2 className="h-4 w-4" /></IconButton>
         </div>
       </div>
 
       <div className="md:hidden">
-        <div className="cm-popup-tabs w-full" role="tablist" aria-label="Contenu du chapitre">
+        <div className="cm-popup-tabs w-full" role="tablist" aria-label={t("studio.chapterWorkspace")}>
           <button type="button" role="tab" aria-selected={mobileTab === "page"} data-active={mobileTab === "page"} onClick={() => setMobileTab("page")} className="cm-popup-tab flex-1">
             Page
           </button>
           <button type="button" role="tab" aria-selected={mobileTab === "notes"} data-active={mobileTab === "notes"} onClick={() => setMobileTab("notes")} className="cm-popup-tab flex-1">
-            Notes
+            {t("studio.tabNotes")}
           </button>
         </div>
       </div>
@@ -2910,7 +2947,7 @@ function ChapterWorkspace({
           <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--stage)] p-5 shadow-[var(--shadow-panel)]">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <div className="tiny-meta text-[var(--text-muted)]">Selected page</div>
+                <div className="tiny-meta text-[var(--text-muted)]">{t("studio.selectedPageLabel")}</div>
                 <h2 className="mt-1 font-display text-[20px] font-bold">Page {page.number}</h2>
               </div>
               <StatusChip label={pageStatus.label} tone={pageStatus.tone} />
@@ -2924,14 +2961,14 @@ function ChapterWorkspace({
               ) : page.validatedCandidateId ? (
                 <div className="flex flex-col items-center gap-3 text-center">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--neon-border)] bg-[var(--neon-soft)]"><Check className="h-6 w-6 text-[var(--neon)]" /></div>
-                  <div className="font-display text-[18px] font-bold">Validated image</div>
-                  <div className="tiny-meta text-[var(--text-muted)]">Candidate {page.candidates.findIndex(c => c.id === page.validatedCandidateId) + 1}</div>
+                  <div className="font-display text-[18px] font-bold">{t("studio.validatedImageLabel")}</div>
+                  <div className="tiny-meta text-[var(--text-muted)]">{t("studio.candidate")} {page.candidates.findIndex(c => c.id === page.validatedCandidateId) + 1}</div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3 px-6 text-center">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--elevated)]"><FileImage className="h-6 w-6 text-[var(--text-muted)]" /></div>
-                  <div className="text-[14px] font-bold text-[var(--text-primary)]">Choose one image candidate to validate this page.</div>
-                  <div className="text-[13px] text-[var(--text-secondary)]">Import as many candidates as you like, then select and validate the final image.</div>
+                  <div className="text-[14px] font-bold text-[var(--text-primary)]">{t("studio.chooseCandidateHint")}</div>
+                  <div className="text-[13px] text-[var(--text-secondary)]">{t("studio.importCandidatesHint")}</div>
                 </div>
               )}
             </div>
@@ -2940,10 +2977,10 @@ function ChapterWorkspace({
           {/* Candidates */}
           <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-display text-[18px] font-bold">Image candidates</h3>
+              <h3 className="font-display text-[18px] font-bold">{t("studio.imageCandidates")}</h3>
               <div className="flex items-center gap-2">
-                <SecondaryButton icon={Plus} className="!h-10 !px-3" onClick={addCandidate}>Add candidate</SecondaryButton>
-                <PrimaryButton onClick={validateSelected} className={!selectedCand ? "opacity-50" : ""}>Validate Selected Image</PrimaryButton>
+                <SecondaryButton icon={Plus} className="!h-10 !px-3" onClick={addCandidate}>{t("studio.addCandidate")}</SecondaryButton>
+                <PrimaryButton onClick={validateSelected} className={!selectedCand ? "opacity-50" : ""}>{t("studio.validateSelectedImage")}</PrimaryButton>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -2954,10 +2991,10 @@ function ChapterWorkspace({
                 return (
                   <div key={c.id} className={`flex flex-col overflow-hidden rounded-[16px] border p-3 transition-all ${validated ? "border-[var(--neon-border)] shadow-[var(--shadow-neon)] bg-[var(--elevated)]" : selected ? "border-[var(--info)] bg-[var(--elevated)]" : empty ? "border-dashed border-[var(--border-strong)] bg-[var(--input-bg)]" : "border-[var(--border-default)] bg-[var(--elevated)]"}`}>
                     <div className="mb-2 flex items-center justify-between">
-                      <div className="tiny-meta text-[var(--text-muted)]">Candidate {idx + 1}</div>
-                      {validated ? <StatusChip label="Validated" tone="neon" />
-                        : c.status === "Imported" ? <StatusChip label="Imported" tone="info" />
-                        : <StatusChip label="Empty" tone="neutral" />}
+                      <div className="tiny-meta text-[var(--text-muted)]">{t("studio.candidate")} {idx + 1}</div>
+                      {validated ? <StatusChip label={t("studio.validated")} tone="neon" />
+                        : c.status === "Imported" ? <StatusChip label={t("studio.imported")} tone="info" />
+                        : <StatusChip label={t("studio.empty")} tone="neutral" />}
                     </div>
                     <button
                       onClick={() => empty ? importInto(c.id) : setSelectedCand(c.id)}
@@ -2966,34 +3003,34 @@ function ChapterWorkspace({
                       {empty ? (
                         <div className="flex flex-col items-center gap-1.5 text-[var(--text-muted)]">
                           <Upload className="h-5 w-5" />
-                          <span className="text-[13px] font-bold">Import image</span>
+                          <span className="text-[13px] font-bold">{t("studio.importImage")}</span>
                         </div>
                       ) : c.image ? (
                         <>
-                          <img src={c.image} alt={`Candidate ${idx + 1}`} className="h-full w-full object-cover" />
-                          {validated && <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-[var(--neon-soft)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--neon)]"><Check className="h-3 w-3" /> Final</span>}
+                          <img src={c.image} alt={`${t("studio.candidate")} ${idx + 1}`} className="h-full w-full object-cover" />
+                          {validated && <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-[var(--neon-soft)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--neon)]"><Check className="h-3 w-3" /> {t("studio.final")}</span>}
                         </>
                       ) : (
                         <div className="flex flex-col items-center gap-2 text-center">
                           <ImageIcon className="h-6 w-6 text-[var(--text-secondary)]" />
-                          <span className="tiny-meta text-[var(--text-muted)]">Image candidate</span>
-                          {validated && <div className="flex items-center gap-1 text-[12px] font-bold text-[var(--neon)]"><Check className="h-3.5 w-3.5" /> Final</div>}
+                          <span className="tiny-meta text-[var(--text-muted)]">{t("studio.imageCandidate")}</span>
+                          {validated && <div className="flex items-center gap-1 text-[12px] font-bold text-[var(--neon)]"><Check className="h-3.5 w-3.5" /> {t("studio.final")}</div>}
                         </div>
                       )}
                     </button>
                     <div className="mt-3 flex items-center gap-1.5">
                       {!empty && !validated && (
                         <button onClick={() => setSelectedCand(c.id)} className={`inline-flex h-9 flex-1 items-center justify-center rounded-[10px] border text-[13px] font-bold transition-colors ${selected ? "border-[var(--info)] bg-[rgba(117,167,255,0.10)] text-[var(--info)]" : "border-[var(--border-default)] bg-[var(--input-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
-                          {selected ? "Selected" : "Select"}
+                          {selected ? t("studio.selected") : t("studio.select")}
                         </button>
                       )}
                       {empty && (
-                        <button onClick={() => importInto(c.id)} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-default)] bg-[var(--input-bg)] text-[13px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Upload className="h-3.5 w-3.5" />Import</button>
+                        <button onClick={() => importInto(c.id)} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-default)] bg-[var(--input-bg)] text-[13px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Upload className="h-3.5 w-3.5" />{t("studio.import")}</button>
                       )}
                       {!empty && (
                         <>
-                          <IconButton ariaLabel="Replace" onClick={() => triggerImport(c.id)}><RefreshCw className="h-4 w-4" /></IconButton>
-                          <IconButton ariaLabel="Remove" onClick={() => removeCand(c.id)}><Trash2 className="h-4 w-4" /></IconButton>
+                          <IconButton ariaLabel={t("studio.replace")} onClick={() => triggerImport(c.id)}><RefreshCw className="h-4 w-4" /></IconButton>
+                          <IconButton ariaLabel={t("studio.remove")} onClick={() => removeCand(c.id)}><Trash2 className="h-4 w-4" /></IconButton>
                         </>
                       )}
                     </div>
@@ -3007,10 +3044,10 @@ function ChapterWorkspace({
         {/* Inspector */}
         <aside className={`${mobileTab === "notes" ? "flex" : "hidden"} flex-col gap-4 md:flex`}>
           <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
-            <h3 className="mb-3 font-display text-[18px] font-bold">Page details</h3>
+            <h3 className="mb-3 font-display text-[18px] font-bold">{t("studio.pageDetails")}</h3>
             <div className="flex flex-col gap-3">
               <div>
-                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Page number</label>
+                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">{t("studio.pageNumber")}</label>
                 <TextInput
                   value={String(page.number)}
                   onChange={(value) => {
@@ -3021,32 +3058,32 @@ function ChapterWorkspace({
                 />
               </div>
               <div>
-                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Page title (optional)</label>
+                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">{t("studio.pageTitleOptional")}</label>
                 <TextInput
                   value={page.title}
                   onChange={(title) => {
                     if (level !== "collaborateur") setPage((current) => ({ ...current, title, updated: "À l'instant" }));
                   }}
-                  placeholder="Page title"
+                  placeholder={t("studio.pageTitlePlaceholder")}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <MetaField label="Validation" value={pageStatus.label} />
-                <MetaField label="Candidates" value={`${page.candidates.filter(c => c.status !== "Empty").length}/${page.candidates.length}`} />
+                <MetaField label={t("studio.validation")} value={pageStatus.label} />
+                <MetaField label={t("studio.candidates")} value={`${page.candidates.filter(c => c.status !== "Empty").length}/${page.candidates.length}`} />
               </div>
             </div>
           </div>
 
           <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-[18px] font-bold">Page note</h3>
-              <IconButton ariaLabel="Enregistrer la note" onClick={savePageNote}><Save className="h-4 w-4" /></IconButton>
+              <h3 className="font-display text-[18px] font-bold">{t("studio.pageNote")}</h3>
+              <IconButton ariaLabel={t("studio.saveNoteAria")} onClick={savePageNote}><Save className="h-4 w-4" /></IconButton>
             </div>
-            <TextInput value={noteTitle} onChange={level === "collaborateur" ? undefined : setNoteTitle} placeholder="Note title" className="mb-2" />
-            <textarea value={noteContent} onChange={level === "collaborateur" ? undefined : (event) => setNoteContent(event.target.value)} placeholder="Notes to complete." className="min-h-[80px] w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--neon)]" />
+            <TextInput value={noteTitle} onChange={level === "collaborateur" ? undefined : setNoteTitle} placeholder={t("studio.noteTitleField")} className="mb-2" />
+            <textarea value={noteContent} onChange={level === "collaborateur" ? undefined : (event) => setNoteContent(event.target.value)} placeholder={t("studio.notesToComplete")} className="min-h-[80px] w-full rounded-[14px] border border-[var(--border-default)] bg-[var(--input-bg)] p-4 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--neon)]" />
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
-                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Linked date</label>
+                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">{t("studio.linkedDate")}</label>
                 <input
                   type="date"
                   value={noteDate}
@@ -3055,7 +3092,7 @@ function ChapterWorkspace({
                 />
               </div>
               <div>
-                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">Priority</label>
+                <label className="tiny-meta mb-1.5 block text-[var(--text-muted)]">{t("studio.priority")}</label>
                 <div className="relative">
                   <Target className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
                   <select
@@ -3075,7 +3112,7 @@ function ChapterWorkspace({
           {!page.validatedCandidateId && pages.some(p => !p.validatedCandidateId) && (
             <div className="flex items-start gap-3 rounded-[16px] border border-[rgba(255,184,77,0.35)] bg-[rgba(255,184,77,0.08)] p-4">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning)]" />
-              <div className="text-[13px] text-[var(--text-secondary)]"><span className="font-bold text-[var(--warning)]">Preview will show warnings.</span> Some pages don't have a validated image yet.</div>
+              <div className="text-[13px] text-[var(--text-secondary)]"><span className="font-bold text-[var(--warning)]">{t("studio.previewWillShowWarnings")}</span> {t("studio.somePagesNoValidatedImage")}</div>
             </div>
           )}
         </aside>
@@ -3089,6 +3126,7 @@ function ChapterWorkspace({
 /* ----- Chapter reader preview ----- */
 
 function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pages: PageItem[]; onClose: () => void }) {
+  const { t, locale } = useI18n();
   const [idx, setIdx] = useState(0);
   const page = pages[idx];
   const validated = page ? page.candidates.find(c => c.id === page.validatedCandidateId) ?? null : null;
@@ -3103,10 +3141,10 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-default)] px-6 py-4">
           <div className="min-w-0">
-            <div className="tiny-meta text-[var(--text-muted)]">Aperçu du chapitre</div>
-            <h3 className="truncate font-display text-[18px] font-bold">Chapter {String(chapter.number).padStart(2, "0")} — {chapter.title}</h3>
+            <div className="tiny-meta text-[var(--text-muted)]">{t("studio.previewChapter")}</div>
+            <h3 className="truncate font-display text-[18px] font-bold">{locale === "fr" ? "Chapitre" : "Chapter"} {String(chapter.number).padStart(2, "0")} — {chapter.title}</h3>
           </div>
-          <IconButton ariaLabel="Fermer" onClick={onClose}><X className="h-4 w-4" /></IconButton>
+          <IconButton ariaLabel={t("studio.close")} onClick={onClose}><X className="h-4 w-4" /></IconButton>
         </div>
 
         <div className="flex flex-1 items-center justify-center overflow-hidden bg-[var(--stage)] p-4">
@@ -3116,15 +3154,15 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
             <div className="flex flex-col items-center gap-3 px-6 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--elevated)]"><FileImage className="h-6 w-6 text-[var(--text-muted)]" /></div>
               <div className="text-[14px] font-bold text-[var(--text-primary)]">Page {page?.number ?? idx + 1}</div>
-              <div className="text-[13px] text-[var(--text-secondary)]">Aucune image validée pour cette page.</div>
+              <div className="text-[13px] text-[var(--text-secondary)]">{t("studio.noValidatedImageForPage")}</div>
             </div>
           )}
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border-default)] bg-[var(--elevated)] px-6 py-4">
-          <SecondaryButton icon={ChevronLeft} className="!h-10 !px-3" onClick={prev}>Précédent</SecondaryButton>
+          <SecondaryButton icon={ChevronLeft} className="!h-10 !px-3" onClick={prev}>{t("studio.previous")}</SecondaryButton>
           <span className="text-[13px] font-semibold text-[var(--text-secondary)]">Page {idx + 1} / {pages.length}</span>
-          <SecondaryButton className="!h-10 !px-3" onClick={next}>Suivant<ChevronRight className="h-4 w-4" /></SecondaryButton>
+          <SecondaryButton className="!h-10 !px-3" onClick={next}>{t("studio.next")}<ChevronRight className="h-4 w-4" /></SecondaryButton>
         </div>
       </div>
     </div>
@@ -3134,6 +3172,7 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
 /* ---------- Root page ---------- */
 
 function CollabMangaPage() {
+  const { t } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
@@ -3167,10 +3206,10 @@ function CollabMangaPage() {
     const timer = window.setTimeout(() => {
       void saveStudioProjects(projects)
         .then((saved) => {
-          if (!saved) setFeedback("Connecte-toi pour enregistrer les projets.");
+          if (!saved) setFeedback(t("studio.needLoginToSave"));
         })
         .catch((error: unknown) => {
-          setFeedback(error instanceof Error ? error.message : "La sauvegarde du projet a échoué.");
+          setFeedback(error instanceof Error ? error.message : t("studio.projectSaveFailedMsg"));
         });
     }, 800);
     return () => window.clearTimeout(timer);
@@ -3200,12 +3239,12 @@ function CollabMangaPage() {
     const next = [project, ...projects];
     try {
       const saved = await saveStudioProjects(next);
-      if (!saved) throw new Error("Connecte-toi pour créer un projet.");
+      if (!saved) throw new Error(t("studio.needLoginToCreate"));
       setProjects(next);
       await navigate({ search: { project: project.id, chapter: undefined } });
-      showFeedback("Projet créé.");
+      showFeedback(t("studio.projectCreatedMsg"));
     } catch (error) {
-      showFeedback(error instanceof Error ? error.message : "La création du projet a échoué.");
+      showFeedback(error instanceof Error ? error.message : t("studio.projectCreateFailedMsg"));
     }
   };
 
@@ -3218,9 +3257,9 @@ function CollabMangaPage() {
       await deleteStudioProject(id);
       setProjects((current) => current.filter((p) => p.id !== id));
       await navigate({ search: { project: undefined, chapter: undefined } });
-      showFeedback("Projet supprimé.");
+      showFeedback(t("studio.projectDeletedMsg"));
     } catch (error) {
-      showFeedback(error instanceof Error ? error.message : "La suppression du projet a échoué.");
+      showFeedback(error instanceof Error ? error.message : t("studio.projectDeleteFailedMsg"));
     }
   };
 
@@ -3229,9 +3268,9 @@ function CollabMangaPage() {
       await leaveStudioProject(id);
       setProjects((current) => current.filter((project) => project.id !== id));
       await navigate({ search: { project: undefined, chapter: undefined } });
-      showFeedback("Tu as quitté le projet.");
+      showFeedback(t("studio.leftProjectMsg"));
     } catch (error) {
-      showFeedback(error instanceof Error ? error.message : "Impossible de quitter le projet.");
+      showFeedback(error instanceof Error ? error.message : t("studio.leaveProjectFailedMsg"));
     }
   };
 
@@ -3239,7 +3278,7 @@ function CollabMangaPage() {
     return (
       <main className="min-h-screen bg-[var(--background)] px-4 py-6 md:px-6 md:py-8 lg:px-8 lg:py-8">
         <div className="mx-auto w-full max-w-[1440px] rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-10 text-center text-[14px] font-semibold text-[var(--text-secondary)]">
-          Chargement des projets…
+          {t("studio.loadingProjects")}
         </div>
       </main>
     );
