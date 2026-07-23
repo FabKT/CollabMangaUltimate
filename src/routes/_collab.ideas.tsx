@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect, type ReactNode } from "react";
 import { addIdea, listIdeas, subscribeIdeas } from "@/lib/db";
+import { useI18n } from "@/lib/i18n";
 import { listFavorites, setFavorite } from "@/lib/favorites";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
@@ -52,7 +53,8 @@ function Chip({ children, tone="neutral", onRemove, className="", onClick, selec
   children: ReactNode; tone?: "neutral"|"neon"|"warning"|"info"|"danger"; onRemove?: () => void;
   className?: string; onClick?: () => void; selected?: boolean;
 }) {
-  const t = selected ? "neon" : tone;
+  const { t } = useI18n();
+  const chipTone = selected ? "neon" : tone;
   const map: Record<string, string> = {
     neutral: "bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--border)]",
     neon:    "bg-[var(--neon-soft)] text-[var(--neon)] border-[var(--neon-border)]",
@@ -64,13 +66,13 @@ function Chip({ children, tone="neutral", onRemove, className="", onClick, selec
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full border text-[12px] font-semibold leading-none transition-colors ${map[t]} ${onClick?"hover:brightness-110":""} ${className}`}
+      className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full border text-[12px] font-semibold leading-none transition-colors ${map[chipTone]} ${onClick?"hover:brightness-110":""} ${className}`}
     >
       <span className="whitespace-nowrap">{children}</span>
       {onRemove && (
         <span
           role="button"
-          aria-label="Remove filter"
+          aria-label={t("ideas.removeFilter")}
           onClick={(e)=>{e.stopPropagation(); onRemove();}}
           className="ml-0.5 -mr-1 grid place-items-center h-4 w-4 rounded-full hover:bg-white/10 cursor-pointer"
         ><X className="h-3 w-3"/></span>
@@ -191,6 +193,7 @@ function NoImagePlaceholder() {
 }
 
 function PropositionsPage() {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [genre, setGenre] = useState("All");
@@ -306,13 +309,13 @@ function PropositionsPage() {
         {/* Page header */}
         <header className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
           <div className="max-w-3xl">
-            <h1 className="font-display text-[28px] leading-[36px] font-bold text-[var(--text)]">Idées</h1>
+            <h1 className="font-display text-[28px] leading-[36px] font-bold text-[var(--text)]">{t("ideas.title")}</h1>
             <p className="mt-2 text-[14px] leading-[22px] text-[var(--text-secondary)]">
-              Explore character ideas, worldbuilding concepts, powers, equipment, motivations, and creative suggestions for manga projects.
+              {t("ideas.subtitle")}
             </p>
           </div>
           <PrimaryBtn onClick={() => setShowCreate(true)} className="shrink-0">
-            <Plus className="h-4 w-4" /> Créer une idée
+            <Plus className="h-4 w-4" /> {t("ideas.create")}
           </PrimaryBtn>
         </header>
 
@@ -325,28 +328,28 @@ function PropositionsPage() {
         {/* Filter panel */}
         <section
           className="rounded-[22px] bg-[var(--panel)] border border-[var(--border)] p-5 md:p-6 shadow-[0_12px_30px_rgba(0,0,0,0.24)] mb-6"
-          aria-label="Filters"
+          aria-label={t("ideas.filters")}
         >
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)]"/>
             <TextInput
               value={search}
               onChange={(e)=>setSearch(e.target.value)}
-              placeholder="Search character designs, powers, equipment, worlds, motivations…"
+              placeholder={t("ideas.search")}
               className="!pl-11"
-              aria-label="Search ideas"
+              aria-label={t("ideas.searchAria")}
             />
           </div>
 
           {/* Type de proposition — on-page filter */}
           <div className="mt-4">
             <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] mb-2">
-              Type d'idée
+              {t("ideas.ideaType")}
             </div>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((c) => (
                 <Chip key={c} selected={category===c} onClick={()=>setCategory(c)}>
-                  {c === "All" ? "Tous" : c}
+                  {c === "All" ? t("ideas.all") : c}
                 </Chip>
               ))}
             </div>
@@ -355,12 +358,12 @@ function PropositionsPage() {
           {activeFilters.length > 0 && (
             <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] mr-1">
-                <Filter className="inline h-3.5 w-3.5 mr-1 -mt-0.5"/>Active
+                <Filter className="inline h-3.5 w-3.5 mr-1 -mt-0.5"/>{t("ideas.active")}
               </span>
               {activeFilters.map((f) => (
                 <Chip key={f.label} tone="neon" onRemove={f.clear}>{f.label}</Chip>
               ))}
-              <GhostBtn onClick={resetFilters} className="!h-7 !px-2 !text-[12px]">Clear all</GhostBtn>
+              <GhostBtn onClick={resetFilters} className="!h-7 !px-2 !text-[12px]">{t("ideas.clearAll")}</GhostBtn>
             </div>
           )}
         </section>
@@ -370,9 +373,9 @@ function PropositionsPage() {
           <section className="space-y-6">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h2 className="font-display text-[20px] leading-[28px] font-bold text-[var(--text)]">Idées créatives</h2>
+                <h2 className="font-display text-[20px] leading-[28px] font-bold text-[var(--text)]">{t("ideas.creativeIdeas")}</h2>
                 <p className="text-[13px] leading-[20px] text-[var(--text-muted)] mt-1">
-                  Showing {results.length} of {dbProps.length} ideas
+                  {t("ideas.showing")} {results.length} {t("ideas.onOf")} {dbProps.length} {t("ideas.ideasLower")}
                 </p>
               </div>
               <div className="inline-flex items-center gap-1 bg-[var(--panel)] border border-[var(--border)] rounded-[14px] p-1">
@@ -440,6 +443,7 @@ function PropositionsPage() {
 function PropCard({ p, saved, onSave, onOpen }: {
   p: Prop; saved: boolean; onSave: ()=>void; onOpen: ()=>void;
 }) {
+  const { t } = useI18n();
   return (
     <article
       className={`rounded-[16px] bg-[var(--card)] border p-5 shadow-[0_8px_22px_rgba(0,0,0,0.18)] transition-all hover:-translate-y-0.5 hover:border-[var(--border-strong)] flex flex-col gap-4 ${
@@ -473,7 +477,7 @@ function PropCard({ p, saved, onSave, onOpen }: {
             {p.authorAvatarUrl ? <img src={p.authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : p.author.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Profil</div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">{t("ideas.profile")}</div>
             <div className="text-[13px] font-semibold text-[var(--text-secondary)] truncate">
               {p.author}{p.project && <span className="text-[var(--text-muted)]"> · {p.project}</span>}
             </div>
@@ -481,13 +485,13 @@ function PropCard({ p, saved, onSave, onOpen }: {
         </div>
         {/* Ligne 2 : actions */}
         <div className="mt-3 flex items-center gap-2">
-          <PrimaryBtn className="!h-9 !px-3 !text-[13px]" onClick={onOpen}>View Details</PrimaryBtn>
+          <PrimaryBtn className="!h-9 !px-3 !text-[13px]" onClick={onOpen}>{t("ideas.viewDetails")}</PrimaryBtn>
           <button
             type="button"
             onClick={onOpen}
             className="inline-flex h-9 items-center gap-1.5 rounded-[12px] border border-[var(--border)] bg-[var(--input-bg)] px-3 text-[12px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--neon-border)] hover:text-[var(--text)]"
           >
-            <MessageCircle className="h-3.5 w-3.5"/>{p.comments} commentaire{p.comments > 1 ? "s" : ""}
+            <MessageCircle className="h-3.5 w-3.5"/>{p.comments} {p.comments > 1 ? t("ideas.commentsPlural") : t("ideas.comment")}
           </button>
         </div>
       </div>
@@ -496,6 +500,7 @@ function PropCard({ p, saved, onSave, onOpen }: {
 }
 
 function ListRow({ p, saved, onSave, onOpen }: { p:Prop; saved:boolean; onSave:()=>void; onOpen:()=>void }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-4 p-4 hover:bg-white/[0.02] transition-colors">
       <div className="hidden sm:block w-20 shrink-0">
@@ -517,10 +522,10 @@ function ListRow({ p, saved, onSave, onOpen }: { p:Prop; saved:boolean; onSave:(
         <p className="text-[13px] leading-[20px] text-[var(--text-secondary)] truncate">{p.description}</p>
       </div>
       <div className="flex items-center gap-1">
-        <IconBtn label={saved?"Saved":"Save"} onClick={onSave} className={saved?"!text-[var(--neon)] !border-[var(--neon-border)]":""}>
+        <IconBtn label={saved?t("ideas.saved"):t("ideas.save")} onClick={onSave} className={saved?"!text-[var(--neon)] !border-[var(--neon-border)]":""}>
           <Bookmark className={`h-4 w-4 ${saved?"fill-current":""}`}/>
         </IconBtn>
-        <PrimaryBtn className="!h-9 !px-3 !text-[13px]" onClick={onOpen}>Open</PrimaryBtn>
+        <PrimaryBtn className="!h-9 !px-3 !text-[13px]" onClick={onOpen}>{t("ideas.open")}</PrimaryBtn>
       </div>
     </div>
   );
@@ -561,17 +566,18 @@ function MoodItem({ p, onOpen }: { p:Prop; onOpen:()=>void }) {
 /* ---------------- Empty state ---------------- */
 
 function EmptyState({ onReset, onCreate }: { onReset:()=>void; onCreate:()=>void }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-[16px] bg-[var(--panel)] border border-[var(--border)] p-10 text-center">
       <div className="mx-auto h-14 w-14 rounded-[14px] bg-[var(--card)] border border-[var(--border)] grid place-items-center text-[var(--text-muted)] mb-4">
         <Search className="h-6 w-6"/>
       </div>
-      <h3 className="font-display text-[20px] leading-[28px] font-bold">Aucune idée trouvée</h3>
+      <h3 className="font-display text-[20px] leading-[28px] font-bold">{t("ideas.empty")}</h3>
       <p className="mt-2 text-[14px] leading-[22px] text-[var(--text-secondary)]">
-        Try adjusting your filters.
+        {t("ideas.tryAdjust")}
       </p>
       <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
-        <SecondaryBtn onClick={onReset}><RotateCcw className="h-4 w-4"/>Reset filters</SecondaryBtn>
+        <SecondaryBtn onClick={onReset}><RotateCcw className="h-4 w-4"/>{t("ideas.resetFilters")}</SecondaryBtn>
       </div>
     </div>
   );
@@ -614,11 +620,12 @@ function ModalShell({ children, onClose, maxWidth="1080px", label }: {
 function PropModal({ p, saved, onSave, onClose }: {
   p: Prop; saved: boolean; onSave: ()=>void; onClose: ()=>void;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"details" | "comments">("details");
   const [activeImage, setActiveImage] = useState(0);
   const images = p.imageUrls?.length ? p.imageUrls : p.imageUrl ? [p.imageUrl] : [];
-  const authorName = p.author === "You" ? "Votre profil" : p.author.replace(/—/g, "").trim() || "Créateur CollabManga";
-  const authorBio = p.authorBio || "Ce membre n'a pas encore renseigné de biographie.";
+  const authorName = p.author === "You" ? t("ideas.yourProfile") : p.author.replace(/—/g, "").trim() || t("ideas.collabCreator");
+  const authorBio = p.authorBio || t("ideas.noBio");
 
   return (
     <ModalShell onClose={onClose} maxWidth="1120px" label={`${p.category}: ${p.title}`}>
@@ -629,7 +636,7 @@ function PropModal({ p, saved, onSave, onClose }: {
             {p.title}
           </h2>
         </div>
-        <IconBtn label="Close" onClick={onClose}><X className="h-4 w-4"/></IconBtn>
+        <IconBtn label={t("ideas.close")} onClick={onClose}><X className="h-4 w-4"/></IconBtn>
       </div>
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-[3fr_4fr] gap-6">
@@ -659,14 +666,14 @@ function PropModal({ p, saved, onSave, onClose }: {
         </div>
 
         <aside className="rounded-[16px] bg-[var(--card)] border border-[var(--border)] p-5 h-fit">
-          <div className="cm-popup-tabs mb-5 w-full" role="tablist" aria-label="Détails de l'idée">
-            <button type="button" role="tab" aria-selected={tab === "details"} data-active={tab === "details"} onClick={() => setTab("details")} className="cm-popup-tab flex-1">Détails</button>
-            <button type="button" role="tab" aria-selected={tab === "comments"} data-active={tab === "comments"} onClick={() => setTab("comments")} className="cm-popup-tab flex-1">Commentaires</button>
+          <div className="cm-popup-tabs mb-5 w-full" role="tablist" aria-label={t("ideas.detailsAria")}>
+            <button type="button" role="tab" aria-selected={tab === "details"} data-active={tab === "details"} onClick={() => setTab("details")} className="cm-popup-tab flex-1">{t("ideas.details")}</button>
+            <button type="button" role="tab" aria-selected={tab === "comments"} data-active={tab === "comments"} onClick={() => setTab("comments")} className="cm-popup-tab flex-1">{t("ideas.comments")}</button>
           </div>
           <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">
-            Créé par
+            {t("ideas.createdBy")}
           </div>
-          <a href={p.authorId ? `/profile/${p.authorId}` : "#"} className="mt-4 flex items-center gap-3" title={`Voir le profil de ${authorName}`} style={{ textDecoration: "none" }}>
+          <a href={p.authorId ? `/profile/${p.authorId}` : "#"} className="mt-4 flex items-center gap-3" title={`${t("ideas.viewProfileOf")} ${authorName}`} style={{ textDecoration: "none" }}>
             <div className="h-12 w-12 overflow-hidden rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display font-bold text-[var(--neon)]">
               {p.authorAvatarUrl ? <img src={p.authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : authorName.slice(0, 2).toUpperCase()}
             </div>
@@ -678,7 +685,7 @@ function PropModal({ p, saved, onSave, onClose }: {
           <p className="mt-4 text-[14px] leading-[22px] text-[var(--text-secondary)]">{authorBio}</p>
           {tab === "details" ? (
             <div className="mt-5 border-t border-[var(--border)] pt-5">
-              <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">Type d'idée</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">{t("ideas.ideaType")}</div>
               <div className="mt-2"><Chip tone="info">{p.category}</Chip></div>
               <h3 className="mt-5 font-display text-[22px] leading-[30px] font-bold">{p.title}</h3>
               <p className="mt-3 text-[14px] leading-[22px] text-[var(--text-secondary)]">{p.description}</p>
@@ -696,6 +703,7 @@ function PropModal({ p, saved, onSave, onClose }: {
 }
 
 function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()=>void }) {
+  const { t } = useI18n();
   const [ideaImages, setIdeaImages] = useState<string[]>([]);
   const [ideaFiles, setIdeaFiles] = useState<File[]>([]);
   const [activeIdeaIndex, setActiveIdeaIndex] = useState(0);
@@ -716,8 +724,8 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
 
   const submitIdea = async () => {
     setCreateError(null);
-    if (!ideaTitle.trim()) { setCreateError("Donne un titre à ton idée."); return; }
-    if (!ideaDescription.trim()) { setCreateError("Ajoute une description."); return; }
+    if (!ideaTitle.trim()) { setCreateError(t("ideas.errorTitle")); return; }
+    if (!ideaDescription.trim()) { setCreateError(t("ideas.errorDesc")); return; }
     setSaving(true);
     try {
       await addIdea({
@@ -729,20 +737,20 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
       onCreated?.();
       onClose();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Publication impossible.");
+      setCreateError(err instanceof Error ? err.message : t("ideas.publishFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <ModalShell onClose={onClose} maxWidth="980px" label="Créer une idée">
+    <ModalShell onClose={onClose} maxWidth="980px" label={t("ideas.create")}>
       <div className="p-6 border-b border-[var(--border)] flex items-center justify-between gap-4">
         <div>
-          <h3 className="font-display text-[24px] leading-[32px] font-bold">Créer une idée</h3>
-          <p className="text-[13px] text-[var(--text-muted)] mt-1">Ajoute une idée avec ses images, son type, son titre et sa description.</p>
+          <h3 className="font-display text-[24px] leading-[32px] font-bold">{t("ideas.create")}</h3>
+          <p className="text-[13px] text-[var(--text-muted)] mt-1">{t("ideas.createSubtitle")}</p>
         </div>
-        <IconBtn label="Close" onClick={onClose}><X className="h-4 w-4"/></IconBtn>
+        <IconBtn label={t("ideas.close")} onClick={onClose}><X className="h-4 w-4"/></IconBtn>
       </div>
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto scrollbar-thin">
         <div className="min-w-0">
@@ -752,8 +760,8 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
             ) : (
               <div className="flex flex-col items-center gap-3 text-center">
                 <ImageIcon className="h-8 w-8 text-[var(--neon)]" />
-                <div className="text-[14px] font-bold">Importer des images</div>
-                <div className="text-[12px] text-[var(--text-muted)]">PNG, JPG, WEBP</div>
+                <div className="text-[14px] font-bold">{t("ideas.importImages")}</div>
+                <div className="text-[12px] text-[var(--text-muted)]">{t("ideas.formats")}</div>
               </div>
             )}
           </label>
@@ -765,20 +773,20 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
               </button>
             )) : (
               <div className="h-16 w-full rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 text-[12px] font-semibold text-[var(--text-muted)] flex items-center">
-                Les images importées apparaîtront ici.
+                {t("ideas.imagesHere")}
               </div>
             )}
           </div>
         </div>
         <div className="space-y-4">
-          <Field label="Type d'idée">
+          <Field label={t("ideas.ideaType")}>
             <Select value={ideaCategory} onChange={setIdeaCategory} options={CATEGORIES.filter((c) => c !== "All")} />
           </Field>
-          <Field label="Titre">
-            <TextInput placeholder="Titre de l'idée" value={ideaTitle} onChange={(e)=>setIdeaTitle(e.target.value)} />
+          <Field label={t("ideas.titleField")}>
+            <TextInput placeholder={t("ideas.titlePlaceholder")} value={ideaTitle} onChange={(e)=>setIdeaTitle(e.target.value)} />
           </Field>
-          <Field label="Description">
-            <TextArea placeholder="Décris l'idée, son intérêt et son usage possible." value={ideaDescription} onChange={(e)=>setIdeaDescription(e.target.value)} />
+          <Field label={t("ideas.descField")}>
+            <TextArea placeholder={t("ideas.descPlaceholder")} value={ideaDescription} onChange={(e)=>setIdeaDescription(e.target.value)} />
           </Field>
           {createError && (
             <div className="rounded-[12px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-4 py-3 text-[13px] font-semibold text-[var(--danger)]">
@@ -788,8 +796,8 @@ function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()
         </div>
       </div>
       <div className="p-5 border-t border-[var(--border)] flex items-center justify-end gap-2">
-        <SecondaryBtn onClick={onClose}>Annuler</SecondaryBtn>
-        <PrimaryBtn onClick={submitIdea}><Check className="h-4 w-4"/>{saving ? "Publication…" : "Ajouter l'idée"}</PrimaryBtn>
+        <SecondaryBtn onClick={onClose}>{t("ideas.cancel")}</SecondaryBtn>
+        <PrimaryBtn onClick={submitIdea}><Check className="h-4 w-4"/>{saving ? t("ideas.publishing") : t("ideas.addIdea")}</PrimaryBtn>
       </div>
     </ModalShell>
   );
