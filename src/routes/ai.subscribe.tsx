@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 import { Card } from "@/components/cma/Layout";
 import { PLANS, PLAN_ORDER, type PlanId } from "@/lib/billing-plans";
@@ -116,6 +116,12 @@ function AiSubscribe() {
       }}
     >
       <div className="mx-auto flex min-h-[calc(100vh-64px)] max-w-[1180px] flex-col justify-center">
+        <div className="mb-6">
+          <Link to="/hub" className="cma-btn-secondary inline-flex">
+            <ArrowLeft size={16} />
+            {t("ai.backToCollabManga")}
+          </Link>
+        </div>
         <header className="mb-8 text-center">
           <div className="mb-4 flex justify-center">
             <BrandMark size={54} />
@@ -176,10 +182,7 @@ function AiSubscribe() {
                   {plan.quota} {t("ai.imagesPerMonth")}
                 </div>
 
-                <div
-                  className="my-5 h-px"
-                  style={{ background: "var(--border-default)" }}
-                />
+                <div className="my-5 h-px" style={{ background: "var(--border-default)" }} />
 
                 <div
                   className="mb-3 text-[12px] font-bold uppercase tracking-wider"
