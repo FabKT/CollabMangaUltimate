@@ -45,8 +45,6 @@ type ModeConfig = {
   importCta: string;
   resultTitle: string;
   resultEmpty: string;
-  /** Ratio fixe du cadre : l'image entière y est affichée sans déformation. */
-  aspect: string;
 };
 
 const MODE_CONFIG: Record<TransferMode, ModeConfig> = {
@@ -59,7 +57,6 @@ const MODE_CONFIG: Record<TransferMode, ModeConfig> = {
     importCta: "Importer la planche de base",
     resultTitle: "Planche restylée",
     resultEmpty: "La planche restylée apparaîtra ici.",
-    aspect: "3 / 4",
   },
   personnage: {
     label: "Personnage",
@@ -70,7 +67,6 @@ const MODE_CONFIG: Record<TransferMode, ModeConfig> = {
     importCta: "Importer le personnage de base",
     resultTitle: "Carte personnage",
     resultEmpty: "La carte personnage restylée apparaîtra ici.",
-    aspect: "3 / 2",
   },
 };
 
@@ -288,24 +284,14 @@ function StyleTransferPage() {
   };
 
   return (
-    <div className="manga-canvas-page w-full min-w-0 text-text-primary">
+    <div className="manga-canvas-page flex h-[calc(100dvh-93px)] w-full min-w-0 flex-col overflow-hidden text-text-primary md:h-[calc(100dvh-48px)] lg:h-[calc(100dvh-64px)]">
       <PageHeader
         title="Transfert de style"
         description="Prends une planche ou un personnage comme base et régénère-le dans un autre style."
-        actions={
-          <button
-            onClick={generate}
-            disabled={isGenerating || !canGenerate}
-            className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Wand2 className="h-4 w-4" />
-            {isGenerating ? "Transfert…" : "Transférer le style"}
-          </button>
-        }
       />
 
       {/* Onglets : Planche / Personnage */}
-      <div className="mb-4 inline-flex items-center gap-1 rounded-[14px] border border-border bg-surface-2 p-1">
+      <div className="mb-3 inline-flex shrink-0 self-start items-center gap-1 rounded-[14px] border border-border bg-surface-2 p-1 md:mb-4">
         {MODES.map((id) => {
           const entry = MODE_CONFIG[id];
           const active = id === mode;
@@ -328,7 +314,7 @@ function StyleTransferPage() {
       </div>
 
       {/* Style band — full width */}
-      <section className="shadow-panel mb-4 rounded-[18px] border border-border bg-surface-2 p-3">
+      <section className="shadow-panel mb-3 shrink-0 rounded-[18px] border border-border bg-surface-2 p-2.5 md:mb-4 md:p-3">
         <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
           Style cible
         </div>
@@ -403,15 +389,15 @@ function StyleTransferPage() {
       </section>
 
       {/* Before / After — two equal parts */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 md:gap-4">
         {/* Before */}
-        <section className="shadow-panel flex min-w-0 flex-col rounded-[18px] border border-border bg-surface-2">
-          <header className="flex items-center justify-between gap-2 border-b border-border p-4">
-            <div className="flex items-center gap-2">
+        <section className="shadow-panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-surface-2">
+          <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2.5 md:p-4">
+            <div className="flex min-w-0 items-center gap-2">
               <span className="rounded-full border border-border bg-surface-3 px-2 py-0.5 text-[11px] font-bold text-text-secondary">
                 {cfg.baseBadge}
               </span>
-              <h2 className="font-display text-base font-bold">{cfg.baseTitle}</h2>
+              <h2 className="truncate font-display text-sm font-bold md:text-base">{cfg.baseTitle}</h2>
             </div>
             {baseImage && (
               <button
@@ -423,10 +409,9 @@ function StyleTransferPage() {
               </button>
             )}
           </header>
-          <div className="p-4">
+          <div className="min-h-0 flex-1 p-2.5 md:p-4">
             <BeforeArea
               baseImage={baseImage}
-              aspect={cfg.aspect}
               importCta={cfg.importCta}
               onImport={importBase}
             />
@@ -434,11 +419,11 @@ function StyleTransferPage() {
         </section>
 
         {/* After */}
-        <section className="shadow-panel flex min-w-0 flex-col rounded-[18px] border border-border bg-surface-2">
-          <header className="flex items-center justify-between gap-2 border-b border-border p-4">
-            <div className="flex items-center gap-2">
+        <section className="shadow-panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[18px] border border-border bg-surface-2">
+          <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2.5 md:p-4">
+            <div className="flex min-w-0 items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <h2 className="font-display text-base font-bold">{cfg.resultTitle}</h2>
+              <h2 className="truncate font-display text-sm font-bold md:text-base">{cfg.resultTitle}</h2>
             </div>
             <button
               onClick={download}
@@ -449,12 +434,9 @@ function StyleTransferPage() {
               <Download className="h-4 w-4" />
             </button>
           </header>
-          <div className="p-4">
+          <div className="min-h-0 flex-1 p-2.5 md:p-4">
             {/* Cadre fixe, résultat entier affiché sans déformation. */}
-            <div
-              className="w-full overflow-hidden rounded-[12px] bg-stage"
-              style={{ aspectRatio: cfg.aspect }}
-            >
+            <div className="h-full w-full overflow-hidden rounded-[12px] bg-stage">
               {isGenerating ? (
                 <div className="flex h-full w-full items-center justify-center">
                   <GeneratingIndicator />
@@ -487,6 +469,16 @@ function StyleTransferPage() {
           </div>
         </section>
       </div>
+
+      <button
+        type="button"
+        onClick={generate}
+        disabled={isGenerating || !canGenerate}
+        className="mt-3 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-accent px-5 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 md:mt-4"
+      >
+        <Wand2 className="h-4 w-4" />
+        {isGenerating ? "Transfert…" : "Transférer le style"}
+      </button>
 
       {lightbox && result && (
         <div
@@ -528,12 +520,10 @@ function StyleTransferPage() {
 
 function BeforeArea({
   baseImage,
-  aspect,
   importCta,
   onImport,
 }: {
   baseImage: string | null;
-  aspect: string;
   importCta: string;
   onImport: (files: FileList | null) => void;
 }) {
@@ -543,8 +533,7 @@ function BeforeArea({
     return (
       <button
         onClick={() => inputRef.current?.click()}
-        className="w-full overflow-hidden rounded-[12px] bg-stage"
-        style={{ aspectRatio: aspect }}
+        className="h-full w-full overflow-hidden rounded-[12px] bg-stage"
         title="Remplacer l'image"
       >
         <input
@@ -565,8 +554,7 @@ function BeforeArea({
 
   return (
     <div
-      className="flex w-full flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed border-border-strong bg-surface-3/40 p-6 text-center"
-      style={{ aspectRatio: aspect }}
+      className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed border-border-strong bg-surface-3/40 p-3 text-center md:p-6"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -586,7 +574,7 @@ function BeforeArea({
       <ImageIcon className="h-9 w-9 text-text-muted" />
       <button
         onClick={() => inputRef.current?.click()}
-        className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
+        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[12px] bg-accent px-3 text-[12px] font-bold text-accent-foreground hover:bg-accent-hover md:px-4 md:text-[13px]"
       >
         <Upload className="h-4 w-4" />
         {importCta}
