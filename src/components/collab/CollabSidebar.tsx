@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Bell,
   User,
+  Settings,
   Zap,
   Sparkles,
   ArrowRight,
@@ -54,7 +55,10 @@ const groups: Group[] = [
   },
   {
     title: "Compte",
-    items: [{ label: "Profil", to: "/profile", icon: User }],
+    items: [
+      { label: "Profil", to: "/profile", icon: User },
+      { label: "Paramètres", to: "/settings", icon: Settings },
+    ],
   },
 ];
 
@@ -79,6 +83,7 @@ const itemKeys: Record<string, TranslationKey> = {
   "/messages": "nav.messages",
   "/notifications": "nav.notifications",
   "/profile": "nav.profile",
+  "/settings": "nav.settings",
 };
 
 export function CollabSidebar({ forceVisible = false }: { forceVisible?: boolean }) {

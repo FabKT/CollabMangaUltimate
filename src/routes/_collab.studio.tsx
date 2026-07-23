@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Plus, Search, MoreHorizontal,
   Edit3, Copy, Trash2, Check, Upload, Image as ImageIcon, Calendar as CalendarIcon,
@@ -3171,6 +3171,9 @@ function ChapterPreviewModal({ chapter, pages, onClose }: { chapter: Chapter; pa
 
 /* ---------- Root page ---------- */
 
+const MemoizedProjectWorkspace = memo(ProjectWorkspace);
+const MemoizedChapterWorkspace = memo(ChapterWorkspace);
+
 function CollabMangaPage() {
   const { t } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -3178,17 +3181,33 @@ function CollabMangaPage() {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const feedbackTimeoutRef = useRef<number | null>(null);
+  const persistedProjectsRef = useRef(new Map<string, Project>());
   const { project: selectedProject, chapter: selectedChapter } = Route.useSearch();
   const navigate = Route.useNavigate();
 
   useEffect(() => {
     let cancelled = false;
     let refreshTimer: number | null = null;
-    const refresh = () => void loadStudioProjects<unknown>().then((saved) => {
-      if (cancelled) return;
-      setProjects(saved.map(normalizeStoredProject).filter((project): project is Project => project !== null));
-      setLoaded(true);
-    });
+    const refresh = () =>
+      void loadStudioProjects<unknown>()
+        .then((saved) => {
+          if (cancelled) return;
+          const normalized = saved
+            .map(normalizeStoredProject)
+            .filter((project): project is Project => project !== null);
+          persistedProjectsRef.current = new Map(
+            normalized.map((project) => [project.id, project]),
+          );
+          setProjects(normalized);
+          setLoaded(true);
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          setFeedback(
+            error instanceof Error ? error.message : t("studio.projectSaveFailedMsg"),
+          );
+          setLoaded(true);
+        });
     refresh();
     const unsubscribe = subscribeStudioProjects(() => {
       if (refreshTimer) window.clearTimeout(refreshTimer);
@@ -3199,21 +3218,31 @@ function CollabMangaPage() {
       if (refreshTimer) window.clearTimeout(refreshTimer);
       unsubscribe();
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!loaded) return;
+    const changedProjects = projects.filter(
+      (project) => persistedProjectsRef.current.get(project.id) !== project,
+    );
+    if (changedProjects.length === 0) return;
     const timer = window.setTimeout(() => {
-      void saveStudioProjects(projects)
+      void saveStudioProjects(changedProjects)
         .then((saved) => {
-          if (!saved) setFeedback(t("studio.needLoginToSave"));
+          if (!saved) {
+            setFeedback(t("studio.needLoginToSave"));
+            return;
+          }
+          for (const project of changedProjects) {
+            persistedProjectsRef.current.set(project.id, project);
+          }
         })
         .catch((error: unknown) => {
           setFeedback(error instanceof Error ? error.message : t("studio.projectSaveFailedMsg"));
         });
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [projects, loaded]);
+  }, [projects, loaded, t]);
 
   const project = useMemo(() => projects.find(p => p.id === selectedProject) ?? null, [projects, selectedProject]);
   const chapter = useMemo(() => project?.chapters.find(c => c.id === selectedChapter) ?? null, [project, selectedChapter]);
@@ -3229,17 +3258,18 @@ function CollabMangaPage() {
     }
   }, [chapter, loaded, navigate, project, selectedChapter, selectedProject]);
 
-  const showFeedback = (message: string) => {
+  const showFeedback = useCallback((message: string) => {
     setFeedback(message);
     if (feedbackTimeoutRef.current) window.clearTimeout(feedbackTimeoutRef.current);
     feedbackTimeoutRef.current = window.setTimeout(() => setFeedback(null), 3200);
-  };
+  }, []);
 
   const addProject = async (project: Project) => {
     const next = [project, ...projects];
     try {
-      const saved = await saveStudioProjects(next);
+      const saved = await saveStudioProjects([project]);
       if (!saved) throw new Error(t("studio.needLoginToCreate"));
+      persistedProjectsRef.current.set(project.id, project);
       setProjects(next);
       await navigate({ search: { project: project.id, chapter: undefined } });
       showFeedback(t("studio.projectCreatedMsg"));
@@ -3248,11 +3278,11 @@ function CollabMangaPage() {
     }
   };
 
-  const updateProject = (id: string, updater: (project: Project) => Project) => {
+  const updateProject = useCallback((id: string, updater: (project: Project) => Project) => {
     setProjects((current) => current.map((p) => (p.id === id ? deriveProjectState(updater(p)) : p)));
-  };
+  }, []);
 
-  const deleteProject = async (id: string) => {
+  const deleteProject = useCallback(async (id: string) => {
     try {
       await deleteStudioProject(id);
       setProjects((current) => current.filter((p) => p.id !== id));
@@ -3261,9 +3291,9 @@ function CollabMangaPage() {
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : t("studio.projectDeleteFailedMsg"));
     }
-  };
+  }, [navigate, showFeedback, t]);
 
-  const leaveProject = async (id: string) => {
+  const leaveProject = useCallback(async (id: string) => {
     try {
       await leaveStudioProject(id);
       setProjects((current) => current.filter((project) => project.id !== id));
@@ -3272,7 +3302,30 @@ function CollabMangaPage() {
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : t("studio.leaveProjectFailedMsg"));
     }
-  };
+  }, [navigate, showFeedback, t]);
+
+  const backToProjects = useCallback(
+    () => void navigate({ search: { project: undefined, chapter: undefined } }),
+    [navigate],
+  );
+  const openProjectChapter = useCallback(
+    (id: string) => {
+      if (project) void navigate({ search: { project: project.id, chapter: id } });
+    },
+    [navigate, project],
+  );
+  const updateSelectedProject = useCallback(
+    (updater: (current: Project) => Project) => {
+      if (project) updateProject(project.id, updater);
+    },
+    [project, updateProject],
+  );
+  const deleteSelectedProject = useCallback(() => {
+    if (project) void deleteProject(project.id);
+  }, [deleteProject, project]);
+  const leaveSelectedProject = useCallback(() => {
+    if (project) void leaveProject(project.id);
+  }, [leaveProject, project]);
 
   if (!loaded) {
     return (
@@ -3289,18 +3342,18 @@ function CollabMangaPage() {
       <div className="mx-auto w-full max-w-[1440px]">
         {!project && <ProjectSelection projects={projects} onOpen={(id) => void navigate({ search: { project: id, chapter: undefined } })} onCreate={() => setCreateProjectOpen(true)} />}
         {project && !chapter && (
-          <ProjectWorkspace
+          <MemoizedProjectWorkspace
             project={project}
-            onBack={() => void navigate({ search: { project: undefined, chapter: undefined } })}
-            onOpenChapter={(id) => void navigate({ search: { project: project.id, chapter: id } })}
+            onBack={backToProjects}
+            onOpenChapter={openProjectChapter}
             onWorkflow={showFeedback}
-            updateProject={(updater) => updateProject(project.id, updater)}
-            onDeleteProject={() => void deleteProject(project.id)}
-            onLeaveProject={() => void leaveProject(project.id)}
+            updateProject={updateSelectedProject}
+            onDeleteProject={deleteSelectedProject}
+            onLeaveProject={leaveSelectedProject}
           />
         )}
         {project && chapter && (
-          <ChapterWorkspace
+          <MemoizedChapterWorkspace
             project={project}
             chapter={chapter}
             onBack={() => void navigate({ search: { project: project.id, chapter: undefined } })}

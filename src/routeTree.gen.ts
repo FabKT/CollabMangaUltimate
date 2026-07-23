@@ -39,6 +39,7 @@ import { Route as CollabStudioRouteImport } from './routes/_collab.studio'
 import { Route as CollabSponsorshipHubRouteImport } from './routes/_collab.sponsorship-hub'
 import { Route as CollabSponsorshipRouteImport } from './routes/_collab.sponsorship'
 import { Route as CollabShowcaseRouteImport } from './routes/_collab.showcase'
+import { Route as CollabSettingsRouteImport } from './routes/_collab.settings'
 import { Route as CollabProfileRouteImport } from './routes/_collab.profile'
 import { Route as CollabNotificationsRouteImport } from './routes/_collab.notifications'
 import { Route as CollabMessagesRouteImport } from './routes/_collab.messages'
@@ -214,6 +215,11 @@ const CollabShowcaseRoute = CollabShowcaseRouteImport.update({
   path: '/showcase',
   getParentRoute: () => CollabRoute,
 } as any)
+const CollabSettingsRoute = CollabSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => CollabRoute,
+} as any)
 const CollabProfileRoute = CollabProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -359,6 +365,7 @@ export interface FileRoutesByFullPath {
   '/messages': typeof CollabMessagesRoute
   '/notifications': typeof CollabNotificationsRoute
   '/profile': typeof CollabProfileRoute
+  '/settings': typeof CollabSettingsRoute
   '/showcase': typeof CollabShowcaseRoute
   '/sponsorship': typeof CollabSponsorshipRoute
   '/sponsorship-hub': typeof CollabSponsorshipHubRoute
@@ -414,6 +421,7 @@ export interface FileRoutesByTo {
   '/messages': typeof CollabMessagesRoute
   '/notifications': typeof CollabNotificationsRoute
   '/profile': typeof CollabProfileRoute
+  '/settings': typeof CollabSettingsRoute
   '/showcase': typeof CollabShowcaseRoute
   '/sponsorship': typeof CollabSponsorshipRoute
   '/sponsorship-hub': typeof CollabSponsorshipHubRoute
@@ -471,6 +479,7 @@ export interface FileRoutesById {
   '/_collab/messages': typeof CollabMessagesRoute
   '/_collab/notifications': typeof CollabNotificationsRoute
   '/_collab/profile': typeof CollabProfileRoute
+  '/_collab/settings': typeof CollabSettingsRoute
   '/_collab/showcase': typeof CollabShowcaseRoute
   '/_collab/sponsorship': typeof CollabSponsorshipRoute
   '/_collab/sponsorship-hub': typeof CollabSponsorshipHubRoute
@@ -529,6 +538,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/notifications'
     | '/profile'
+    | '/settings'
     | '/showcase'
     | '/sponsorship'
     | '/sponsorship-hub'
@@ -584,6 +594,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/notifications'
     | '/profile'
+    | '/settings'
     | '/showcase'
     | '/sponsorship'
     | '/sponsorship-hub'
@@ -640,6 +651,7 @@ export interface FileRouteTypes {
     | '/_collab/messages'
     | '/_collab/notifications'
     | '/_collab/profile'
+    | '/_collab/settings'
     | '/_collab/showcase'
     | '/_collab/sponsorship'
     | '/_collab/sponsorship-hub'
@@ -914,6 +926,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CollabShowcaseRouteImport
       parentRoute: typeof CollabRoute
     }
+    '/_collab/settings': {
+      id: '/_collab/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof CollabSettingsRouteImport
+      parentRoute: typeof CollabRoute
+    }
     '/_collab/profile': {
       id: '/_collab/profile'
       path: '/profile'
@@ -1102,6 +1121,7 @@ interface CollabRouteChildren {
   CollabMessagesRoute: typeof CollabMessagesRoute
   CollabNotificationsRoute: typeof CollabNotificationsRoute
   CollabProfileRoute: typeof CollabProfileRoute
+  CollabSettingsRoute: typeof CollabSettingsRoute
   CollabShowcaseRoute: typeof CollabShowcaseRoute
   CollabSponsorshipRoute: typeof CollabSponsorshipRoute
   CollabSponsorshipHubRoute: typeof CollabSponsorshipHubRoute
@@ -1123,6 +1143,7 @@ const CollabRouteChildren: CollabRouteChildren = {
   CollabMessagesRoute: CollabMessagesRoute,
   CollabNotificationsRoute: CollabNotificationsRoute,
   CollabProfileRoute: CollabProfileRoute,
+  CollabSettingsRoute: CollabSettingsRoute,
   CollabShowcaseRoute: CollabShowcaseRoute,
   CollabSponsorshipRoute: CollabSponsorshipRoute,
   CollabSponsorshipHubRoute: CollabSponsorshipHubRoute,
