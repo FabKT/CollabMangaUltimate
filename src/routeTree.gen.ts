@@ -19,6 +19,7 @@ import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as CatalogIdRouteImport } from './routes/catalog.$id'
 import { Route as ApiGenerationJobsRouteImport } from './routes/api.generation-jobs'
 import { Route as AiSwapRouteImport } from './routes/ai.swap'
+import { Route as AiSubscribeRouteImport } from './routes/ai.subscribe'
 import { Route as AiStyleTransferRouteImport } from './routes/ai.style-transfer'
 import { Route as AiSketchFinalRouteImport } from './routes/ai.sketch-final'
 import { Route as AiSceneRouteImport } from './routes/ai.scene'
@@ -113,6 +114,11 @@ const ApiGenerationJobsRoute = ApiGenerationJobsRouteImport.update({
 const AiSwapRoute = AiSwapRouteImport.update({
   id: '/swap',
   path: '/swap',
+  getParentRoute: () => AiRoute,
+} as any)
+const AiSubscribeRoute = AiSubscribeRouteImport.update({
+  id: '/subscribe',
+  path: '/subscribe',
   getParentRoute: () => AiRoute,
 } as any)
 const AiStyleTransferRoute = AiStyleTransferRouteImport.update({
@@ -386,6 +392,7 @@ export interface FileRoutesByFullPath {
   '/ai/scene': typeof AiSceneRoute
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
+  '/ai/subscribe': typeof AiSubscribeRoute
   '/ai/swap': typeof AiSwapRoute
   '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/catalog/$id': typeof CatalogIdRouteWithChildren
@@ -442,6 +449,7 @@ export interface FileRoutesByTo {
   '/ai/scene': typeof AiSceneRoute
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
+  '/ai/subscribe': typeof AiSubscribeRoute
   '/ai/swap': typeof AiSwapRoute
   '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/ai': typeof AiIndexRoute
@@ -500,6 +508,7 @@ export interface FileRoutesById {
   '/ai/scene': typeof AiSceneRoute
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
+  '/ai/subscribe': typeof AiSubscribeRoute
   '/ai/swap': typeof AiSwapRoute
   '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/catalog/$id': typeof CatalogIdRouteWithChildren
@@ -559,6 +568,7 @@ export interface FileRouteTypes {
     | '/ai/scene'
     | '/ai/sketch-final'
     | '/ai/style-transfer'
+    | '/ai/subscribe'
     | '/ai/swap'
     | '/api/generation-jobs'
     | '/catalog/$id'
@@ -615,6 +625,7 @@ export interface FileRouteTypes {
     | '/ai/scene'
     | '/ai/sketch-final'
     | '/ai/style-transfer'
+    | '/ai/subscribe'
     | '/ai/swap'
     | '/api/generation-jobs'
     | '/ai'
@@ -672,6 +683,7 @@ export interface FileRouteTypes {
     | '/ai/scene'
     | '/ai/sketch-final'
     | '/ai/style-transfer'
+    | '/ai/subscribe'
     | '/ai/swap'
     | '/api/generation-jobs'
     | '/catalog/$id'
@@ -784,6 +796,13 @@ declare module '@tanstack/react-router' {
       path: '/swap'
       fullPath: '/ai/swap'
       preLoaderRoute: typeof AiSwapRouteImport
+      parentRoute: typeof AiRoute
+    }
+    '/ai/subscribe': {
+      id: '/ai/subscribe'
+      path: '/subscribe'
+      fullPath: '/ai/subscribe'
+      preLoaderRoute: typeof AiSubscribeRouteImport
       parentRoute: typeof AiRoute
     }
     '/ai/style-transfer': {
@@ -1175,6 +1194,7 @@ interface AiRouteChildren {
   AiSceneRoute: typeof AiSceneRoute
   AiSketchFinalRoute: typeof AiSketchFinalRoute
   AiStyleTransferRoute: typeof AiStyleTransferRoute
+  AiSubscribeRoute: typeof AiSubscribeRoute
   AiSwapRoute: typeof AiSwapRoute
   AiIndexRoute: typeof AiIndexRoute
 }
@@ -1196,6 +1216,7 @@ const AiRouteChildren: AiRouteChildren = {
   AiSceneRoute: AiSceneRoute,
   AiSketchFinalRoute: AiSketchFinalRoute,
   AiStyleTransferRoute: AiStyleTransferRoute,
+  AiSubscribeRoute: AiSubscribeRoute,
   AiSwapRoute: AiSwapRoute,
   AiIndexRoute: AiIndexRoute,
 }

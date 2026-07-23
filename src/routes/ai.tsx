@@ -18,14 +18,15 @@ function AiRoute() {
 function AiSubscriptionGate() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const navigate = useNavigate();
-  const [checking, setChecking] = useState(!isLocalAiClientMode && pathname !== "/ai/plan");
-  const [allowed, setAllowed] = useState(isLocalAiClientMode || pathname === "/ai/plan");
+  const isBillingRoute = pathname === "/ai/plan" || pathname === "/ai/subscribe";
+  const [checking, setChecking] = useState(!isLocalAiClientMode && !isBillingRoute);
+  const [allowed, setAllowed] = useState(isLocalAiClientMode || isBillingRoute);
   const verifiedRef = useRef(isLocalAiClientMode);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (isLocalAiClientMode || pathname === "/ai/plan") {
+    if (isLocalAiClientMode || isBillingRoute) {
       setAllowed(true);
       setChecking(false);
       return;
@@ -58,12 +59,12 @@ function AiSubscriptionGate() {
         setAllowed(hasActivePlan);
         verifiedRef.current = hasActivePlan;
         if (!hasActivePlan) {
-          await navigate({ to: "/ai/plan", replace: true });
+          await navigate({ to: "/ai/subscribe", replace: true });
         }
       } catch {
         if (!cancelled) {
           setAllowed(false);
-          await navigate({ to: "/ai/plan", replace: true });
+          await navigate({ to: "/ai/subscribe", replace: true });
         }
       } finally {
         if (!cancelled) setChecking(false);
@@ -81,6 +82,10 @@ function AiSubscriptionGate() {
         Vérification de l'abonnement...
       </div>
     );
+  }
+
+  if (pathname === "/ai/subscribe") {
+    return <Outlet />;
   }
 
   return (
