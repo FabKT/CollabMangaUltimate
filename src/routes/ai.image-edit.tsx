@@ -21,6 +21,7 @@ import {
   IMAGE_EDIT_SESSION_KEY,
   type ImageEditDraft,
   type ImageEditReference,
+  type ImageEditReferenceRole,
 } from "@/lib/image-edit-workspace";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { recordGeneratedImage } from "@/lib/manga-history";
@@ -47,6 +48,31 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+async function readTargetImage(file: File) {
+  const dataUrl = await fileToDataUrl(file);
+  const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error("Impossible de lire les dimensions de l'image."));
+    image.src = dataUrl;
+  });
+
+  return {
+    dataUrl,
+    aspectRatio: dimensions.width >= dimensions.height ? ("3:2" as const) : ("2:3" as const),
+  };
+}
+
+const referenceRoles: Array<{ value: ImageEditReferenceRole; label: string }> = [
+  { value: "Inspiration", label: "Inspiration ciblée" },
+  { value: "Pose", label: "Pose" },
+  { value: "Style", label: "Style" },
+  { value: "Background", label: "Décor" },
+  { value: "Object", label: "Objet" },
+  { value: "Storyboard", label: "Structure" },
+  { value: "Target", label: "Cible précise" },
+];
+
 function downloadImage(url: string) {
   const link = document.createElement("a");
   link.href = url;
@@ -67,6 +93,7 @@ function ImageEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
+  const targetUploadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void Promise.all([
@@ -134,6 +161,29 @@ function ImageEditPage() {
     setDraft((current) =>
       current ? { ...current, references: [...current.references, ...imported] } : current,
     );
+  };
+
+  const importTargetImage = async (files: FileList | null) => {
+    const file = Array.from(files ?? []).find((candidate) => candidate.type.startsWith("image/"));
+    if (!file) return;
+
+    setError(null);
+    try {
+      const imported = await readTargetImage(file);
+      setResult(null);
+      setDraft((current) => ({
+        originalImageUrl: imported.dataUrl,
+        currentImageUrl: imported.dataUrl,
+        prompt: current?.prompt ?? "",
+        selectedCharacterIds: current?.selectedCharacterIds ?? [],
+        references: current?.references ?? [],
+        aspectRatio: imported.aspectRatio,
+        source: file.name,
+      }));
+      setTab("image");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Image import failed.");
+    }
   };
 
   const modifyImage = async () => {
@@ -240,16 +290,47 @@ function ImageEditPage() {
   if (!loaded) return <div className="py-20 text-center text-text-muted">Loading...</div>;
   if (!draft) {
     return (
-      <Panel className="mx-auto max-w-2xl py-16 text-center">
-        <ImageIcon className="mx-auto h-10 w-10 text-accent" />
-        <h1 className="mt-4 text-xl font-bold">Aucune image à modifier</h1>
-        <p className="mt-2 text-sm text-text-secondary">
-          Ouvrez une image générée depuis l'historique pour commencer.
-        </p>
-        <Link to="/ai/history" className="cma-btn-primary mt-5 inline-flex">
-          Ouvrir l'historique
-        </Link>
-      </Panel>
+      <>
+        <PageHeader
+          title="Modification d'image"
+          description="Importez une image ou ouvrez une génération depuis l'historique."
+        />
+        <Panel className="mx-auto max-w-2xl py-16 text-center">
+          <input
+            ref={targetUploadRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              void importTargetImage(event.target.files);
+              event.currentTarget.value = "";
+            }}
+          />
+          <ImageIcon className="mx-auto h-10 w-10 text-accent" />
+          <h1 className="mt-4 text-xl font-bold">Importer l'image à modifier</h1>
+          <p className="mt-2 text-sm text-text-secondary">
+            Cette image devient la cible principale et reste verrouillée hors des changements
+            demandés.
+          </p>
+          {error && (
+            <p className="mt-4 rounded-[10px] border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              {error}
+            </p>
+          )}
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => targetUploadRef.current?.click()}
+              className="cma-btn-primary"
+            >
+              <Upload className="h-4 w-4" /> Importer une image
+            </button>
+            <Link to="/ai/history" className="cma-btn-secondary">
+              Ouvrir l'historique
+            </Link>
+          </div>
+        </Panel>
+      </>
     );
   }
 
@@ -288,12 +369,36 @@ function ImageEditPage() {
 
           <div className="min-h-[560px] p-5">
             {tab === "image" && (
-              <div className="flex h-full min-h-[520px] items-center justify-center rounded-[16px] bg-stage p-4">
-                <img
-                  src={draft.currentImageUrl}
-                  alt="Image à modifier"
-                  className="max-h-[520px] max-w-full rounded-[10px] object-contain"
+              <div>
+                <input
+                  ref={targetUploadRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    void importTargetImage(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
                 />
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="truncate text-xs text-text-muted">
+                    {draft.source || "Image cible"}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => targetUploadRef.current?.click()}
+                    className="cma-btn-secondary shrink-0"
+                  >
+                    <Upload className="h-4 w-4" /> Remplacer
+                  </button>
+                </div>
+                <div className="flex h-full min-h-[470px] items-center justify-center rounded-[16px] bg-stage p-4">
+                  <img
+                    src={draft.currentImageUrl}
+                    alt="Image à modifier"
+                    className="max-h-[470px] max-w-full rounded-[10px] object-contain"
+                  />
+                </div>
               </div>
             )}
 
@@ -342,7 +447,10 @@ function ImageEditPage() {
                   accept="image/*"
                   multiple
                   className="hidden"
-                  onChange={(event) => void importReferences(event.target.files)}
+                  onChange={(event) => {
+                    void importReferences(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
                 />
                 <button
                   type="button"
@@ -357,12 +465,63 @@ function ImageEditPage() {
                       key={reference.id}
                       className="relative overflow-hidden rounded-[12px] border border-border bg-surface-2 p-2"
                     >
-                      <img
-                        src={reference.imageDataUrl}
-                        alt={reference.name}
-                        className="aspect-square w-full rounded-[9px] object-cover"
-                      />
+                      <div className="aspect-square overflow-hidden rounded-[9px] bg-stage p-1">
+                        <img
+                          src={reference.imageDataUrl}
+                          alt={reference.name}
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
                       <p className="mt-2 truncate text-[11px] font-bold">{reference.name}</p>
+                      <select
+                        aria-label={`Rôle de ${reference.name}`}
+                        value={reference.role ?? "Inspiration"}
+                        onChange={(event) =>
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  references: current.references.map((item) =>
+                                    item.id === reference.id
+                                      ? {
+                                          ...item,
+                                          role: event.target.value as ImageEditReferenceRole,
+                                        }
+                                      : item,
+                                  ),
+                                }
+                              : current,
+                          )
+                        }
+                        className="mt-2 h-9 w-full rounded-[8px] border border-border bg-surface px-2 text-[11px] text-text-primary outline-none focus:border-accent"
+                      >
+                        {referenceRoles.map((role) => (
+                          <option key={role.value} value={role.value}>
+                            {role.label}
+                          </option>
+                        ))}
+                      </select>
+                      <textarea
+                        aria-label={`Consignes pour ${reference.name}`}
+                        value={reference.description ?? ""}
+                        onChange={(event) =>
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  references: current.references.map((item) =>
+                                    item.id === reference.id
+                                      ? { ...item, description: event.target.value }
+                                      : item,
+                                  ),
+                                }
+                              : current,
+                          )
+                        }
+                        placeholder="Éléments précis à reprendre..."
+                        rows={2}
+                        className="mt-2 w-full resize-none rounded-[8px] border border-border bg-surface px-2 py-2 text-[11px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+                      />
                       <button
                         type="button"
                         aria-label="Supprimer"

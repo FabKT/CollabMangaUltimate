@@ -4,6 +4,7 @@ import type { GenerationUsage } from "@/lib/generation-metrics";
 import { errorMessage } from "@/lib/error-message";
 import { LOCAL_MANGA_PAGE_PLAN } from "@/lib/ai-style-plans";
 import { isLocalAiServerMode } from "@/lib/local-ai-mode";
+import { buildStrictImageEditPrompt } from "@/lib/strict-image-edit-plan";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
@@ -330,15 +331,30 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
   }
 
   const size = imageSizeForAspectRatio(data.aspectRatio);
-  const requestData = isLocalAiServerMode()
-    ? {
-        ...data,
-        prompt: withLocalMangaPlan(data.prompt, "USER SCENE REQUEST - HIGHEST PRIORITY"),
-        editPrompt: data.editPrompt
-          ? withLocalMangaPlan(data.editPrompt, "USER EDIT REQUEST - HIGHEST PRIORITY")
-          : data.editPrompt,
-      }
-    : data;
+  const strictEditPrompt =
+    data.operation === "edit"
+      ? buildStrictImageEditPrompt({
+          editRequest: data.editPrompt || data.prompt,
+          assets: data.selectedAssets,
+          hasTargetImage: Boolean(data.existingImageDataUrl),
+        })
+      : undefined;
+  const requestData =
+    data.operation === "edit"
+      ? {
+          ...data,
+          prompt: strictEditPrompt!,
+          editPrompt: strictEditPrompt,
+        }
+      : isLocalAiServerMode()
+        ? {
+            ...data,
+            prompt: withLocalMangaPlan(data.prompt, "USER SCENE REQUEST - HIGHEST PRIORITY"),
+            editPrompt: data.editPrompt
+              ? withLocalMangaPlan(data.editPrompt, "USER EDIT REQUEST - HIGHEST PRIORITY")
+              : data.editPrompt,
+          }
+        : data;
   const body = JSON.stringify({
     project: "manga-forge",
     task: "manga_page_generation",
