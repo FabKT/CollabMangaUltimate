@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
 import { fitPromptToApiLimit } from "@/lib/prompt-limit";
+import { fetchGenerationWithRetry } from "@/lib/server-fetch-retry";
 
 /**
  * Decor / background generation plan.
@@ -131,26 +132,27 @@ export async function requestPulseNoteDecorImage(
     .map((reference) => reference.imageDataUrl)
     .filter((url): url is string => Boolean(url));
 
-  const response = await fetch(`${backendUrl}/api/decor/generate`, {
+  const body = JSON.stringify({
+    project: "manga-forge",
+    task: "decor_generation",
+    prompt: finalPrompt,
+    size: DECOR_IMAGE_SIZE,
+    aspectRatio: "3:2",
+    styleId: input.styleId,
+    styleName: input.styleName,
+    styleImageDataUrl: input.styleImageDataUrl,
+    referenceImages,
+  });
+  const response = await fetchGenerationWithRetry(`${backendUrl}/api/decor/generate`, () => ({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-app-id": "manga-forge",
       "x-app-token": appToken,
     },
-    body: JSON.stringify({
-      project: "manga-forge",
-      task: "decor_generation",
-      prompt: finalPrompt,
-      size: DECOR_IMAGE_SIZE,
-      aspectRatio: "3:2",
-      styleId: input.styleId,
-      styleName: input.styleName,
-      styleImageDataUrl: input.styleImageDataUrl,
-      referenceImages,
-    }),
+    body,
     signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
-  });
+  }));
 
   const contentType = response.headers.get("content-type") ?? "";
   const payload: PulseNoteDecorResponse = contentType.includes("application/json")

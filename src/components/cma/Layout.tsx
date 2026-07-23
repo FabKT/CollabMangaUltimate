@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { Sidebar } from "./Sidebar";
 import { Menu, X } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 
 export function CmaLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -32,11 +33,21 @@ export function CmaLayout({ children }: { children: ReactNode }) {
 
       <main className="flex-1 min-w-0">
         {/* Mobile top bar */}
-        <div className="cm-mobile-nav-bar xl:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-30" style={{ background: "var(--bg-app)", borderBottom: "1px solid var(--border-default)" }}>
-          <button onClick={() => setMobileOpen(true)} className="cma-icon-btn" aria-label="Open menu">
+        <div
+          className="cm-mobile-nav-bar xl:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-30"
+          style={{ background: "var(--bg-app)", borderBottom: "1px solid var(--border-default)" }}
+        >
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="cma-icon-btn"
+            aria-label="Open menu"
+          >
             <Menu size={16} />
           </button>
-          <div className="font-bold" style={{ fontFamily: "var(--font-display)" }}>CollabManga AI</div>
+          <BrandMark size={24} />
+          <div className="font-bold" style={{ fontFamily: "var(--font-display)" }}>
+            CollabManga AI
+          </div>
         </div>
 
         <div className="p-4 md:p-6 lg:p-8">{children}</div>
@@ -46,14 +57,26 @@ export function CmaLayout({ children }: { children: ReactNode }) {
 }
 
 export function PageHeader({
-  title, description, actions,
-}: { title: string; description?: string; actions?: ReactNode }) {
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+}) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4" style={{ marginBottom: 24 }}>
+    <header
+      className="flex flex-wrap items-start justify-between gap-4"
+      style={{ marginBottom: 24 }}
+    >
       <div className="min-w-0">
         <h1 className="cma-page-title">{title}</h1>
         {description && (
-          <p className="mt-1" style={{ font: "500 14px/22px var(--font-sans)", color: "var(--text-secondary)" }}>
+          <p
+            className="mt-1"
+            style={{ font: "500 14px/22px var(--font-sans)", color: "var(--text-secondary)" }}
+          >
             {description}
           </p>
         )}
@@ -64,8 +87,18 @@ export function PageHeader({
 }
 
 export function Card({
-  children, className = "", padding = 20, selected = false, as: As = "div",
-}: { children: ReactNode; className?: string; padding?: number; selected?: boolean; as?: "div" | "button" | "a" }) {
+  children,
+  className = "",
+  padding = 20,
+  selected = false,
+  as: As = "div",
+}: {
+  children: ReactNode;
+  className?: string;
+  padding?: number;
+  selected?: boolean;
+  as?: "div" | "button" | "a";
+}) {
   const Tag = As as any;
   return (
     <Tag
@@ -87,7 +120,15 @@ export function Card({
   );
 }
 
-export function Panel({ children, className = "", padding = 20 }: { children: ReactNode; className?: string; padding?: number }) {
+export function Panel({
+  children,
+  className = "",
+  padding = 20,
+}: {
+  children: ReactNode;
+  className?: string;
+  padding?: number;
+}) {
   return (
     <div
       className={className}
@@ -122,8 +163,16 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={"cma-input " + (props.className ?? "")}
-      onFocus={(e) => { e.currentTarget.style.borderColor = "var(--neon)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)"; props.onFocus?.(e); }}
-      onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(133,154,206,0.2)"; e.currentTarget.style.boxShadow = "none"; props.onBlur?.(e); }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = "var(--neon)";
+        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)";
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = "rgba(133,154,206,0.2)";
+        e.currentTarget.style.boxShadow = "none";
+        props.onBlur?.(e);
+      }}
     />
   );
 }
@@ -134,13 +183,29 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
       {...props}
       className={"cma-input " + (props.className ?? "")}
       style={{ minHeight: 110, resize: "vertical", ...(props.style ?? {}) }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = "var(--neon)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)"; props.onFocus?.(e); }}
-      onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(133,154,206,0.2)"; e.currentTarget.style.boxShadow = "none"; props.onBlur?.(e); }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = "var(--neon)";
+        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)";
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = "rgba(133,154,206,0.2)";
+        e.currentTarget.style.boxShadow = "none";
+        props.onBlur?.(e);
+      }}
     />
   );
 }
 
-export function Chip({ children, active = false, onClick }: { children: ReactNode; active?: boolean; onClick?: () => void }) {
+export function Chip({
+  children,
+  active = false,
+  onClick,
+}: {
+  children: ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <button
       onClick={onClick}
@@ -152,11 +217,23 @@ export function Chip({ children, active = false, onClick }: { children: ReactNod
   );
 }
 
-export function Tabs({ tabs, value, onChange }: { tabs: { id: string; label: string; icon?: ReactNode }[]; value: string; onChange: (id: string) => void }) {
+export function Tabs({
+  tabs,
+  value,
+  onChange,
+}: {
+  tabs: { id: string; label: string; icon?: ReactNode }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
   return (
     <div
       className="inline-flex items-center gap-1 p-1"
-      style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 999 }}
+      style={{
+        background: "var(--bg-input)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 999,
+      }}
     >
       {tabs.map((t) => (
         <button

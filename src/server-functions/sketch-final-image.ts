@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { GenerationUsage } from "@/lib/generation-metrics";
 import { fitPromptToApiLimit } from "@/lib/prompt-limit";
+import { fetchGenerationWithRetry } from "@/lib/server-fetch-retry";
 
 /**
  * Sketch-to-final plan.
@@ -288,29 +289,33 @@ export async function requestPulseNoteSketchFinal(
   const sketchImageDataUrl = input.sketchImageDataUrl || input.baseImageDataUrl;
   const references = [...input.elementReferences, ...input.references];
 
-  const response = await fetch(`${backendUrl}/api/sketch-final/generate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-app-id": "manga-forge",
-      "x-app-token": appToken,
-    },
-    body: JSON.stringify({
-      project: "manga-forge",
-      task: "sketch_to_final",
-      prompt: finalPrompt,
-      sketchImageDataUrl,
-      baseImageDataUrl: sketchImageDataUrl,
-      styleImageDataUrl: input.styleImageDataUrl,
-      styleId: input.styleId,
-      styleName: input.styleName,
-      styleDescription: input.styleDescription,
-      elementReferences: references,
-      notes: input.notes || input.prompt,
-      size: input.size,
-    }),
-    signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
+  const body = JSON.stringify({
+    project: "manga-forge",
+    task: "sketch_to_final",
+    prompt: finalPrompt,
+    sketchImageDataUrl,
+    baseImageDataUrl: sketchImageDataUrl,
+    styleImageDataUrl: input.styleImageDataUrl,
+    styleId: input.styleId,
+    styleName: input.styleName,
+    styleDescription: input.styleDescription,
+    elementReferences: references,
+    notes: input.notes || input.prompt,
+    size: input.size,
   });
+  const response = await fetchGenerationWithRetry(
+    `${backendUrl}/api/sketch-final/generate`,
+    () => ({
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-app-id": "manga-forge",
+        "x-app-token": appToken,
+      },
+      body,
+      signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
+    }),
+  );
 
   const contentType = response.headers.get("content-type") ?? "";
   const payload: PulseNoteSketchFinalResponse = contentType.includes("application/json")

@@ -3,6 +3,7 @@ import type { GenerationUsage } from "@/lib/generation-metrics";
 import { buildStylePlan } from "@/lib/ai-style-plans";
 import { isLocalAiServerMode } from "@/lib/local-ai-mode";
 import { fitPromptToApiLimit } from "@/lib/prompt-limit";
+import { fetchGenerationWithRetry } from "@/lib/server-fetch-retry";
 
 /**
  * Character-card generation plan.
@@ -211,31 +212,32 @@ export async function requestPulseNoteCharacterImage(
         "Mandatory target rendering-style evidence only. Analyze and apply its lineart, shapes, value logic, eye/face/hair treatment, shading, texture and polish. Do not copy identity, pose, anatomy, outfit, scene, text or composition.",
     }));
 
-  const response = await fetch(`${backendUrl}/api/character/generate`, {
+  const body = JSON.stringify({
+    project: "manga-forge",
+    task: "character_card_generation",
+    prompt: localPlanEnabled ? finalPrompt : fitPromptToApiLimit(input.prompt),
+    size: CHARACTER_IMAGE_SIZE,
+    aspectRatio: "3:2",
+    identityImageDataUrl: input.identityImageDataUrl,
+    identityReferenceName: input.identityReferenceName,
+    styleId: input.styleId,
+    styleName: input.styleName,
+    styleDescription: input.styleDescription,
+    styleImageDataUrl: input.styleImageDataUrl,
+    styleReferenceImages: input.styleReferenceImages,
+    structureImageDataUrl: input.structureImageDataUrl,
+    references: [...identityReferences, ...styleLibraryReferences],
+  });
+  const response = await fetchGenerationWithRetry(`${backendUrl}/api/character/generate`, () => ({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-app-id": "manga-forge",
       "x-app-token": appToken,
     },
-    body: JSON.stringify({
-      project: "manga-forge",
-      task: "character_card_generation",
-      prompt: localPlanEnabled ? finalPrompt : fitPromptToApiLimit(input.prompt),
-      size: CHARACTER_IMAGE_SIZE,
-      aspectRatio: "3:2",
-      identityImageDataUrl: input.identityImageDataUrl,
-      identityReferenceName: input.identityReferenceName,
-      styleId: input.styleId,
-      styleName: input.styleName,
-      styleDescription: input.styleDescription,
-      styleImageDataUrl: input.styleImageDataUrl,
-      styleReferenceImages: input.styleReferenceImages,
-      structureImageDataUrl: input.structureImageDataUrl,
-      references: [...identityReferences, ...styleLibraryReferences],
-    }),
+    body,
     signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
-  });
+  }));
 
   const contentType = response.headers.get("content-type") ?? "";
   const payload: PulseNoteCharacterResponse = contentType.includes("application/json")

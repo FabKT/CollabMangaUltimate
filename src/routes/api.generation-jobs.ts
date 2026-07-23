@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase } from "@/lib/stripe-server";
+import { processGenerationJob } from "@/server-functions/generation-job-worker";
 
 const ALLOWED_ENDPOINTS = new Set([
   "/api/manga/generate-page",
@@ -23,48 +24,26 @@ async function authenticatedUserId(request: Request) {
   return data.user?.id ?? null;
 }
 
-async function processJob(
-  requestUrl: string,
-  authorization: string,
-  job: { id: string; endpoint: string; payload: unknown },
-) {
-  const supabase = getServiceSupabase();
-  await supabase
-    .from("ai_generation_jobs")
-    .update({ status: "running", started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("id", job.id);
+function isLocalRequest(request: Request) {
+  const hostname = new URL(request.url).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
 
-  try {
-    const response = await fetch(new URL(job.endpoint, requestUrl), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: authorization },
-      body: JSON.stringify(job.payload),
-    });
-    const result = await response.json().catch(async () => ({ error: await response.text().catch(() => "") }));
-    const now = new Date().toISOString();
-    if (!response.ok) {
-      await supabase.from("ai_generation_jobs").update({
-        status: "failed",
-        error_message: result.error || `Generation failed (${response.status}).`,
-        completed_at: now,
-        updated_at: now,
-      }).eq("id", job.id);
-      return;
-    }
-    await supabase.from("ai_generation_jobs").update({
-      status: "completed",
-      result_payload: result,
-      completed_at: now,
-      updated_at: now,
-    }).eq("id", job.id);
-  } catch (error) {
-    const now = new Date().toISOString();
-    await supabase.from("ai_generation_jobs").update({
-      status: "failed",
-      error_message: error instanceof Error ? error.message : "Generation failed.",
-      completed_at: now,
-      updated_at: now,
-    }).eq("id", job.id);
+async function invokeWorker(request: Request, jobId: string, authorization: string) {
+  if (isLocalRequest(request)) {
+    void processGenerationJob(jobId, authorization);
+    return;
+  }
+
+  const workerUrl = new URL("/.netlify/functions/generation-worker-background", request.url);
+  const response = await fetch(workerUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId, authorization }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Unable to start generation worker (${response.status}).`);
   }
 }
 
@@ -75,29 +54,64 @@ export const Route = createFileRoute("/api/generation-jobs")({
         try {
           const userId = await authenticatedUserId(request);
           if (!userId) return Response.json({ error: "Authentication required." }, { status: 401 });
-          const body = await request.json() as { workspace?: string; endpoint?: string; payload?: unknown };
+          const body = (await request.json()) as {
+            id?: string;
+            workspace?: string;
+            endpoint?: string;
+            payload?: unknown;
+          };
           if (!body.workspace || !body.endpoint || !ALLOWED_ENDPOINTS.has(body.endpoint)) {
             return Response.json({ error: "Invalid generation job." }, { status: 400 });
           }
           const supabase = getServiceSupabase();
-          const inserted = await supabase.from("ai_generation_jobs").insert({
+          const record = {
+            ...(body.id ? { id: body.id } : {}),
             user_id: userId,
             workspace: body.workspace,
             endpoint: body.endpoint,
             request_payload: body.payload ?? {},
-          }).select("id").single();
+          };
+          const inserted = await supabase
+            .from("ai_generation_jobs")
+            .insert(record)
+            .select("id")
+            .single();
           if (inserted.error || !inserted.data) {
-            return Response.json({ error: inserted.error?.message || "Generation queue unavailable." }, { status: 503 });
+            if (body.id && inserted.error?.code === "23505") {
+              const existing = await supabase
+                .from("ai_generation_jobs")
+                .select("id,status")
+                .eq("id", body.id)
+                .eq("user_id", userId)
+                .maybeSingle();
+              if (existing.data) return Response.json(existing.data, { status: 202 });
+            }
+            return Response.json(
+              { error: inserted.error?.message || "Generation queue unavailable." },
+              { status: 503 },
+            );
           }
           const authorization = request.headers.get("authorization") ?? "";
-          void processJob(request.url, authorization, {
-            id: inserted.data.id,
-            endpoint: body.endpoint,
-            payload: body.payload ?? {},
-          });
+          try {
+            await invokeWorker(request, inserted.data.id, authorization);
+          } catch (error) {
+            await supabase
+              .from("ai_generation_jobs")
+              .update({
+                status: "failed",
+                error_message:
+                  error instanceof Error ? error.message : "Unable to start generation worker.",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", inserted.data.id);
+            throw error;
+          }
           return Response.json({ id: inserted.data.id, status: "queued" }, { status: 202 });
         } catch (error) {
-          return Response.json({ error: error instanceof Error ? error.message : "Generation queue unavailable." }, { status: 503 });
+          return Response.json(
+            { error: error instanceof Error ? error.message : "Generation queue unavailable." },
+            { status: 503 },
+          );
         }
       },
       GET: async ({ request }) => {
@@ -106,12 +120,31 @@ export const Route = createFileRoute("/api/generation-jobs")({
           if (!userId) return Response.json({ error: "Authentication required." }, { status: 401 });
           const id = new URL(request.url).searchParams.get("id");
           if (!id) return Response.json({ error: "Missing job id." }, { status: 400 });
-          const queried = await getServiceSupabase().from("ai_generation_jobs")
-            .select("id,status,result_payload,error_message")
+          const queried = await getServiceSupabase()
+            .from("ai_generation_jobs")
+            .select("id,status,result_payload,error_message,updated_at")
             .eq("id", id)
             .eq("user_id", userId)
             .maybeSingle();
-          if (queried.error || !queried.data) return Response.json({ error: "Generation job not found." }, { status: 404 });
+          if (queried.error || !queried.data)
+            return Response.json({ error: "Generation job not found." }, { status: 404 });
+          const stale =
+            (queried.data.status === "queued" || queried.data.status === "running") &&
+            Date.now() - new Date(queried.data.updated_at).getTime() > 16 * 60 * 1000;
+          if (stale) {
+            const error = "La génération précédente a expiré. Tu peux la relancer.";
+            await getServiceSupabase()
+              .from("ai_generation_jobs")
+              .update({
+                status: "failed",
+                error_message: error,
+                completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", id)
+              .eq("user_id", userId);
+            return Response.json({ id, status: "failed", error });
+          }
           return Response.json({
             id: queried.data.id,
             status: queried.data.status,
@@ -119,7 +152,10 @@ export const Route = createFileRoute("/api/generation-jobs")({
             error: queried.data.error_message ?? undefined,
           });
         } catch (error) {
-          return Response.json({ error: error instanceof Error ? error.message : "Unable to read generation job." }, { status: 503 });
+          return Response.json(
+            { error: error instanceof Error ? error.message : "Unable to read generation job." },
+            { status: 503 },
+          );
         }
       },
     },

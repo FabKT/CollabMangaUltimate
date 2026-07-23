@@ -12,8 +12,6 @@ import {
   Images,
   History,
   CreditCard,
-  Zap,
-  ChevronsUpDown,
   Users,
   ArrowLeft,
   ShieldCheck,
@@ -26,6 +24,7 @@ import { onCreditsChanged } from "@/lib/credits-events";
 import { PLANS } from "@/lib/billing-plans";
 import { LanguageSelect, useI18n, type TranslationKey } from "@/lib/i18n";
 import { isLocalAiClientMode } from "@/lib/local-ai-mode";
+import { BrandMark } from "@/components/BrandMark";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -170,19 +169,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
     >
       {/* Brand */}
       <div className="flex items-center gap-2 px-2 mb-3">
-        <div
-          className="shrink-0 grid place-items-center"
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 8,
-            background: "linear-gradient(135deg, rgba(57,255,136,0.18), rgba(57,255,136,0.04))",
-            border: "1px solid rgba(57,255,136,0.45)",
-            boxShadow: "0 0 14px rgba(57,255,136,0.16)",
-          }}
-        >
-          <Zap size={15} color="var(--neon)" strokeWidth={2.4} />
-        </div>
+        <BrandMark />
         <span
           className="font-bold text-[15px] leading-none"
           style={{ fontFamily: "var(--font-display)" }}
@@ -190,47 +177,6 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
           CollabManga AI
         </span>
       </div>
-
-      {/* Workspace switcher */}
-      <button
-        className="flex items-center gap-2 w-full mb-4 px-2 transition-colors"
-        style={{
-          height: 44,
-          borderRadius: 10,
-          border: "1px solid var(--border-default)",
-          background: "var(--bg-elevated)",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = "var(--neon-soft-border)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = "var(--border-default)";
-        }}
-      >
-        <span
-          className="grid place-items-center shrink-0"
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 999,
-            background: "linear-gradient(135deg, #39ff88, #12b76a)",
-          }}
-        >
-          <span className="text-[11px] font-black" style={{ color: "#04111e" }}>
-            C
-          </span>
-        </span>
-        <span className="min-w-0 flex-1 text-left">
-          <span className="block text-[13px] font-bold leading-tight truncate">CollabCreative</span>
-          <span
-            className="block text-[11px] leading-tight truncate"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {t("nav.workspace")}
-          </span>
-        </span>
-        <ChevronsUpDown size={14} style={{ color: "var(--text-muted)" }} />
-      </button>
 
       {/* Switch to CollabManga (social network) */}
       {!isLocalAiClientMode && (

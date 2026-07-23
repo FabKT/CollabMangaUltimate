@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { CollabSidebar } from "./CollabSidebar";
 import { Menu, X } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 
 export function CollabLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -36,9 +37,14 @@ export function CollabLayout({ children }: { children: ReactNode }) {
           className="cm-mobile-nav-bar xl:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-30"
           style={{ background: "var(--bg-app)", borderBottom: "1px solid var(--border-default)" }}
         >
-          <button onClick={() => setMobileOpen(true)} className="cma-icon-btn" aria-label="Open menu">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="cma-icon-btn"
+            aria-label="Open menu"
+          >
             <Menu size={16} />
           </button>
+          <BrandMark size={24} />
           <div className="font-bold" style={{ fontFamily: "var(--font-display)" }}>
             CollabManga
           </div>

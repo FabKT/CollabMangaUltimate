@@ -217,12 +217,11 @@ function StyleTransferPage() {
     setError(null);
     setIsGenerating(true);
     try {
-      const presetStyleReferences =
-        activeStyle
-          ? [await imageSourceToDataUrl(activeStyle.face)].filter((image): image is string =>
-              Boolean(image),
-            )
-          : [];
+      const presetStyleReferences = activeStyle
+        ? [await imageSourceToDataUrl(activeStyle.face)].filter((image): image is string =>
+            Boolean(image),
+          )
+        : [];
       const styleReferenceImages = activeCustomStyle?.images ?? presetStyleReferences;
       window.localStorage.setItem("collabmanga.ai-job.style-transfer.mode", mode);
       const generated = await runDurableGeneration<StyleTransferResult>(
@@ -291,10 +290,7 @@ function StyleTransferPage() {
 
   return (
     <div className="manga-canvas-page flex h-[calc(100dvh-93px)] w-full min-w-0 flex-col overflow-hidden text-text-primary md:h-[calc(100dvh-48px)] lg:h-[calc(100dvh-64px)]">
-      <PageHeader
-        title={t("ai.styleTransfer")}
-        description={t("ai.styleTransferDesc")}
-      />
+      <PageHeader title={t("ai.styleTransfer")} description={t("ai.styleTransferDesc")} />
 
       {/* Onglets : Planche / Personnage */}
       <div className="mb-3 inline-flex shrink-0 self-start items-center gap-1 rounded-[14px] border border-border bg-surface-2 p-1 md:mb-4">
@@ -319,33 +315,39 @@ function StyleTransferPage() {
         })}
       </div>
 
-      {/* Style band — full width */}
-      <section className="shadow-panel mb-3 shrink-0 rounded-[18px] border border-border bg-surface-2 p-2.5 md:mb-4 md:p-3">
-        <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+      {/* Compact style band leaves the available height to the source/result frames. */}
+      <section className="shadow-panel mb-2 shrink-0 rounded-[16px] border border-border bg-surface-2 p-2 md:mb-3">
+        <div className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">
           {t("ai.targetStyle")}
         </div>
-        <div className="scroll-dark flex gap-3 overflow-x-auto pb-1">
+        <div className="scroll-dark flex gap-2 overflow-x-auto pb-1">
           {MANGA_STYLES.map((style) => {
             const selected = style.id === targetStyleId;
             return (
               <button
                 key={style.id}
                 onClick={() => setTargetStyleId(style.id)}
-                className={`flex w-[112px] shrink-0 flex-col gap-2 rounded-[14px] border p-2 transition ${
+                className={`flex w-[88px] shrink-0 flex-col gap-1.5 rounded-[12px] border p-1.5 transition ${
                   selected
                     ? "border-accent-border bg-accent-soft/30"
                     : "border-border bg-surface-3 hover:border-accent"
                 }`}
               >
-                <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
-                  <img src={style.face} alt={style.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                <div className="relative h-12 w-full overflow-hidden rounded-[8px] border border-border bg-surface-2">
+                  <img
+                    src={style.face}
+                    alt={style.name}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
                   {selected && (
                     <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground">
                       <Check className="h-3 w-3" />
                     </span>
                   )}
                 </div>
-                <span className="truncate text-center text-[12px] font-bold text-text-primary">
+                <span className="truncate text-center text-[11px] font-bold text-text-primary">
                   {style.name}
                 </span>
               </button>
@@ -356,13 +358,13 @@ function StyleTransferPage() {
             <button
               key={style.id}
               onClick={() => setTargetStyleId(style.id)}
-              className={`flex w-[112px] shrink-0 flex-col gap-2 rounded-[14px] border p-2 transition ${
+              className={`flex w-[88px] shrink-0 flex-col gap-1.5 rounded-[12px] border p-1.5 transition ${
                 style.id === targetStyleId
                   ? "border-accent-border bg-accent-soft/30"
                   : "border-border bg-surface-3 hover:border-accent"
               }`}
             >
-              <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
+              <div className="relative h-12 w-full overflow-hidden rounded-[8px] border border-border bg-surface-2">
                 <img
                   src={style.images[0]}
                   alt={style.name}
@@ -374,7 +376,7 @@ function StyleTransferPage() {
                   </span>
                 )}
               </div>
-              <span className="truncate text-center text-[12px] font-bold text-text-primary">
+              <span className="truncate text-center text-[11px] font-bold text-text-primary">
                 {style.name}
               </span>
             </button>
@@ -382,12 +384,12 @@ function StyleTransferPage() {
           <button
             type="button"
             onClick={() => setCreateStyleOpen(true)}
-            className="flex w-[112px] shrink-0 flex-col gap-2 rounded-[14px] border border-dashed border-border-strong bg-surface-3 p-2 transition hover:border-accent"
+            className="flex w-[88px] shrink-0 flex-col gap-1.5 rounded-[12px] border border-dashed border-border-strong bg-surface-3 p-1.5 transition hover:border-accent"
           >
-            <span className="grid aspect-square w-full place-items-center rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-text-secondary">
-              <Plus className="h-6 w-6" />
+            <span className="grid h-12 w-full place-items-center rounded-[8px] border border-dashed border-border-strong bg-surface-2 text-text-secondary">
+              <Plus className="h-5 w-5" />
             </span>
-            <span className="truncate text-center text-[12px] font-bold text-text-primary">
+            <span className="truncate text-center text-[11px] font-bold text-text-primary">
               {t("ai.createStyle")}
             </span>
           </button>
@@ -403,7 +405,9 @@ function StyleTransferPage() {
               <span className="rounded-full border border-border bg-surface-3 px-2 py-0.5 text-[11px] font-bold text-text-secondary">
                 {cfg.baseBadge}
               </span>
-              <h2 className="truncate font-display text-sm font-bold md:text-base">{cfg.baseTitle}</h2>
+              <h2 className="truncate font-display text-sm font-bold md:text-base">
+                {cfg.baseTitle}
+              </h2>
             </div>
             {baseImage && (
               <button
@@ -416,11 +420,7 @@ function StyleTransferPage() {
             )}
           </header>
           <div className="min-h-0 flex-1 p-2.5 md:p-4">
-            <BeforeArea
-              baseImage={baseImage}
-              importCta={cfg.importCta}
-              onImport={importBase}
-            />
+            <BeforeArea baseImage={baseImage} importCta={cfg.importCta} onImport={importBase} />
           </div>
         </section>
 
@@ -429,7 +429,9 @@ function StyleTransferPage() {
           <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2.5 md:p-4">
             <div className="flex min-w-0 items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <h2 className="truncate font-display text-sm font-bold md:text-base">{cfg.resultTitle}</h2>
+              <h2 className="truncate font-display text-sm font-bold md:text-base">
+                {cfg.resultTitle}
+              </h2>
             </div>
             <button
               onClick={download}

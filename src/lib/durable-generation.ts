@@ -10,6 +10,7 @@ type JobState<T> = {
 const JOB_PREFIX = "collabmanga.ai-job.";
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 20 * 60 * 1000;
+const NETWORK_ATTEMPTS = 4;
 
 function pendingKey(workspace: string) {
   return `${JOB_PREFIX}${workspace}`;
@@ -27,6 +28,23 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function isLocalBrowser() {
+  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+}
+
+async function fetchWithNetworkRetry(input: RequestInfo | URL, init?: RequestInit) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= NETWORK_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetch(input, init);
+    } catch (error) {
+      lastError = error;
+      if (attempt < NETWORK_ATTEMPTS) await delay(750 * attempt);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Network connection failed.");
+}
+
 async function directGeneration<T>(endpoint: string, payload: unknown): Promise<T> {
   const response = await fetch(endpoint, {
     method: "POST",
@@ -40,12 +58,29 @@ async function directGeneration<T>(endpoint: string, payload: unknown): Promise<
 
 async function pollJob<T>(workspace: string, id: string): Promise<T> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
+  let missingAttempts = 0;
   while (Date.now() < deadline) {
-    const response = await fetch(`/api/generation-jobs?id=${encodeURIComponent(id)}`, {
-      headers: await authJsonHeaders(),
-    });
+    let response: Response;
+    try {
+      response = await fetchWithNetworkRetry(`/api/generation-jobs?id=${encodeURIComponent(id)}`, {
+        headers: await authJsonHeaders(),
+      });
+    } catch {
+      await delay(POLL_INTERVAL_MS);
+      continue;
+    }
     const job = (await response.json().catch(() => ({}))) as JobState<T>;
-    if (!response.ok) throw new Error(job.error || `Unable to recover generation (${response.status}).`);
+    if (response.status === 404 && missingAttempts < 8) {
+      missingAttempts += 1;
+      await delay(POLL_INTERVAL_MS);
+      continue;
+    }
+    if (response.status >= 500) {
+      await delay(POLL_INTERVAL_MS);
+      continue;
+    }
+    if (!response.ok)
+      throw new Error(job.error || `Unable to recover generation (${response.status}).`);
     if (job.status === "completed" && job.result) {
       forgetJob(workspace);
       return job.result;
@@ -56,7 +91,9 @@ async function pollJob<T>(workspace: string, id: string): Promise<T> {
     }
     await delay(POLL_INTERVAL_MS);
   }
-  throw new Error("Generation is still running. It will be recovered automatically on your next visit.");
+  throw new Error(
+    "Generation is still running. It will be recovered automatically on your next visit.",
+  );
 }
 
 export async function runDurableGeneration<T>(
@@ -64,17 +101,31 @@ export async function runDurableGeneration<T>(
   endpoint: string,
   payload: unknown,
 ): Promise<T> {
-  const response = await fetch("/api/generation-jobs", {
-    method: "POST",
-    headers: await authJsonHeaders(),
-    body: JSON.stringify({ workspace, endpoint, payload }),
-  });
+  const remembered = window.localStorage.getItem(pendingKey(workspace));
+  if (remembered) return pollJob<T>(workspace, remembered);
+
+  const id = crypto.randomUUID();
+  rememberJob(workspace, id);
+  let response: Response;
+  try {
+    response = await fetchWithNetworkRetry("/api/generation-jobs", {
+      method: "POST",
+      headers: await authJsonHeaders(),
+      body: JSON.stringify({ id, workspace, endpoint, payload }),
+    });
+  } catch (error) {
+    if (!isLocalBrowser()) return pollJob<T>(workspace, id);
+    forgetJob(workspace);
+    return directGeneration<T>(endpoint, payload);
+  }
   const body = await response.json().catch(() => ({}));
 
-  // Local development and deployments awaiting the SQL migration keep working.
-  if (!response.ok || !body.id) return directGeneration<T>(endpoint, payload);
+  if (!response.ok || !body.id) {
+    forgetJob(workspace);
+    if (isLocalBrowser()) return directGeneration<T>(endpoint, payload);
+    throw new Error(body.error || `Unable to queue generation (${response.status}).`);
+  }
 
-  rememberJob(workspace, body.id);
   return pollJob<T>(workspace, body.id);
 }
 
@@ -86,5 +137,7 @@ export async function resumeDurableGeneration<T>(workspace: string): Promise<T |
 }
 
 export function hasPendingGeneration(workspace: string) {
-  return typeof window !== "undefined" && Boolean(window.localStorage.getItem(pendingKey(workspace)));
+  return (
+    typeof window !== "undefined" && Boolean(window.localStorage.getItem(pendingKey(workspace)))
+  );
 }
