@@ -56,6 +56,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export default MessagesPage;
 
@@ -120,11 +121,13 @@ function Avatar({
   imageUrl,
   online,
   size = 40,
+  t,
 }: {
   label: string;
   imageUrl?: string;
   online?: boolean;
   size?: number;
+  t?: (key: TranslationKey) => string;
 }) {
   const initials = label
     .split(" ")
@@ -151,7 +154,7 @@ function Avatar({
             background: online ? "var(--cm-neon)" : "var(--cm-disabled)",
             border: "2px solid var(--cm-menu)",
           }}
-          aria-label={online ? "En ligne" : "Hors ligne"}
+          aria-label={t ? (online ? t("msg.online") : t("msg.offline")) : online ? "Online" : "Offline"}
         />
       )}
     </div>
@@ -168,6 +171,7 @@ function MessagesPage({
   initialSponsorshipId?: string;
 }) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [baseTab, setBaseTab] = useState<BaseTab>("amis");
   const [activeConv, setActiveConv] = useState<string | null>(null);
   const [conversationQuery, setConversationQuery] = useState("");
@@ -195,7 +199,7 @@ function MessagesPage({
             id: p.id,
             name: p.title,
             label: "# discussion",
-            preview: "Espace de discussion du projet",
+            preview: t("msg.projectDiscussionSpace"),
             time: "",
             unread: 0,
           })),
@@ -232,8 +236,8 @@ function MessagesPage({
             profileId: other?.id,
             username: other?.username,
             avatarUrl: other?.avatar_url ?? undefined,
-            name: other?.display_name || other?.username || "Conversation",
-            preview: c.lastMessage?.content || "Nouvelle conversation",
+            name: other?.display_name || other?.username || t("msg.conversation"),
+            preview: c.lastMessage?.content || t("msg.newConversationPreview"),
             time: c.lastMessage ? timeLabel(c.lastMessage.created_at) : timeLabel(c.created_at),
             unread: 0,
           };
@@ -242,7 +246,7 @@ function MessagesPage({
     } catch (error) {
       setFriends([]);
       setConversationError(
-        error instanceof Error ? error.message : "Impossible de charger les conversations.",
+        error instanceof Error ? error.message : t("msg.loadConversationsFailed"),
       );
     } finally {
       if (showLoading) setLoadingConversations(false);
@@ -281,7 +285,7 @@ function MessagesPage({
     created_at: string;
   }): UiMessage => ({
     id: m.id,
-    user: m.sender_id === uid ? "Toi" : activeFriend?.name || "Membre",
+    user: m.sender_id === uid ? t("msg.you") : activeFriend?.name || t("msg.member"),
     time: timeLabel(m.created_at),
     text: m.content,
     self: m.sender_id === uid,
@@ -300,7 +304,7 @@ function MessagesPage({
           setMessages(
             rows.map((m) => ({
               id: m.id,
-              user: m.authorId === uid ? "Toi" : m.author,
+              user: m.authorId === uid ? t("msg.you") : m.author,
               time: timeLabel(m.createdAt),
               text: m.content,
               self: m.authorId === uid,
@@ -311,7 +315,7 @@ function MessagesPage({
           if (!cancelled) {
             setMessages([]);
             setThreadError(
-              error instanceof Error ? error.message : "Impossible de charger les messages.",
+              error instanceof Error ? error.message : t("msg.loadMessagesFailed"),
             );
           }
         });
@@ -323,7 +327,7 @@ function MessagesPage({
                 ...current,
                 {
                   id: m.id,
-                  user: m.authorId === uid ? "Toi" : m.author,
+                  user: m.authorId === uid ? t("msg.you") : m.author,
                   time: timeLabel(m.createdAt),
                   text: m.content,
                   self: m.authorId === uid,
@@ -351,7 +355,7 @@ function MessagesPage({
         if (!cancelled) {
           setMessages([]);
           setThreadError(
-            error instanceof Error ? error.message : "Impossible de charger les messages.",
+            error instanceof Error ? error.message : t("msg.loadMessagesFailed"),
           );
         }
       });
@@ -383,7 +387,7 @@ function MessagesPage({
                 ...current,
                 {
                   id: message.id,
-                  user: "Toi",
+                  user: t("msg.you"),
                   time: timeLabel(message.createdAt),
                   text: message.content,
                   self: true,
@@ -392,7 +396,7 @@ function MessagesPage({
         );
         return;
       } catch (error) {
-        setThreadError(error instanceof Error ? error.message : "Impossible d'envoyer le message.");
+        setThreadError(error instanceof Error ? error.message : t("msg.sendMessageFailed"));
         throw error;
       }
     }
@@ -403,7 +407,7 @@ function MessagesPage({
       );
       await refreshConversations(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Impossible d'envoyer le message.";
+      const message = error instanceof Error ? error.message : t("msg.sendMessageFailed");
       setThreadError(message);
       throw error;
     }
@@ -430,6 +434,7 @@ function MessagesPage({
         style={{ background: "var(--cm-container)" }}
       >
         <ConversationMenu
+          t={t}
           baseTab={baseTab}
           onBaseTab={selectBaseTab}
           activeConv={activeConv}
@@ -452,6 +457,7 @@ function MessagesPage({
         />
 
         <ChatArea
+          t={t}
           baseTab={baseTab}
           activeConv={activeConv}
           onBack={() => setActiveConv(null)}
@@ -467,6 +473,7 @@ function MessagesPage({
       </div>
 
       <NewMessageModal
+        t={t}
         open={newMessageOpen}
         onOpenChange={setNewMessageOpen}
         onStarted={(convId) => {
@@ -476,6 +483,7 @@ function MessagesPage({
         }}
       />
       <DetailsModal
+        t={t}
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         kind={baseTab}
@@ -499,6 +507,7 @@ function MessagesPage({
       />
       {createProjectOpen && (
         <QuickProjectModal
+          t={t}
           onClose={() => setCreateProjectOpen(false)}
           onCreated={(id) => {
             setCreateProjectOpen(false);
@@ -521,9 +530,11 @@ function MessagesPage({
 
 /** Création rapide d'un projet depuis l'onglet Projets de la messagerie. */
 function QuickProjectModal({
+  t,
   onClose,
   onCreated,
 }: {
+  t: (key: TranslationKey) => string;
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
@@ -534,7 +545,7 @@ function QuickProjectModal({
 
   const create = async () => {
     if (!name.trim()) {
-      setError("Donne un nom au projet.");
+      setError(t("profile.projectNameRequired"));
       return;
     }
     setError(null);
@@ -546,7 +557,7 @@ function QuickProjectModal({
         {
           id,
           title: name.trim(),
-          synopsis: synopsis.trim() || "Synopsis à compléter.",
+          synopsis: synopsis.trim() || t("profile.synopsisTodo"),
           status: "Draft",
           chaptersCount: 0,
           validatedPages: 0,
@@ -561,11 +572,11 @@ function QuickProjectModal({
         },
         ...existing,
       ]);
-      if (!saved) throw new Error("Le projet n'a pas pu être enregistré sur cet appareil.");
+      if (!saved) throw new Error(t("msg.projectSaveFailedDevice"));
       onCreated(id);
     } catch (createError) {
       setError(
-        createError instanceof Error ? createError.message : "Impossible de créer le projet.",
+        createError instanceof Error ? createError.message : t("msg.createProjectFailed"),
       );
     } finally {
       setSaving(false);
@@ -582,27 +593,27 @@ function QuickProjectModal({
         }}
       >
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: "var(--font-sora)" }}>Créer un projet</DialogTitle>
+          <DialogTitle style={{ fontFamily: "var(--font-sora)" }}>{t("profile.createProjectTitle")}</DialogTitle>
           <DialogDescription style={{ color: "var(--cm-text-2)" }}>
-            Le projet sera créé dans le Studio et sa discussion ouverte ici.
+            {t("msg.projectWillBeCreatedText")}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 py-2">
           <div className="grid gap-1.5">
-            <Label>Nom du projet</Label>
+            <Label>{t("profile.projectName")}</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nom du manga"
+              placeholder={t("profile.projectName")}
               style={{ background: "var(--cm-input)", border: "1px solid var(--cm-border)" }}
             />
           </div>
           <div className="grid gap-1.5">
-            <Label>Synopsis</Label>
+            <Label>{t("profile.synopsis")}</Label>
             <Textarea
               value={synopsis}
               onChange={(e) => setSynopsis(e.target.value)}
-              placeholder="Résumé court…"
+              placeholder={t("msg.synopsisPlaceholderShort")}
               style={{ background: "var(--cm-input)", border: "1px solid var(--cm-border)" }}
             />
           </div>
@@ -614,14 +625,14 @@ function QuickProjectModal({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} style={{ color: "var(--cm-text-2)" }}>
-            Annuler
+            {t("profile.cancel")}
           </Button>
           <Button
             onClick={() => void create()}
             disabled={saving}
             style={{ background: "var(--cm-neon)", color: "#04111E" }}
           >
-            {saving ? "Création…" : "Créer le projet"}
+            {saving ? t("profile.creating") : t("profile.createProjectButton")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -632,6 +643,7 @@ function QuickProjectModal({
 /* -------------------------- Conversation menu ---------------------------- */
 
 function ConversationMenu(props: {
+  t: (key: TranslationKey) => string;
   baseTab: BaseTab;
   onBaseTab: (t: BaseTab) => void;
   activeConv: string | null;
@@ -646,6 +658,7 @@ function ConversationMenu(props: {
   sponsors: SponsorConv[];
 }) {
   const {
+    t,
     baseTab,
     onBaseTab,
     activeConv,
@@ -664,9 +677,10 @@ function ConversationMenu(props: {
     <nav
       className={`${activeConv ? "hidden md:flex" : "flex"} h-full min-w-0 flex-col overflow-hidden`}
       style={{ background: "var(--cm-menu)", borderRight: "1px solid var(--cm-divider)" }}
-      aria-label="Conversation menu"
+      aria-label={t("msg.conversationMenuAria")}
     >
       <BaseMenu
+        t={t}
         baseTab={baseTab}
         onBaseTab={onBaseTab}
         activeConv={activeConv}
@@ -794,6 +808,7 @@ function PlusBtn({ onClick, label }: { onClick: () => void; label: string }) {
 }
 
 function BaseMenu({
+  t,
   baseTab,
   onBaseTab,
   activeConv,
@@ -807,8 +822,9 @@ function BaseMenu({
   projects,
   sponsors,
 }: {
+  t: (key: TranslationKey) => string;
   baseTab: BaseTab;
-  onBaseTab: (t: BaseTab) => void;
+  onBaseTab: (tab: BaseTab) => void;
   activeConv: string | null;
   onConv: (id: string) => void;
   onNewMessage: () => void;
@@ -838,22 +854,22 @@ function BaseMenu({
 
   return (
     <>
-      <SearchRow placeholder="Rechercher une conversation" value={query} onChange={onQuery} />
+      <SearchRow placeholder={t("msg.searchConversation")} value={query} onChange={onQuery} />
       <div className="px-2 pt-2">
         <VerticalTab
-          label="Amis"
+          label={t("msg.tabFriends")}
           icon={<Users className="h-5 w-5" />}
           active={baseTab === "amis"}
           onClick={() => onBaseTab("amis")}
         />
         <VerticalTab
-          label="Projets"
+          label={t("msg.tabProjects")}
           icon={<FolderKanban className="h-5 w-5" />}
           active={baseTab === "projets"}
           onClick={() => onBaseTab("projets")}
         />
         <VerticalTab
-          label="Parrainages"
+          label={t("msg.tabSponsorships")}
           icon={<Handshake className="h-5 w-5" />}
           active={baseTab === "parrainages"}
           onClick={() => onBaseTab("parrainages")}
@@ -867,7 +883,7 @@ function BaseMenu({
             className="flex items-center gap-2 px-3 py-3 text-[13px]"
             style={{ color: "var(--cm-muted)" }}
           >
-            <LoaderCircle className="h-4 w-4 animate-spin" /> Chargement des conversations…
+            <LoaderCircle className="h-4 w-4 animate-spin" /> {t("msg.loadingConversations")}
           </div>
         )}
         {error && baseTab === "amis" && (
@@ -880,17 +896,17 @@ function BaseMenu({
         )}
         {noResults && (
           <p className="px-3 py-3 text-[13px]" style={{ color: "var(--cm-muted)" }}>
-            Aucune conversation ne correspond à cette recherche.
+            {t("msg.noResultsSearch")}
           </p>
         )}
         {baseTab === "amis" && (
           <>
-            <SectionTitle action={<PlusBtn onClick={onNewMessage} label="Nouvelle conversation" />}>
-              Messages privés
+            <SectionTitle action={<PlusBtn onClick={onNewMessage} label={t("msg.newConversation")} />}>
+              {t("msg.privateMessages")}
             </SectionTitle>
             {!loading && !error && friends.length === 0 && (
               <p className="px-3 py-2 text-[13px]" style={{ color: "var(--cm-muted)" }}>
-                Aucune conversation — clique sur + pour en démarrer une.
+                {t("msg.noConversationsYet")}
               </p>
             )}
             {visibleFriends.map((f) => (
@@ -899,12 +915,13 @@ function BaseMenu({
                 active={activeConv === f.id}
                 onClick={() => onConv(f.id)}
                 avatar={
-                  <Avatar label={f.name} imageUrl={f.avatarUrl} online={f.online} size={36} />
+                  <Avatar t={t} label={f.name} imageUrl={f.avatarUrl} online={f.online} size={36} />
                 }
                 title={f.name}
                 preview={f.preview}
                 time={f.time}
                 unread={f.unread}
+                t={t}
               />
             ))}
           </>
@@ -913,13 +930,13 @@ function BaseMenu({
         {baseTab === "projets" && (
           <>
             <SectionTitle
-              action={<PlusBtn onClick={onNewMessage} label="Nouvelle discussion projet" />}
+              action={<PlusBtn onClick={onNewMessage} label={t("msg.newProjectDiscussion")} />}
             >
-              Discussions projets
+              {t("msg.projectDiscussions")}
             </SectionTitle>
             {projects.length === 0 && (
               <p className="px-3 py-2 text-[13px]" style={{ color: "var(--cm-muted)" }}>
-                Aucun projet — clique sur + pour en créer un.
+                {t("msg.noProjectsYetMsg")}
               </p>
             )}
             {visibleProjects.map((p) => (
@@ -933,6 +950,7 @@ function BaseMenu({
                 preview={p.preview}
                 time={p.time}
                 unread={p.unread}
+                t={t}
               />
             ))}
           </>
@@ -941,13 +959,13 @@ function BaseMenu({
         {baseTab === "parrainages" && (
           <>
             <SectionTitle
-              action={<PlusBtn onClick={onNewMessage} label="Nouvelle discussion parrainage" />}
+              action={<PlusBtn onClick={onNewMessage} label={t("msg.newSponsorshipDiscussion")} />}
             >
-              Discussions parrainages
+              {t("msg.sponsorshipDiscussions")}
             </SectionTitle>
             {sponsors.length === 0 && (
               <p className="px-3 py-2 text-[13px]" style={{ color: "var(--cm-muted)" }}>
-                Aucun parrainage — clique sur + pour en créer un.
+                {t("msg.noSponsorshipsYetMsg")}
               </p>
             )}
             {visibleSponsors.map((s) => (
@@ -961,6 +979,7 @@ function BaseMenu({
                 preview={s.preview}
                 time={s.time}
                 unread={s.unread}
+                t={t}
               />
             ))}
           </>
@@ -1003,6 +1022,7 @@ function ConvRow({
   preview,
   time,
   unread,
+  t,
 }: {
   active: boolean;
   onClick: () => void;
@@ -1012,6 +1032,7 @@ function ConvRow({
   preview?: string;
   time?: string;
   unread?: number;
+  t: (key: TranslationKey) => string;
 }) {
   return (
     <button
@@ -1063,7 +1084,7 @@ function ConvRow({
             <span
               className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-extrabold"
               style={{ background: "var(--cm-neon)", color: "#04111E" }}
-              aria-label={`${unread} non lus`}
+              aria-label={`${unread} ${t("msg.unread")}`}
             >
               {unread}
             </span>
@@ -1077,6 +1098,7 @@ function ConvRow({
 /* -------------------------- Active conversation -------------------------- */
 
 function ChatArea({
+  t,
   baseTab,
   activeConv,
   onBack,
@@ -1089,6 +1111,7 @@ function ChatArea({
   onSend,
   onConv,
 }: {
+  t: (key: TranslationKey) => string;
   baseTab: BaseTab;
   activeConv: string | null;
   onBack: () => void;
@@ -1104,8 +1127,8 @@ function ChatArea({
   const [threadQuery, setThreadQuery] = useState("");
   const [mediaOnly, setMediaOnly] = useState(false);
   const context = useMemo(
-    () => resolveContext({ baseTab, activeConv, friends, projects, sponsors }),
-    [baseTab, activeConv, friends, projects, sponsors],
+    () => resolveContext({ t, baseTab, activeConv, friends, projects, sponsors }),
+    [t, baseTab, activeConv, friends, projects, sponsors],
   );
   const filteredMessages = useMemo(() => {
     const query = threadQuery.trim().toLocaleLowerCase("fr");
@@ -1124,9 +1147,10 @@ function ChatArea({
     <section
       className={`${activeConv ? "flex" : "hidden md:flex"} h-full min-w-0 flex-col overflow-hidden`}
       style={{ background: "var(--cm-chat)" }}
-      aria-label="Active conversation"
+      aria-label={t("msg.activeConversationAria")}
     >
       <TopBar
+        t={t}
         context={context}
         hasActiveConversation={Boolean(activeConv)}
         onBack={onBack}
@@ -1137,6 +1161,7 @@ function ChatArea({
         onMediaOnly={setMediaOnly}
       />
       <MessageThread
+        t={t}
         context={context}
         friends={friends}
         projects={projects}
@@ -1148,6 +1173,7 @@ function ChatArea({
       />
       {context.canCompose && (
         <Composer
+          t={t}
           placeholder={context.placeholder}
           allowImage={baseTab === "amis"}
           onSend={onSend}
@@ -1167,13 +1193,14 @@ type Ctx = {
 };
 
 function resolveContext(args: {
+  t: (key: TranslationKey) => string;
   baseTab: BaseTab;
   activeConv: string | null;
   friends: Friend[];
   projects: ProjectConv[];
   sponsors: SponsorConv[];
 }): Ctx {
-  const { baseTab, activeConv, friends, projects, sponsors } = args;
+  const { t, baseTab, activeConv, friends, projects, sponsors } = args;
 
   if (activeConv) {
     const src = baseTab === "amis" ? friends : baseTab === "projets" ? projects : sponsors;
@@ -1181,16 +1208,16 @@ function resolveContext(args: {
     if (item) {
       const contextLabel =
         baseTab === "amis"
-          ? "Message direct"
+          ? t("msg.directMessage")
           : baseTab === "projets"
-            ? "Conversation de projet"
-            : "Discussion de parrainage";
+            ? t("msg.projectConversation")
+            : t("msg.sponsorshipDiscussion");
       return {
         title: item.name,
         subtitle: contextLabel,
         icon:
           baseTab === "amis" ? (
-            <Avatar label={item.name} imageUrl={(item as Friend).avatarUrl} online size={28} />
+            <Avatar t={t} label={item.name} imageUrl={(item as Friend).avatarUrl} online size={28} />
           ) : (
             <ThumbTile
               label={item.name}
@@ -1205,10 +1232,10 @@ function resolveContext(args: {
           ),
         placeholder:
           baseTab === "amis"
-            ? `Message ${item.name}…`
+            ? `${t("msg.messagePrefix")} ${item.name}…`
             : baseTab === "projets"
-              ? "Message à la conversation de projet…"
-              : "Message à la discussion de parrainage…",
+              ? t("msg.messageToProjectConv")
+              : t("msg.messageToSponsorshipDiscussion"),
         kind: "conversation",
         canCompose: true,
       };
@@ -1216,8 +1243,8 @@ function resolveContext(args: {
   }
   if (baseTab === "amis")
     return {
-      title: "Amis",
-      subtitle: "Conversations privées",
+      title: t("msg.tabFriends"),
+      subtitle: t("msg.privateConversations"),
       icon: <Users className="h-5 w-5" />,
       placeholder: "",
       kind: "amis-overview",
@@ -1225,16 +1252,16 @@ function resolveContext(args: {
     };
   if (baseTab === "projets")
     return {
-      title: "Projets",
-      subtitle: "Discussions de projet",
+      title: t("msg.tabProjects"),
+      subtitle: t("msg.projectDiscussionsSubtitle"),
       icon: <FolderKanban className="h-5 w-5" />,
       placeholder: "",
       kind: "projets-overview",
       canCompose: false,
     };
   return {
-    title: "Parrainages",
-    subtitle: "Discussions de parrainage",
+    title: t("msg.tabSponsorships"),
+    subtitle: t("msg.sponsorshipDiscussionsSubtitle"),
     icon: <Handshake className="h-5 w-5" />,
     placeholder: "",
     kind: "parrainages-overview",
@@ -1243,6 +1270,7 @@ function resolveContext(args: {
 }
 
 function TopBar({
+  t,
   context,
   hasActiveConversation,
   onBack,
@@ -1252,6 +1280,7 @@ function TopBar({
   mediaOnly,
   onMediaOnly,
 }: {
+  t: (key: TranslationKey) => string;
   context: Ctx;
   hasActiveConversation: boolean;
   onBack: () => void;
@@ -1278,7 +1307,7 @@ function TopBar({
             onClick={onBack}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md md:hidden"
             style={{ color: "var(--cm-text-2)" }}
-            aria-label="Retour aux conversations"
+            aria-label={t("msg.backToConversations")}
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -1320,7 +1349,7 @@ function TopBar({
             autoFocus
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Rechercher…"
+            placeholder={t("msg.searchPlaceholder")}
             className="h-9 w-32 sm:w-48"
             style={{
               background: "var(--cm-input)",
@@ -1331,7 +1360,7 @@ function TopBar({
         )}
         {context.kind === "conversation" && (
           <IconBtn
-            label={searchOpen ? "Fermer la recherche" : "Rechercher dans la conversation"}
+            label={searchOpen ? t("msg.closeSearch") : t("msg.searchInConversation")}
             onClick={() => {
               setSearchOpen((current) => !current);
               if (searchOpen) onQuery("");
@@ -1342,7 +1371,7 @@ function TopBar({
         )}
         {context.kind === "conversation" && (
           <IconBtn
-            label={mediaOnly ? "Afficher tous les messages" : "Afficher les images"}
+            label={mediaOnly ? t("msg.showAllMessages") : t("msg.showImages")}
             onClick={() => onMediaOnly(!mediaOnly)}
           >
             <ImageIcon
@@ -1355,7 +1384,7 @@ function TopBar({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                aria-label="Plus d'options"
+                aria-label={t("msg.moreOptions")}
                 className="flex h-9 w-9 items-center justify-center rounded-md"
                 style={{ color: "var(--cm-text-2)" }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cm-hover)")}
@@ -1372,10 +1401,10 @@ function TopBar({
                 color: "var(--cm-text)",
               }}
             >
-              <DropdownMenuItem onClick={onOpenDetails}>Voir les détails</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMediaOnly(true)}>Médias partagés</DropdownMenuItem>
+              <DropdownMenuItem onClick={onOpenDetails}>{t("msg.viewDetails")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onMediaOnly(true)}>{t("msg.sharedMedia")}</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSearchOpen(true)}>
-                Rechercher dans la conversation
+                {t("msg.searchInConversation")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1409,6 +1438,7 @@ function IconBtn({
 }
 
 function MessageThread({
+  t,
   context,
   friends,
   projects,
@@ -1418,6 +1448,7 @@ function MessageThread({
   filtering,
   onConv,
 }: {
+  t: (key: TranslationKey) => string;
   context: Ctx;
   friends: Friend[];
   projects?: ProjectConv[];
@@ -1438,17 +1469,17 @@ function MessageThread({
     >
       {context.kind === "empty" && (
         <EmptyState
-          title="Sélectionne une conversation"
-          text="Choisis un ami, une discussion de projet ou une discussion de parrainage dans le menu de gauche."
+          title={t("msg.selectConversation")}
+          text={t("msg.selectConversationText")}
         />
       )}
 
-      {context.kind === "amis-overview" && <FriendsOverview friends={friends} onConv={onConv} />}
+      {context.kind === "amis-overview" && <FriendsOverview t={t} friends={friends} onConv={onConv} />}
       {context.kind === "projets-overview" && (
-        <ProjectsOverview projects={projects} onConv={onConv} />
+        <ProjectsOverview t={t} projects={projects} onConv={onConv} />
       )}
       {context.kind === "parrainages-overview" && (
-        <SponsorsOverview sponsors={sponsors} onConv={onConv} />
+        <SponsorsOverview t={t} sponsors={sponsors} onConv={onConv} />
       )}
 
       {context.kind === "conversation" && error && (
@@ -1460,7 +1491,7 @@ function MessageThread({
         </p>
       )}
       {context.kind === "conversation" && (
-        <MessagesList messages={messages} filtering={filtering} />
+        <MessagesList t={t} messages={messages} filtering={filtering} />
       )}
       <div ref={endRef} />
     </div>
@@ -1500,9 +1531,11 @@ function EmptyState({ title, text }: { title: string; text: string }) {
 }
 
 function FriendsOverview({
+  t,
   friends,
   onConv,
 }: {
+  t: (key: TranslationKey) => string;
   friends: Friend[];
   onConv?: (id: string) => void;
 }) {
@@ -1514,7 +1547,7 @@ function FriendsOverview({
       >
         {friends.length === 0 && (
           <p className="px-4 py-4 text-[13px]" style={{ color: "var(--cm-muted)" }}>
-            Aucune conversation pour l'instant.
+            {t("msg.noConversationYet")}
           </p>
         )}
         {friends.map((fr, i) => (
@@ -1524,12 +1557,12 @@ function FriendsOverview({
             style={{ borderTop: i === 0 ? "none" : "1px solid var(--cm-divider)" }}
           >
             <div className="flex items-center gap-3">
-              <Avatar label={fr.name} imageUrl={fr.avatarUrl} size={36} />
+              <Avatar t={t} label={fr.name} imageUrl={fr.avatarUrl} size={36} />
               <div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: "var(--cm-text)" }}>
                   {fr.name}
                 </div>
-                <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Membre CollabManga</div>
+                <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{t("msg.collabMember")}</div>
               </div>
             </div>
             <Button
@@ -1538,7 +1571,7 @@ function FriendsOverview({
               style={{ color: "var(--cm-text-2)" }}
               onClick={() => onConv?.(fr.id)}
             >
-              Message
+              {t("msg.message")}
             </Button>
           </div>
         ))}
@@ -1548,9 +1581,11 @@ function FriendsOverview({
 }
 
 function ProjectsOverview({
+  t,
   projects = [],
   onConv,
 }: {
+  t: (key: TranslationKey) => string;
   projects?: ProjectConv[];
   onConv?: (id: string) => void;
 }) {
@@ -1558,8 +1593,8 @@ function ProjectsOverview({
     <div className="mx-auto grid max-w-3xl gap-3">
       {projects.length === 0 && (
         <EmptyState
-          title="Aucun projet"
-          text="Crée un projet avec le + de la colonne de gauche : sa discussion apparaîtra ici."
+          title={t("msg.noProjectOverview")}
+          text={t("msg.createProjectHint")}
         />
       )}
       {projects.map((p) => (
@@ -1582,7 +1617,7 @@ function ProjectsOverview({
             style={{ background: "var(--cm-neon)", color: "#04111E" }}
             onClick={() => onConv?.(p.id)}
           >
-            Ouvrir
+            {t("msg.open")}
           </Button>
         </div>
       ))}
@@ -1591,9 +1626,11 @@ function ProjectsOverview({
 }
 
 function SponsorsOverview({
+  t,
   sponsors = [],
   onConv,
 }: {
+  t: (key: TranslationKey) => string;
   sponsors?: SponsorConv[];
   onConv?: (id: string) => void;
 }) {
@@ -1601,8 +1638,8 @@ function SponsorsOverview({
     <div className="mx-auto grid max-w-3xl gap-3">
       {sponsors.length === 0 && (
         <EmptyState
-          title="Aucun parrainage"
-          text="Crée un parrainage avec le + de la colonne de gauche : sa discussion apparaîtra ici."
+          title={t("msg.noSponsorshipOverview")}
+          text={t("msg.createSponsorshipHint")}
         />
       )}
       {sponsors.map((s) => (
@@ -1626,7 +1663,7 @@ function SponsorsOverview({
             style={{ color: "var(--cm-text-2)" }}
             onClick={() => onConv?.(s.id)}
           >
-            Ouvrir
+            {t("msg.open")}
           </Button>
         </div>
       ))}
@@ -1634,16 +1671,16 @@ function SponsorsOverview({
   );
 }
 
-function MessagesList({ messages, filtering }: { messages: UiMessage[]; filtering: boolean }) {
+function MessagesList({ t, messages, filtering }: { t: (key: TranslationKey) => string; messages: UiMessage[]; filtering: boolean }) {
   return (
     <div className="mx-auto max-w-4xl">
       {messages.length === 0 ? (
         <EmptyState
-          title={filtering ? "Aucun résultat" : "Aucun message"}
+          title={filtering ? t("msg.noResults") : t("msg.noMessages")}
           text={
             filtering
-              ? "Aucun message ne correspond aux filtres actifs."
-              : "Écris le premier message de cette conversation."
+              ? t("msg.noResultsFilterText")
+              : t("msg.writeFirstMessage")
           }
         />
       ) : (
@@ -1697,10 +1734,12 @@ function MessageRow({ m }: { m: UiMessage }) {
 /* ------------------------------- Composer -------------------------------- */
 
 function Composer({
+  t,
   placeholder,
   allowImage,
   onSend,
 }: {
+  t: (key: TranslationKey) => string;
   placeholder: string;
   allowImage: boolean;
   onSend: (text: string, file?: File | null) => Promise<void>;
@@ -1753,7 +1792,7 @@ function Composer({
             type="button"
             onClick={() => setImageFile(null)}
             className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
-            aria-label="Retirer l'image"
+            aria-label={t("msg.removeImage")}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1774,7 +1813,7 @@ function Composer({
             />
             <button
               type="button"
-              aria-label="Ajouter une image"
+              aria-label={t("msg.addImage")}
               onClick={() => fileRef.current?.click()}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
               style={{
@@ -1802,8 +1841,8 @@ function Composer({
                 void submit();
               }
             }}
-            placeholder={placeholder || "Écris un message…"}
-            aria-label="Zone de saisie du message"
+            placeholder={placeholder || t("msg.writeMessagePlaceholder")}
+            aria-label={t("msg.messageInputAria")}
             rows={1}
             className="w-full resize-none outline-none"
             style={{
@@ -1823,7 +1862,7 @@ function Composer({
 
         <button
           type="button"
-          aria-label="Envoyer le message"
+          aria-label={t("msg.sendMessageAria")}
           className="flex h-11 items-center justify-center rounded-xl px-4 font-bold transition-colors"
           style={{ background: "var(--cm-neon)", color: "#04111E", minWidth: 44 }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cm-neon-hover)")}
@@ -1845,10 +1884,12 @@ function Composer({
 /* -------------------------------- modals --------------------------------- */
 
 function NewMessageModal({
+  t,
   open,
   onOpenChange,
   onStarted,
 }: {
+  t: (key: TranslationKey) => string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onStarted: (conversationId: string) => void;
@@ -1882,21 +1923,21 @@ function NewMessageModal({
     }
     setSearching(true);
     setError(null);
-    const t = window.setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       void Promise.all([searchProfiles(q), currentUserId()])
         .then(([profiles, ownId]) => setResults(profiles.filter((profile) => profile.id !== ownId)))
         .catch((searchError) => {
           setResults([]);
-          setError(searchError instanceof Error ? searchError.message : "Recherche impossible.");
+          setError(searchError instanceof Error ? searchError.message : t("msg.searchImpossible"));
         })
         .finally(() => setSearching(false));
     }, 250);
-    return () => window.clearTimeout(t);
-  }, [query]);
+    return () => window.clearTimeout(timeoutId);
+  }, [query, t]);
 
   const start = async () => {
     if (!selected) {
-      setError("Choisis un membre dans les résultats.");
+      setError(t("msg.chooseUser"));
       return;
     }
     setError(null);
@@ -1907,7 +1948,7 @@ function NewMessageModal({
       onStarted(convId);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de démarrer la conversation.");
+      setError(err instanceof Error ? err.message : t("msg.startFailed"));
     } finally {
       setStarting(false);
     }
@@ -1924,17 +1965,17 @@ function NewMessageModal({
       >
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "var(--font-sora)" }}>
-            Nouvelle conversation
+            {t("msg.newConversationTitle")}
           </DialogTitle>
           <DialogDescription style={{ color: "var(--cm-text-2)" }}>
-            Cherche un membre CollabManga pour démarrer la discussion.
+            {t("msg.newConversationDesc")}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 py-2">
           <div className="grid gap-1.5">
-            <Label>Rechercher un utilisateur</Label>
+            <Label>{t("msg.searchUserLabel")}</Label>
             <Input
-              placeholder="Nom ou @pseudo"
+              placeholder={t("msg.searchUserPlaceholder")}
               value={selected ? `@${selected.username}` : query}
               onChange={(e) => {
                 setSelected(null);
@@ -1956,7 +1997,7 @@ function NewMessageModal({
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     onClick={() => setSelected(p)}
                   >
-                    <Avatar label={p.display_name || p.username} size={28} />
+                    <Avatar t={t} label={p.display_name || p.username} size={28} />
                     <span>{p.display_name || p.username}</span>
                     <span style={{ color: "var(--cm-muted)", fontSize: 12 }}>@{p.username}</span>
                   </button>
@@ -1968,7 +2009,7 @@ function NewMessageModal({
                 className="flex items-center gap-2 px-2 py-2 text-xs"
                 style={{ color: "var(--cm-muted)" }}
               >
-                <LoaderCircle className="h-4 w-4 animate-spin" /> Recherche…
+                <LoaderCircle className="h-4 w-4 animate-spin" /> {t("msg.searching")}
               </div>
             )}
             {!selected &&
@@ -1977,14 +2018,14 @@ function NewMessageModal({
               results.length === 0 &&
               !error && (
                 <p className="px-2 py-2 text-xs" style={{ color: "var(--cm-muted)" }}>
-                  Aucun utilisateur trouvé.
+                  {t("msg.noUserFound")}
                 </p>
               )}
           </div>
           <div className="grid gap-1.5">
-            <Label>Premier message</Label>
+            <Label>{t("msg.firstMessageLabel")}</Label>
             <Textarea
-              placeholder="Écris ton premier message…"
+              placeholder={t("msg.firstMessagePlaceholder")}
               value={firstMessage}
               onChange={(e) => setFirstMessage(e.target.value)}
               style={{ background: "var(--cm-input)", border: "1px solid var(--cm-border)" }}
@@ -2002,14 +2043,14 @@ function NewMessageModal({
             onClick={() => onOpenChange(false)}
             style={{ color: "var(--cm-text-2)" }}
           >
-            Annuler
+            {t("profile.cancel")}
           </Button>
           <Button
             onClick={() => void start()}
             disabled={starting || !selected}
             style={{ background: "var(--cm-neon)", color: "#04111E" }}
           >
-            {starting ? "Démarrage…" : "Démarrer la conversation"}
+            {starting ? t("msg.starting") : t("msg.startConversation")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2018,6 +2059,7 @@ function NewMessageModal({
 }
 
 function DetailsModal({
+  t,
   open,
   onOpenChange,
   kind,
@@ -2026,6 +2068,7 @@ function DetailsModal({
   subtitle,
   onViewProfile,
 }: {
+  t: (key: TranslationKey) => string;
   open: boolean;
   onOpenChange: (value: boolean) => void;
   kind: BaseTab;
@@ -2034,13 +2077,13 @@ function DetailsModal({
   subtitle?: string;
   onViewProfile?: () => void;
 }) {
-  const displayName = title || "Conversation";
+  const displayName = title || t("msg.conversation");
   const typeLabel =
     kind === "amis"
-      ? "Message direct"
+      ? t("msg.directMessage")
       : kind === "projets"
-        ? "Conversation de projet"
-        : "Discussion de parrainage";
+        ? t("msg.projectConversation")
+        : t("msg.sponsorshipDiscussion");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -2052,12 +2095,12 @@ function DetailsModal({
       >
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "var(--font-sora)" }}>
-            Détails de la conversation
+            {t("msg.conversationDetails")}
           </DialogTitle>
           <DialogDescription style={{ color: "var(--cm-text-2)" }}>{typeLabel}</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-3 py-2">
-          <Avatar label={displayName} imageUrl={friend?.avatarUrl} size={56} />
+          <Avatar t={t} label={displayName} imageUrl={friend?.avatarUrl} size={56} />
           <div>
             <div style={{ fontSize: 16, fontWeight: 800 }}>{displayName}</div>
             <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>
@@ -2070,7 +2113,7 @@ function DetailsModal({
             onClick={onViewProfile}
             style={{ background: "var(--cm-neon)", color: "#04111E" }}
           >
-            Voir le profil
+            {t("msg.viewProfile")}
           </Button>
         )}
         <DialogFooter>
@@ -2079,7 +2122,7 @@ function DetailsModal({
             onClick={() => onOpenChange(false)}
             style={{ color: "var(--cm-text-2)" }}
           >
-            <ChevronLeft className="mr-1 h-4 w-4" /> Fermer
+            <ChevronLeft className="mr-1 h-4 w-4" /> {t("msg.close")}
           </Button>
         </DialogFooter>
       </DialogContent>
