@@ -159,6 +159,26 @@ async function compressCoverImage(file: File): Promise<string> {
   return canvas.toDataURL("image/webp", 0.84);
 }
 
+async function compressProfileImage(file: File, kind: "avatar" | "banner"): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const maxWidth = kind === "banner" ? 1800 : 800;
+  const maxHeight = kind === "banner" ? 900 : 800;
+  const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (value) => (value ? resolve(value) : reject(new Error("Image compression failed."))),
+      "image/webp",
+      0.86,
+    ),
+  );
+  return new File([blob], `${kind}-${Date.now()}.webp`, { type: "image/webp" });
+}
+
 function OwnProfilePage() {
   return <ProfilePage />;
 }
@@ -2544,7 +2564,8 @@ function MediaUploadButton({ t, kind, onDone }: { t: (key: TranslationKey) => st
     if (!file || !supabase) return;
     setState("saving");
     try {
-      const url = await uploadImage(file, kind === "avatar" ? "avatars" : "banners");
+      const optimized = await compressProfileImage(file, kind);
+      const url = await uploadImage(optimized, kind === "avatar" ? "avatars" : "banners");
       const { error: authError } = await supabase.auth.updateUser({
         data: kind === "avatar" ? { avatar_url: url } : { banner_url: url },
       });
@@ -2859,7 +2880,6 @@ function AddAnnouncementModal({ t, open, onClose, onCreated }: { t: (key: Transl
   const [title, setTitle] = useState("");
   const [hook, setHook] = useState("");
   const [description, setDescription] = useState("");
-  const [statusSought, setStatusSought] = useState("Scénariste");
   const [genres, setGenres] = useState<string[]>([]);
   const [subgenres, setSubgenres] = useState<string[]>([]);
   const [remuneration, setRemuneration] = useState(false);
@@ -2876,13 +2896,14 @@ function AddAnnouncementModal({ t, open, onClose, onCreated }: { t: (key: Transl
     }
     setSaving(true);
     try {
+      const { role } = await getMyRoles();
       await addAnnouncement({
         mode: "collaborator",
         title: title.trim(),
         hook: hook.trim(),
         description: description.trim(),
         language,
-        status_sought: statusSought,
+        status_sought: role || "Utilisateur",
         genres,
         subgenres,
         remuneration,
@@ -2927,7 +2948,6 @@ function AddAnnouncementModal({ t, open, onClose, onCreated }: { t: (key: Transl
         <Field label={t("profile.description")}>
           <textarea className="cm-textarea" placeholder={t("profile.description")} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
-        <ChoiceRow label={t("profile.statusSought")} options={[...PROFILE_ROLES]} defaultValue="Scénariste" onChange={(s) => setStatusSought(s[0] ?? "")} />
         <ToggleRow label={t("profile.remuneration")} checked={remuneration} onChange={setRemuneration} />
         <ChoiceRow label={t("profile.engagement")} options={["Long terme", "Ponctuel"]} defaultValue="Long terme" onChange={(values) => setEngagement(values[0] === "Ponctuel" ? "Ponctuel" : "Long terme")} />
         <div>

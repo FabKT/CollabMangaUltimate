@@ -77,6 +77,8 @@ type UserAnnouncement = {
   title: string;
   userName: string;
   avatarInitials: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
   portfolioImage?: string;
   description: string;
   roleOffered: string;
@@ -605,11 +607,13 @@ function AnnouncementsPage() {
               title: r.title,
               userName: author,
               avatarInitials: author.slice(0, 2).toUpperCase(),
+              avatarUrl: r.author?.avatar_url ?? undefined,
+              bannerUrl: r.author?.banner_url ?? undefined,
               description: r.hook || r.description.slice(0, 160),
-              roleOffered: r.status_sought || "—",
+              roleOffered: r.author?.role || r.status_sought || "—",
               remuneration: r.remuneration,
               engagement: r.engagement,
-              mainSkill: r.status_sought || "—",
+              mainSkill: r.author?.role || r.status_sought || "—",
               genre: r.genres[0] ?? "—",
               availability: "À définir",
               language: r.language,
@@ -634,11 +638,22 @@ function AnnouncementsPage() {
 
   // Production : uniquement les annonces réelles (Supabase), plus aucun exemple.
   const projectAnnouncements = useMemo(() => {
+    const studioByKey = new Map(
+      studioProjects.map((item) => [
+        `${item.projectName}\u0000${item.title}`.toLocaleLowerCase(),
+        item,
+      ]),
+    );
     const keys = new Set(
       dbProjects.map((item) => `${item.projectName}\u0000${item.title}`.toLocaleLowerCase()),
     );
     return [
-      ...dbProjects,
+      ...dbProjects.map((item) => {
+        const studio = studioByKey.get(
+          `${item.projectName}\u0000${item.title}`.toLocaleLowerCase(),
+        );
+        return studio?.cover ? { ...item, cover: studio.cover } : item;
+      }),
       ...studioProjects.filter(
         (item) => !keys.has(`${item.projectName}\u0000${item.title}`.toLocaleLowerCase()),
       ),
@@ -647,9 +662,9 @@ function AnnouncementsPage() {
 
   const data: Announcement[] =
     filters.target === "project"
-      ? [...dbUsers]
+      ? [...projectAnnouncements]
       : filters.target === "collaborator"
-        ? [...projectAnnouncements]
+        ? [...dbUsers]
         : [...projectAnnouncements, ...dbUsers];
 
   const filtered = useMemo(() => {
@@ -769,7 +784,12 @@ function AnnouncementsPage() {
         <DetailsModal
           item={detailsFor}
           onClose={() => setDetailsFor(null)}
-          onApply={() => setWorkflowModal({ kind: "apply", item: detailsFor })}
+          onApply={() =>
+            setWorkflowModal({
+              kind: detailsFor.kind === "user" ? "invite" : "apply",
+              item: detailsFor,
+            })
+          }
         />
       )}
       {workflowModal && (
@@ -972,7 +992,7 @@ function RemunerationBadge() {
   );
 }
 
-function CoverArt({ title }: { title: string }) {
+function CoverArt({ title, imageUrl }: { title: string; imageUrl?: string }) {
   // Deterministic hue per title for visual variety without real images
   const hue = Array.from(title).reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
   return (
@@ -986,6 +1006,21 @@ function CoverArt({ title }: { title: string }) {
         background: `linear-gradient(135deg, hsl(${hue} 55% 22%) 0%, hsl(${(hue + 40) % 360} 60% 12%) 60%, #08112B 100%)`,
       }}
     >
+      {imageUrl && (
+        <img
+          src={imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      )}
       <div
         aria-hidden
         style={{
@@ -1020,7 +1055,17 @@ function CoverArt({ title }: { title: string }) {
   );
 }
 
-function AvatarBlock({ initials, title }: { initials: string; title: string }) {
+function AvatarBlock({
+  initials,
+  title,
+  avatarUrl,
+  bannerUrl,
+}: {
+  initials: string;
+  title: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+}) {
   const hue = Array.from(title).reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
   return (
     <div
@@ -1036,8 +1081,27 @@ function AvatarBlock({ initials, title }: { initials: string; title: string }) {
         justifyContent: "center",
       }}
     >
+      {bannerUrl && (
+        <img
+          src={bannerUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      )}
+      {bannerUrl && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(5,11,29,0.34)" }} />
+      )}
       <div
         style={{
+          position: "relative",
           width: 84,
           height: 84,
           borderRadius: "50%",
@@ -1051,9 +1115,18 @@ function AvatarBlock({ initials, title }: { initials: string; title: string }) {
           fontWeight: 700,
           color: C.text,
           letterSpacing: "0.04em",
+          overflow: "hidden",
         }}
       >
-        {initials}
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={title}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          initials
+        )}
       </div>
     </div>
   );
@@ -1268,7 +1341,7 @@ export function ProjectCard({
   return (
     <CardShell>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", flex: 1 }}>
-        <CoverArt title={item.projectName} />
+        <CoverArt title={item.projectName} imageUrl={item.cover} />
         <RoleSpotlight label="Rôle recherché" role={item.roleNeeded} />
         <CardHeader
           title={item.title}
@@ -1310,12 +1383,16 @@ function UserCard({
   return (
     <CardShell>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", flex: 1 }}>
-        <AvatarBlock initials={item.avatarInitials} title={item.userName} />
-        <RoleSpotlight label="Rôle proposé" role={item.roleOffered} />
+        <AvatarBlock
+          initials={item.avatarInitials}
+          title={item.userName}
+          avatarUrl={item.avatarUrl}
+          bannerUrl={item.bannerUrl}
+        />
         <CardHeader
           title={item.title}
           subtitle={item.userName}
-          category="Recherche projet"
+          category="Recherche collaborateur"
           description={item.description}
           saved={saved}
           onSave={onSave ?? (() => {})}
@@ -1498,6 +1575,7 @@ function ModalShell({
         alignItems: "center",
         justifyContent: "center",
         padding: 16,
+        overflowY: "auto",
       }}
       onClick={onClose}
     >
@@ -1506,7 +1584,7 @@ function ModalShell({
         style={{
           width: "100%",
           maxWidth,
-          maxHeight: "85vh",
+          maxHeight: "calc(100dvh - 32px)",
           background: C.panel,
           border: `1px solid ${C.borderStrong}`,
           borderRadius: 24,
@@ -1634,26 +1712,22 @@ export function DetailsModal({
               <div
                 style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}` }}
               >
-                <CoverArt title={item.projectName} />
+                <CoverArt title={item.projectName} imageUrl={item.cover} />
               </div>
             ) : (
               <div
                 style={{
-                  width: 96,
-                  height: 96,
-                  borderRadius: "50%",
-                  background: C.card,
-                  border: `1px solid ${C.borderStrong}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  ...sora,
-                  fontSize: 30,
-                  fontWeight: 700,
-                  color: C.text,
+                  borderRadius: 18,
+                  overflow: "hidden",
+                  border: `1px solid ${C.border}`,
                 }}
               >
-                {item.avatarInitials}
+                <AvatarBlock
+                  initials={item.avatarInitials}
+                  title={item.userName}
+                  avatarUrl={item.avatarUrl}
+                  bannerUrl={item.bannerUrl}
+                />
               </div>
             )}
 
@@ -1697,9 +1771,11 @@ export function DetailsModal({
           </aside>
 
           <section style={{ padding: 24 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <CategoryChip>{itemRole(item)}</CategoryChip>
-            </div>
+            {isProject && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <CategoryChip>{itemRole(item)}</CategoryChip>
+              </div>
+            )}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
               <Chip>{remunerationLabel(item)}</Chip>
               <Chip>{item.engagement}</Chip>
@@ -1855,7 +1931,11 @@ export function DetailsModal({
           />
           {saved ? "Enregistré" : "Save"}
         </GhostButton>
-        {!hideApply && <PrimaryButton onClick={onApply}>Apply to Project</PrimaryButton>}
+        {!hideApply && (
+          <PrimaryButton onClick={onApply}>
+            {isProject ? "Apply to Project" : "Invite to Project"}
+          </PrimaryButton>
+        )}
       </div>
     </ModalShell>
   );

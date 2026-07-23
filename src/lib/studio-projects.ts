@@ -24,6 +24,7 @@ type StudioMemberRow = {
     username: string;
     display_name: string | null;
     role: string | null;
+    avatar_url: string | null;
   } | null;
 };
 
@@ -34,6 +35,7 @@ type PublicProfileRow = {
   username: string;
   display_name: string | null;
   role: string | null;
+  avatar_url: string | null;
 };
 
 const LEGACY_DB_NAME = "collabmanga-studio";
@@ -169,13 +171,17 @@ async function listRemoteRows(userId: string): Promise<StudioProjectRow[]> {
   }
   const projectIds = [...rows.keys()];
   if (projectIds.length === 0) return [];
-  const { data: members, error: membersError } = await sb
-    .from("studio_project_members")
-    .select(
-      "project_id, user_id, access_level, role, status, profile:profiles!studio_project_members_user_id_fkey(username, display_name, role)",
-    )
-    .in("project_id", projectIds)
-    .eq("status", "active");
+  const [membersResult, currentProfileResult] = await Promise.all([
+    sb
+      .from("studio_project_members")
+      .select(
+        "project_id, user_id, access_level, role, status, profile:profiles!studio_project_members_user_id_fkey(username, display_name, role, avatar_url)",
+      )
+      .in("project_id", projectIds)
+      .eq("status", "active"),
+    sb.from("profiles").select("avatar_url").eq("id", userId).maybeSingle(),
+  ]);
+  const { data: members, error: membersError } = membersResult;
   if (membersError) throw new Error(membersError.message);
 
   return [...rows.values()].map((row) => {
@@ -188,6 +194,7 @@ async function listRemoteRows(userId: string): Promise<StudioProjectRow[]> {
             ? "Vous"
             : member.profile?.display_name || member.profile?.username || "Collaborateur",
         role: member.role || member.profile?.role || "Collaborateur",
+        avatarUrl: member.profile?.avatar_url ?? undefined,
         level: member.access_level,
         isCurrentUser: member.user_id === userId,
       }));
@@ -198,6 +205,7 @@ async function listRemoteRows(userId: string): Promise<StudioProjectRow[]> {
         role: "Créateur",
         level: "chef",
         isCurrentUser: true,
+        avatarUrl: currentProfileResult.data?.avatar_url ?? undefined,
       });
     }
     return {
@@ -337,11 +345,11 @@ export async function loadPublicStudioProjects<T>(): Promise<T[]> {
     sb
       .from("studio_project_members")
       .select(
-        "project_id, user_id, access_level, role, status, profile:profiles!studio_project_members_user_id_fkey(username, display_name, role)",
+        "project_id, user_id, access_level, role, status, profile:profiles!studio_project_members_user_id_fkey(username, display_name, role, avatar_url)",
       )
       .in("project_id", projectIds)
       .eq("status", "active"),
-    sb.from("profiles").select("id, username, display_name, role").in("id", ownerIds),
+    sb.from("profiles").select("id, username, display_name, role, avatar_url").in("id", ownerIds),
   ]);
   if (membersResult.error) throw new Error(membersResult.error.message);
   if (ownersResult.error) throw new Error(ownersResult.error.message);
@@ -358,6 +366,7 @@ export async function loadPublicStudioProjects<T>(): Promise<T[]> {
         id: member.user_id,
         name: member.profile?.display_name || member.profile?.username || "Collaborateur",
         role: member.role || member.profile?.role || "Collaborateur",
+        avatarUrl: member.profile?.avatar_url ?? undefined,
         level: member.access_level,
       }));
     const owner = owners.get(row.owner_id);
@@ -366,6 +375,7 @@ export async function loadPublicStudioProjects<T>(): Promise<T[]> {
         id: row.owner_id,
         name: owner?.display_name || owner?.username || "Créateur",
         role: owner?.role || "Créateur",
+        avatarUrl: owner?.avatar_url ?? undefined,
         level: "chef",
       });
     }

@@ -3532,7 +3532,13 @@ export function useI18n() {
   return value;
 }
 
-export function LanguageSelect({ className = "" }: { className?: string }) {
+export function LanguageSelect({
+  className = "",
+  placement = "down",
+}: {
+  className?: string;
+  placement?: "up" | "down";
+}) {
   const { locale, setLocale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -3570,7 +3576,9 @@ export function LanguageSelect({ className = "" }: { className?: string }) {
       {open && (
         <div
           role="listbox"
-          className="absolute right-0 z-[100] mt-2 min-w-[170px] overflow-hidden rounded-lg p-1 shadow-2xl"
+          className={`absolute right-0 z-[100] min-w-[170px] overflow-hidden rounded-lg p-1 shadow-2xl ${
+            placement === "up" ? "bottom-full mb-2" : "top-full mt-2"
+          }`}
           style={{ background: "#0a1430", border: "1px solid rgba(133,154,206,0.3)" }}
         >
           {options.map((option) => (

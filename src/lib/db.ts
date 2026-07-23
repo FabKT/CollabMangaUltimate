@@ -14,6 +14,7 @@ export type DbProfile = {
   banner_url?: string | null;
   /** Rôle principal choisi dans le popup de modification du profil (Dessinateur, Scénariste, Créateur de contenu, Lecteur). */
   role?: string | null;
+  secondary_role?: string | null;
 };
 
 export type DbDiscoverProfile = DbProfile & {
@@ -85,7 +86,8 @@ export type DbMessage = {
   created_at: string;
 };
 
-const PROFILE_COLS = "id, username, display_name, avatar_url, role";
+const PROFILE_COLS =
+  "id, username, display_name, avatar_url, banner_url, role, secondary_role";
 
 /** Utilisateur connecté (ou null). */
 export async function currentUserId(): Promise<string | null> {

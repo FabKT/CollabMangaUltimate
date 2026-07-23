@@ -166,9 +166,11 @@ function Avatar({
 function MessagesPage({
   initialConversationId,
   initialSponsorshipId,
+  initialChannel,
 }: {
   initialConversationId?: string;
   initialSponsorshipId?: string;
+  initialChannel?: BaseTab;
 }) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -180,6 +182,7 @@ function MessagesPage({
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [conversationError, setConversationError] = useState<string | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
+  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
 
   // ---- données réelles (Supabase) ----
   const [uid, setUid] = useState<string | null>(null);
@@ -262,16 +265,37 @@ function MessagesPage({
   }, []);
 
   useEffect(() => {
-    if (!initialConversationId) return;
-    setBaseTab("amis");
-    setActiveConv(initialConversationId);
-  }, [initialConversationId]);
+    if (initialSponsorshipId) {
+      setBaseTab("parrainages");
+      setActiveConv(initialSponsorshipId);
+      return;
+    }
+    if (initialConversationId) {
+      setBaseTab(initialChannel ?? "amis");
+      setActiveConv(initialConversationId);
+      return;
+    }
+    setActiveConv(null);
+  }, [initialChannel, initialConversationId, initialSponsorshipId]);
 
   useEffect(() => {
-    if (!initialSponsorshipId) return;
-    setBaseTab("parrainages");
-    setActiveConv(initialSponsorshipId);
-  }, [initialSponsorshipId]);
+    const viewport = window.visualViewport;
+    const updateHeight = () => {
+      if (window.innerWidth >= 768) {
+        setMobileViewportHeight(null);
+        return;
+      }
+      const visibleHeight = viewport?.height ?? window.innerHeight;
+      setMobileViewportHeight(Math.max(280, Math.floor(visibleHeight - 53)));
+    };
+    updateHeight();
+    viewport?.addEventListener("resize", updateHeight);
+    window.addEventListener("resize", updateHeight);
+    return () => {
+      viewport?.removeEventListener("resize", updateHeight);
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, []);
 
   const activeFriend = friends.find((f) => f.id === activeConv) ?? null;
   const activeProject = projectConvs.find((project) => project.id === activeConv) ?? null;
@@ -418,12 +442,31 @@ function MessagesPage({
     setActiveConv(null);
     setConversationQuery("");
     setThreadError(null);
+    void navigate({ to: "/messages", search: {}, replace: true });
+  };
+
+  const openConversation = (id: string, channel: BaseTab = baseTab) => {
+    setBaseTab(channel);
+    setActiveConv(id);
+    void navigate({
+      to: "/messages",
+      search:
+        channel === "parrainages"
+          ? { sponsorship: id, channel }
+          : { conversation: id, channel },
+    });
+  };
+
+  const closeConversation = () => {
+    setActiveConv(null);
+    void navigate({ to: "/messages", search: {}, replace: true });
   };
 
   return (
     <div
       className="h-[calc(100dvh-53px)] w-full min-w-0 overflow-hidden md:h-screen"
       style={{
+        height: mobileViewportHeight ? `${mobileViewportHeight}px` : undefined,
         background: "var(--cm-bg)",
         color: "var(--cm-text)",
         fontFamily: "var(--font-manrope)",
@@ -438,9 +481,7 @@ function MessagesPage({
           baseTab={baseTab}
           onBaseTab={selectBaseTab}
           activeConv={activeConv}
-          onConv={(id) => {
-            setActiveConv(id);
-          }}
+          onConv={(id) => openConversation(id)}
           query={conversationQuery}
           onQuery={setConversationQuery}
           loading={loadingConversations}
@@ -460,7 +501,7 @@ function MessagesPage({
           t={t}
           baseTab={baseTab}
           activeConv={activeConv}
-          onBack={() => setActiveConv(null)}
+          onBack={closeConversation}
           onOpenDetails={() => setDetailsOpen(true)}
           friends={friends}
           projects={projectConvs}
@@ -468,7 +509,7 @@ function MessagesPage({
           messages={messages}
           error={threadError}
           onSend={handleSend}
-          onConv={(id) => setActiveConv(id)}
+          onConv={(id) => openConversation(id)}
         />
       </div>
 
@@ -479,7 +520,7 @@ function MessagesPage({
         onStarted={(convId) => {
           void refreshConversations(false);
           setBaseTab("amis");
-          setActiveConv(convId);
+          openConversation(convId, "amis");
         }}
       />
       <DetailsModal
@@ -512,8 +553,7 @@ function MessagesPage({
           onCreated={(id) => {
             setCreateProjectOpen(false);
             refreshLinked();
-            setBaseTab("projets");
-            setActiveConv(id);
+            openConversation(id, "projets");
           }}
         />
       )}

@@ -339,7 +339,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
         ))}
       </nav>
 
-      <LanguageSelect className="cma-input mt-3 !h-9 !w-full" />
+      <LanguageSelect placement="up" className="cma-input mt-3 !h-9 !w-full" />
 
       {/* Quota réel de l'abonnement (crédits restants) */}
       {!isLocalAiClientMode && (

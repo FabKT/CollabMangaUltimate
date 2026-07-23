@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect, type ReactNode } from "react";
-import { addIdea, listIdeas, subscribeIdeas } from "@/lib/db";
+import { listIdeas, subscribeIdeas } from "@/lib/db";
 import { useI18n } from "@/lib/i18n";
 import { listFavorites, setFavorite } from "@/lib/favorites";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import {
   Search, X, Bookmark, MessageCircle,
-  Sparkles, LayoutGrid, List, Images, ChevronDown, Filter, Check,
-  RotateCcw, ImageIcon, Plus,
+  Sparkles, LayoutGrid, List, Images, ChevronDown, Filter,
+  RotateCcw,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_collab/ideas")({
@@ -207,7 +207,6 @@ function PropositionsPage() {
 
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Prop | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [dbProps, setDbProps] = useState<Prop[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
 
@@ -314,9 +313,6 @@ function PropositionsPage() {
               {t("ideas.subtitle")}
             </p>
           </div>
-          <PrimaryBtn onClick={() => setShowCreate(true)} className="shrink-0">
-            <Plus className="h-4 w-4" /> {t("ideas.create")}
-          </PrimaryBtn>
         </header>
 
         {dataError && (
@@ -399,7 +395,7 @@ function PropositionsPage() {
             </div>
 
             {results.length === 0 ? (
-              <EmptyState onReset={resetFilters} onCreate={()=>setShowCreate(true)} />
+              <EmptyState onReset={resetFilters} />
             ) : view === "cards" ? (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {results.map(p => (
@@ -433,7 +429,6 @@ function PropositionsPage() {
           onClose={()=>setOpen(null)}
         />
       )}
-      {showCreate && <CreateModal onClose={()=>setShowCreate(false)} onCreated={refreshIdeas}/>}
     </div>
   );
 }
@@ -565,7 +560,7 @@ function MoodItem({ p, onOpen }: { p:Prop; onOpen:()=>void }) {
 
 /* ---------------- Empty state ---------------- */
 
-function EmptyState({ onReset, onCreate }: { onReset:()=>void; onCreate:()=>void }) {
+function EmptyState({ onReset }: { onReset:()=>void }) {
   const { t } = useI18n();
   return (
     <div className="rounded-[16px] bg-[var(--panel)] border border-[var(--border)] p-10 text-center">
@@ -601,12 +596,12 @@ function ModalShell({ children, onClose, maxWidth="1080px", label }: {
       role="dialog"
       aria-modal="true"
       aria-label={label}
-      className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-black/70 backdrop-blur-sm p-0 sm:p-6"
+      className="fixed inset-0 z-50 grid place-items-end overflow-y-auto bg-black/70 p-0 backdrop-blur-sm sm:place-items-center sm:p-6"
       onClick={onClose}
     >
       <div
         onClick={(e)=>e.stopPropagation()}
-        className="w-full bg-[var(--panel)] border border-[var(--border-strong)] rounded-t-[24px] sm:rounded-[24px] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col max-h-[95vh] sm:max-h-[85vh]"
+        className="flex max-h-[calc(100dvh-8px)] w-full flex-col overflow-y-auto rounded-t-[24px] border border-[var(--border-strong)] bg-[var(--panel)] shadow-[0_30px_80px_rgba(0,0,0,0.55)] sm:max-h-[85vh] sm:overflow-hidden sm:rounded-[24px]"
         style={{ maxWidth }}
       >
         {children}
@@ -700,105 +695,4 @@ function PropModal({ p, saved, onSave, onClose }: {
     </ModalShell>
   );
 
-}
-
-function CreateModal({ onClose, onCreated }: { onClose: ()=>void; onCreated?: ()=>void }) {
-  const { t } = useI18n();
-  const [ideaImages, setIdeaImages] = useState<string[]>([]);
-  const [ideaFiles, setIdeaFiles] = useState<File[]>([]);
-  const [activeIdeaIndex, setActiveIdeaIndex] = useState(0);
-  const [ideaCategory, setIdeaCategory] = useState(CATEGORIES[1]);
-  const [ideaTitle, setIdeaTitle] = useState("");
-  const [ideaDescription, setIdeaDescription] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const ideaInputId = "idea-create-images";
-  const activeIdeaImage = ideaImages[activeIdeaIndex];
-  const addIdeaFiles = (files: FileList | null) => {
-    if (!files?.length) return;
-    const incoming = Array.from(files).filter((file) => file.type.startsWith("image/"));
-    const urls = incoming.map((file) => URL.createObjectURL(file));
-    setIdeaFiles((current) => [...current, ...incoming]);
-    setIdeaImages((current) => [...current, ...urls]);
-  };
-
-  const submitIdea = async () => {
-    setCreateError(null);
-    if (!ideaTitle.trim()) { setCreateError(t("ideas.errorTitle")); return; }
-    if (!ideaDescription.trim()) { setCreateError(t("ideas.errorDesc")); return; }
-    setSaving(true);
-    try {
-      await addIdea({
-        title: ideaTitle.trim(),
-        category: ideaCategory,
-        description: ideaDescription.trim(),
-        files: ideaFiles,
-      });
-      onCreated?.();
-      onClose();
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : t("ideas.publishFailed"));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalShell onClose={onClose} maxWidth="980px" label={t("ideas.create")}>
-      <div className="p-6 border-b border-[var(--border)] flex items-center justify-between gap-4">
-        <div>
-          <h3 className="font-display text-[24px] leading-[32px] font-bold">{t("ideas.create")}</h3>
-          <p className="text-[13px] text-[var(--text-muted)] mt-1">{t("ideas.createSubtitle")}</p>
-        </div>
-        <IconBtn label={t("ideas.close")} onClick={onClose}><X className="h-4 w-4"/></IconBtn>
-      </div>
-      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto scrollbar-thin">
-        <div className="min-w-0">
-          <label htmlFor={ideaInputId} className="grid aspect-[4/3] cursor-pointer place-items-center overflow-hidden rounded-[18px] border border-dashed border-[var(--border-strong)] bg-[var(--input-bg)]">
-            {activeIdeaImage ? (
-              <img src={activeIdeaImage} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-center">
-                <ImageIcon className="h-8 w-8 text-[var(--neon)]" />
-                <div className="text-[14px] font-bold">{t("ideas.importImages")}</div>
-                <div className="text-[12px] text-[var(--text-muted)]">{t("ideas.formats")}</div>
-              </div>
-            )}
-          </label>
-          <input id={ideaInputId} type="file" accept="image/*" multiple className="hidden" onChange={(event) => addIdeaFiles(event.currentTarget.files)} />
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {ideaImages.length > 0 ? ideaImages.map((src, index) => (
-              <button key={`${src}-${index}`} type="button" onClick={() => setActiveIdeaIndex(index)} className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border bg-[var(--card)]" style={{ borderColor: activeIdeaIndex === index ? "var(--neon)" : "var(--border)" }}>
-                <img src={src} alt="" className="h-full w-full object-cover" />
-              </button>
-            )) : (
-              <div className="h-16 w-full rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 text-[12px] font-semibold text-[var(--text-muted)] flex items-center">
-                {t("ideas.imagesHere")}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="space-y-4">
-          <Field label={t("ideas.ideaType")}>
-            <Select value={ideaCategory} onChange={setIdeaCategory} options={CATEGORIES.filter((c) => c !== "All")} />
-          </Field>
-          <Field label={t("ideas.titleField")}>
-            <TextInput placeholder={t("ideas.titlePlaceholder")} value={ideaTitle} onChange={(e)=>setIdeaTitle(e.target.value)} />
-          </Field>
-          <Field label={t("ideas.descField")}>
-            <TextArea placeholder={t("ideas.descPlaceholder")} value={ideaDescription} onChange={(e)=>setIdeaDescription(e.target.value)} />
-          </Field>
-          {createError && (
-            <div className="rounded-[12px] border border-[rgba(255,95,126,0.35)] bg-[rgba(255,95,126,0.10)] px-4 py-3 text-[13px] font-semibold text-[var(--danger)]">
-              {createError}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="p-5 border-t border-[var(--border)] flex items-center justify-end gap-2">
-        <SecondaryBtn onClick={onClose}>{t("ideas.cancel")}</SecondaryBtn>
-        <PrimaryBtn onClick={submitIdea}><Check className="h-4 w-4"/>{saving ? t("ideas.publishing") : t("ideas.addIdea")}</PrimaryBtn>
-      </div>
-    </ModalShell>
-  );
 }

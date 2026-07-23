@@ -458,8 +458,12 @@ function SponsorshipDetailPage() {
               {s.participants.length === 0 && <li className="px-5 py-6 text-sm text-text-muted">{t("sponsorDetail.noParticipants")}</li>}
               {s.participants.map((p) => (
                 <li key={p.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-5">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-surface-3 font-display text-sm font-bold text-neon">
-                    {p.initials}
+                  <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-surface-3 font-display text-sm font-bold text-neon">
+                    {p.avatarUrl ? (
+                      <img src={p.avatarUrl} alt={p.name} className="h-full w-full object-cover" />
+                    ) : (
+                      p.initials
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">

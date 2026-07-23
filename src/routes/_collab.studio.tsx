@@ -433,7 +433,14 @@ function ProjectSelection({ projects, onOpen, onCreate }: { projects: Project[];
 
 /** Niveaux d'accès au projet : un seul chef (le créateur), des éditeurs, des collaborateurs. */
 type CollabLevel = "chef" | "editeur" | "collaborateur";
-type Collaborator = { id: string; name: string; role: string; level: CollabLevel; isCurrentUser?: boolean };
+type Collaborator = {
+  id: string;
+  name: string;
+  role: string;
+  level: CollabLevel;
+  isCurrentUser?: boolean;
+  avatarUrl?: string;
+};
 
 const LEVEL_LABEL_KEY: Record<CollabLevel, TranslationKey> = {
   chef: "studio.levelChef",
@@ -1883,7 +1890,13 @@ function CollaborateursTab({
               className="flex min-w-0 flex-1 items-center gap-3"
               title={`${t("ideas.viewProfileOf")} ${c.name}`}
             >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-gradient-to-br from-[#1a2960] to-[#0a1030] font-display text-[14px] font-bold">{initials(c.name)}</div>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-default)] bg-gradient-to-br from-[#1a2960] to-[#0a1030] font-display text-[14px] font-bold">
+                {c.avatarUrl ? (
+                  <img src={c.avatarUrl} alt={c.name} className="h-full w-full object-cover" />
+                ) : (
+                  initials(c.name)
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px] font-bold">{c.name}</div>
                 <div className="truncate tiny-meta text-[var(--text-muted)]">{c.role}</div>

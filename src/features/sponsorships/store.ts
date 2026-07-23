@@ -24,6 +24,7 @@ export interface Participant {
   role: "creator" | "owner" | "collaborator" | "manager";
   meta?: string;
   initials: string;
+  avatarUrl?: string;
 }
 
 export interface Sponsorship {
@@ -113,6 +114,7 @@ function normalizeParticipant(value: unknown, index: number): Participant {
       item.initials,
       name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "P",
     ),
+    avatarUrl: asOptionalString(item.avatarUrl),
   };
 }
 function normalizeSponsorships(value: unknown): Sponsorship[] {
@@ -218,6 +220,35 @@ export async function listSponsorships(force = false): Promise<Sponsorship[]> {
       creatorId: row.creator_id,
       projectId: row.project_id,
     })));
+    const participantIds = [
+      ...new Set(
+        state
+          .flatMap((item) => [
+            item.ownerId,
+            item.creatorId,
+            ...item.participants.map((participant) => participant.id),
+          ])
+          .filter((id): id is string => Boolean(id && UUID_PATTERN.test(id))),
+      ),
+    ];
+    if (participantIds.length > 0) {
+      const profilesResult = await getSupabase()
+        .from("profiles")
+        .select("id, avatar_url")
+        .in("id", participantIds);
+      if (!profilesResult.error) {
+        const avatars = new Map(
+          (profilesResult.data ?? []).map((profile) => [profile.id, profile.avatar_url as string | null]),
+        );
+        state = state.map((item) => ({
+          ...item,
+          participants: item.participants.map((participant) => ({
+            ...participant,
+            avatarUrl: avatars.get(participant.id) ?? participant.avatarUrl,
+          })),
+        }));
+      }
+    }
     loadedFor = uid;
     notify();
     return state;

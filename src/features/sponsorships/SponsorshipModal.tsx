@@ -22,6 +22,7 @@ type CreatorOption = {
   initials: string;
   meta: string;
   bio: string;
+  avatarUrl?: string;
   services: Service[];
 };
 
@@ -90,6 +91,7 @@ export function SponsorshipModal({
               initials: name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
               meta: profile.role || "Créateur de contenu",
               bio: "Profil CollabManga",
+              avatarUrl: profile.avatar_url ?? undefined,
               services: creatorServices,
             };
           })
@@ -193,6 +195,7 @@ export function SponsorshipModal({
             role: "creator",
             meta: selectedCreator.meta,
             initials: selectedCreator.initials,
+            avatarUrl: selectedCreator.avatarUrl,
           },
         ],
       });
@@ -274,8 +277,12 @@ export function SponsorshipModal({
                       active ? "border-neon/60 bg-neon-soft" : "border-border bg-surface-3 hover:border-neon/35"
                     }`}
                   >
-                    <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-surface font-display text-sm font-bold text-neon">
-                      {creator.initials}
+                    <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-xl border border-border bg-surface font-display text-sm font-bold text-neon">
+                      {creator.avatarUrl ? (
+                        <img src={creator.avatarUrl} alt={creator.name} className="h-full w-full object-cover" />
+                      ) : (
+                        creator.initials
+                      )}
                     </span>
                     <span className="min-w-0">
                       <span className="block font-semibold text-foreground">{creator.name}</span>

@@ -537,8 +537,8 @@ function ModalShell({ children, onClose, width = 1100 }: { children: ReactNode; 
         style={{
           background: C.panel, border: `1px solid ${C.borderStrong}`, borderRadius: 24,
           boxShadow: "0 30px 80px rgba(0,0,0,0.55)", width: "100%", maxWidth: width,
-          maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden",
-          marginTop: "4vh",
+          maxHeight: "calc(100dvh - 16px)", display: "flex", flexDirection: "column",
+          overflowY: "auto", overflowX: "hidden", marginTop: 8,
         }}
       >
         {children}

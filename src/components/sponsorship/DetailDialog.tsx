@@ -74,9 +74,9 @@ export function DetailDialog({
 
   return (
     <Dialog open={!!a} onOpenChange={onOpenChange}>
-      <DialogContent className="grid-cols-none gap-0 border-[rgba(133,154,206,0.28)] bg-cm-panel p-0 shadow-[0_30px_80px_rgba(0,0,0,0.55)] w-[95vw] max-w-[1320px] max-h-[85vh] rounded-[24px] overflow-hidden text-cm-text">
+      <DialogContent className="grid-cols-none gap-0 border-[rgba(133,154,206,0.28)] bg-cm-panel p-0 shadow-[0_30px_80px_rgba(0,0,0,0.55)] w-[95vw] max-w-[1320px] max-h-[calc(100dvh-16px)] sm:max-h-[85vh] rounded-[24px] overflow-hidden text-cm-text">
         {a && (
-          <ScrollArea className="max-h-[85vh]">
+          <ScrollArea className="max-h-[calc(100dvh-16px)] sm:max-h-[85vh]">
             <div
               className={`grid gap-5 p-6 ${
                 a.mode === "creator"

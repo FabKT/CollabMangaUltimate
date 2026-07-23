@@ -26,6 +26,8 @@ export function StatusBadge({ status, size = "sm" }: { status: SponsorshipStatus
 
 export function Modal({ open, onClose, title, children, footer, size = "md" }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; size?: "md" | "lg" | "xl" }) {
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
@@ -33,7 +35,7 @@ export function Modal({ open, onClose, title, children, footer, size = "md" }: {
     const focusable = () => Array.from(el?.querySelectorAll<HTMLElement>('a,button,input,select,textarea,[tabindex]:not([tabindex="-1"])') ?? []).filter(x => !x.hasAttribute("disabled"));
     setTimeout(() => focusable()[0]?.focus(), 10);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+      if (e.key === "Escape") { e.preventDefault(); onCloseRef.current(); }
       if (e.key === "Tab") {
         const items = focusable();
         if (!items.length) return;
@@ -46,7 +48,7 @@ export function Modal({ open, onClose, title, children, footer, size = "md" }: {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; prev?.focus(); };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   const w = size === "xl" ? "max-w-[1240px]" : size === "lg" ? "max-w-3xl" : "max-w-xl";
   return (
