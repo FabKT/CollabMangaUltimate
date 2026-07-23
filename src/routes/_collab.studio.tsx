@@ -6,7 +6,7 @@ import {
   StickyNote, Megaphone, ChevronLeft, ChevronRight,
   BookOpen, Layers, AlertTriangle, FileImage, RefreshCw, Save, Play,
   ArrowUpDown, Target, Star, X,
-  Users, UserPlus, Rocket, Undo2, Handshake,
+  Users, UserPlus, Rocket, Undo2, Handshake, Info,
 } from "lucide-react";
 import { addSponsorOption, updateSponsorOption } from "@/lib/sponsorship-options";
 import { ServiceFormModal } from "@/components/sponsorship/ServiceFormModal";
@@ -31,6 +31,7 @@ import {
   STATUS_META as SPONSORSHIP_STATUS_META,
   useSponsorships as useLinkedSponsorships,
 } from "@/features/sponsorships/store";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export const Route = createFileRoute("/_collab/studio")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -486,7 +487,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
 
 /* ---------- STATE 2: Project Workspace ---------- */
 
-type ProjectTab = "Chapters" | "Notes" | "Calendar" | "Recrutement" | "Parrainage" | "Collaborateurs" | "Settings";
+type ProjectTab = "Information" | "Chapters" | "Notes" | "Calendar" | "Recrutement" | "Parrainage" | "Collaborateurs" | "Settings";
 
 function ProjectWorkspace({
   project,
@@ -506,6 +507,7 @@ function ProjectWorkspace({
   onLeaveProject: () => void;
 }) {
   const [tab, setTab] = useState<ProjectTab>("Chapters");
+  const isMobile = useIsMobile();
   const [modal, setModal] = useState<"chapter" | "note" | "parrainage" | "recruit" | null>(null);
   const [noteDate, setNoteDate] = useState<string | undefined>(undefined);
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -542,18 +544,42 @@ function ProjectWorkspace({
     setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   };
 
+  useEffect(() => {
+    setTab((current) => {
+      if (isMobile && current === "Chapters") return "Information";
+      if (!isMobile && current === "Information") return "Chapters";
+      return current;
+    });
+  }, [isMobile]);
+
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        back={{ label: "Back to Projects", onClick: onBack }}
-        eyebrow={<span className="tiny-meta text-[var(--neon)]">Project workspace</span>}
-        title={project.title}
-        description={`${project.status} · ${project.chaptersCount} chapters · ${project.validatedPages}/${project.totalPages} pages validated`}
-        actions={<PrimaryButton icon={Plus} onClick={() => openManagedModal("chapter")}>Add Chapter</PrimaryButton>}
-      />
+      <div className="hidden md:block">
+        <PageHeader
+          back={{ label: "Back to Projects", onClick: onBack }}
+          eyebrow={<span className="tiny-meta text-[var(--neon)]">Project workspace</span>}
+          title={project.title}
+          description={`${project.status} · ${project.chaptersCount} chapters · ${project.validatedPages}/${project.totalPages} pages validated`}
+          actions={<PrimaryButton icon={Plus} onClick={() => openManagedModal("chapter")}>Add Chapter</PrimaryButton>}
+        />
+      </div>
+
+      <div className="md:hidden">
+        <button type="button" onClick={onBack} className="btn-ghost -ml-2 mb-2 h-10">
+          <ArrowLeft className="h-4 w-4" /> Back to Projects
+        </button>
+        <section className="overflow-hidden rounded-[18px] border border-[var(--border-default)] bg-[var(--panel)] shadow-[var(--shadow-panel)]">
+          <h1 className="px-4 py-3 font-display text-[22px] font-extrabold leading-7">{project.title}</h1>
+          {project.coverDataUrl ? (
+            <img src={project.coverDataUrl} alt={`Couverture de ${project.title}`} className="aspect-[3/4] w-full object-cover" />
+          ) : (
+            <CoverPlaceholder title={project.title} className="aspect-[3/4] w-full" />
+          )}
+        </section>
+      </div>
 
       {/* Summary panel */}
-      <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-6 shadow-[var(--shadow-panel)]">
+      <div className="hidden rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-6 shadow-[var(--shadow-panel)] md:block">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_1fr_280px]">
           {/* Left: cover */}
           <div className="flex flex-col gap-3">
@@ -632,10 +658,47 @@ function ProjectWorkspace({
         <Tabs
           value={tab}
           onChange={setTab}
-          items={["Chapters", "Notes", "Calendar", "Recrutement", "Parrainage", "Collaborateurs", "Settings"]}
-          icons={{ Recrutement: Megaphone, Parrainage: Handshake, Collaborateurs: Users }}
+          items={isMobile ? ["Information", "Chapters", "Notes", "Calendar", "Recrutement", "Parrainage", "Collaborateurs", "Settings"] : ["Chapters", "Notes", "Calendar", "Recrutement", "Parrainage", "Collaborateurs", "Settings"]}
+          icons={{ Information: Info, Recrutement: Megaphone, Parrainage: Handshake, Collaborateurs: Users }}
         />
 
+        {tab === "Information" && (
+          <section className="rounded-[18px] border border-[var(--border-default)] bg-[var(--panel)] p-4 shadow-[var(--shadow-panel)] md:hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <StatusChip label={project.status} tone={toneForProjectStatus(project.status)} />
+              <StarRating value={project.rating ?? 0} />
+            </div>
+            <div className="mt-5">
+              <div className="tiny-meta mb-1.5 text-[var(--text-muted)]">Synopsis</div>
+              <p className="text-[14px] leading-[22px] text-[var(--text-secondary)]">{project.synopsis}</p>
+            </div>
+            <div className="mt-5">
+              <div className="tiny-meta mb-2 text-[var(--text-muted)]">Genres</div>
+              <div className="flex flex-wrap gap-2">
+                {project.genres.map(genre => <Chip key={genre} label={genre} active />)}
+                {(project.subgenres ?? []).map(genre => <Chip key={genre} label={genre} />)}
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <StatBox label="Chapitres" value={project.chaptersCount} />
+              <StatBox label="Pages validées" value={project.validatedPages} />
+              <StatBox label="Parrainages" value={project.sponsorships.length} />
+              <StatBox label="Collaborateurs" value={projectCollaborators(project).length} />
+            </div>
+            <div className="mt-5 grid gap-2">
+              <SecondaryButton icon={Upload} className="!h-10 justify-start !px-3" onClick={() => coverInputRef.current?.click()}>Replace Cover</SecondaryButton>
+              <SecondaryButton icon={Plus} className="!h-10 justify-start !px-3" onClick={() => openManagedModal("chapter")}>Add Chapter</SecondaryButton>
+              <SecondaryButton icon={StickyNote} className="!h-10 justify-start !px-3" onClick={() => openNote()}>Add Note</SecondaryButton>
+            </div>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => { onCoverFile(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }}
+            />
+          </section>
+        )}
         {tab === "Chapters" && <ChaptersTab project={project} onOpenChapter={onOpenChapter} onAdd={() => openManagedModal("chapter")} updateProject={updateProject} onWorkflow={onWorkflow} />}
         {tab === "Notes" && <NotesTab project={project} onAdd={() => openNote()} updateProject={updateProject} onWorkflow={onWorkflow} />}
         {tab === "Calendar" && <CalendarTab project={project} onAddNote={openNote} />}
@@ -2541,6 +2604,7 @@ function ChapterWorkspace({
   const [noteContent, setNoteContent] = useState(linkedNote?.content ?? "");
   const [noteDate, setNoteDate] = useState(linkedNote?.date ?? "");
   const [notePriority, setNotePriority] = useState<Note["priority"]>(linkedNote?.priority ?? "Medium");
+  const [mobileTab, setMobileTab] = useState<"page" | "notes">("page");
 
   // Persiste chaque modification de pages dans le projet (store IndexedDB).
   useEffect(() => {
@@ -2828,9 +2892,20 @@ function ChapterWorkspace({
         </div>
       </div>
 
+      <div className="md:hidden">
+        <div className="cm-popup-tabs w-full" role="tablist" aria-label="Contenu du chapitre">
+          <button type="button" role="tab" aria-selected={mobileTab === "page"} data-active={mobileTab === "page"} onClick={() => setMobileTab("page")} className="cm-popup-tab flex-1">
+            Page
+          </button>
+          <button type="button" role="tab" aria-selected={mobileTab === "notes"} data-active={mobileTab === "notes"} onClick={() => setMobileTab("notes")} className="cm-popup-tab flex-1">
+            Notes
+          </button>
+        </div>
+      </div>
+
       {/* Main + inspector */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
-        <div className="flex flex-col gap-4">
+        <div className={`${mobileTab === "page" ? "flex" : "hidden"} flex-col gap-4 md:flex`}>
           {/* Selected page preview */}
           <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--stage)] p-5 shadow-[var(--shadow-panel)]">
             <div className="mb-4 flex items-center justify-between">
@@ -2930,7 +3005,7 @@ function ChapterWorkspace({
         </div>
 
         {/* Inspector */}
-        <aside className="flex flex-col gap-4">
+        <aside className={`${mobileTab === "notes" ? "flex" : "hidden"} flex-col gap-4 md:flex`}>
           <div className="rounded-[22px] border border-[var(--border-default)] bg-[var(--panel)] p-5 shadow-[var(--shadow-panel)]">
             <h3 className="mb-3 font-display text-[18px] font-bold">Page details</h3>
             <div className="flex flex-col gap-3">

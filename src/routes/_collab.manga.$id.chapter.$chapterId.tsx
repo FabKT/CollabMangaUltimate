@@ -6,6 +6,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  BookOpen,
+  Rows3,
   Star,
 } from "lucide-react";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
@@ -180,13 +182,19 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Colonne gauche : contenu (header sticky + pages + commentaires) */}
       <div className="flex min-w-0 flex-1 flex-col">
+        <div className="border-b border-[var(--color-border-default)] px-4 py-2 md:hidden">
+          <Link to="/manga/$id" params={{ id: view.projectId }} className="btn-ghost -ml-2 h-10">
+            <ArrowLeft className="h-4 w-4" /> {view.projectTitle}
+          </Link>
+        </div>
+
         {/* Header sticky : retour + titre (gauche), contrôle Pages (droite, pagination only) */}
         <div
           className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-6"
           style={{ ...readerPanel, borderBottom: "1px solid var(--color-border-default)", backdropFilter: "blur(6px)" }}
         >
           <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <Link to="/manga/$id" params={{ id: view.projectId }} className="btn-ghost -ml-2 h-10">
+            <Link to="/manga/$id" params={{ id: view.projectId }} className="btn-ghost -ml-2 hidden h-10 md:inline-flex">
               <ArrowLeft className="h-4 w-4" /> {view.projectTitle}
             </Link>
             <span className="truncate text-[13px] font-bold text-[color:var(--color-text-secondary)]">
@@ -194,8 +202,17 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
             </span>
           </div>
 
+          <div className="flex items-center gap-1 rounded-xl border border-[var(--color-border-default)] p-1 md:hidden" style={{ background: "var(--color-elevated, rgba(255,255,255,0.03))" }} role="tablist" aria-label={t("chapter.readingMode")}>
+            <button type="button" role="tab" aria-selected={mode === "vertical"} aria-label={t("chapter.scroll")} title={t("chapter.scroll")} onClick={() => setMode("vertical")} className={`grid h-9 w-9 place-items-center rounded-lg border transition-colors ${mode === "vertical" ? "border-[var(--neon-border)] bg-[var(--neon-soft)] text-[var(--neon)]" : "border-transparent text-[var(--color-text-secondary)]"}`}>
+              <Rows3 className="h-4 w-4" />
+            </button>
+            <button type="button" role="tab" aria-selected={mode === "pagination"} aria-label={t("chapter.pagination")} title={t("chapter.pagination")} onClick={() => setMode("pagination")} className={`grid h-9 w-9 place-items-center rounded-lg border transition-colors ${mode === "pagination" ? "border-[var(--neon-border)] bg-[var(--neon-soft)] text-[var(--neon)]" : "border-transparent text-[var(--color-text-secondary)]"}`}>
+              <BookOpen className="h-4 w-4" />
+            </button>
+          </div>
+
           {mode === "pagination" && total > 0 && (
-            <div ref={pageRef} className="relative flex items-center gap-2">
+            <div ref={pageRef} className="relative hidden items-center gap-2 md:flex">
               <button
                 type="button"
                 aria-label={t("chapter.prevPage")}
@@ -249,6 +266,18 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
           )}
         </div>
 
+        <nav className="grid grid-cols-3 gap-2 border-b border-[var(--color-border-default)] p-3 md:hidden">
+          <button type="button" disabled={!view.prevChapterId} onClick={() => view.prevChapterId && goToChapter(view.prevChapterId)} aria-label={t("chapter.prevChapter")} className="grid h-10 place-items-center rounded-xl border border-[var(--color-border-default)] disabled:opacity-40" style={{ background: "var(--color-elevated, rgba(255,255,255,0.03))" }}>
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button type="button" disabled={!view.nextChapterId} onClick={() => view.nextChapterId && goToChapter(view.nextChapterId)} aria-label={t("chapter.nextChapter")} className="grid h-10 place-items-center rounded-xl border border-[var(--color-border-default)] disabled:opacity-40" style={{ background: "var(--color-elevated, rgba(255,255,255,0.03))" }}>
+            <ChevronRight className="h-5 w-5" />
+          </button>
+          <button type="button" disabled={!view.lastChapterId || view.lastChapterId === view.chapterId} onClick={() => view.lastChapterId && goToChapter(view.lastChapterId)} aria-label={t("chapter.lastChapter")} className="grid h-10 place-items-center rounded-xl border border-[var(--neon-border)] bg-[var(--neon-soft)] text-[var(--neon)] disabled:opacity-40">
+            <ArrowDown className="h-4 w-4" />
+          </button>
+        </nav>
+
         {/* Contenu du chapitre + commentaires */}
         <div className="px-4 py-6 md:px-6 md:py-8">
           {view.images.length === 0 ? (
@@ -274,6 +303,12 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
             </div>
           )}
 
+          <section className="mx-auto mt-6 max-w-[1000px] rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-panel)] p-4 md:hidden">
+            <p className="meta-label mb-2">{t("chapter.rateTitle")}</p>
+            <StarRatingPicker value={rating} onRate={rate} />
+            {rating > 0 && <p className="mt-1.5 text-[12px] text-[color:var(--color-text-muted)]">{t("chapter.yourRating")} {rating}/5</p>}
+          </section>
+
           <section className="mx-auto mt-8 max-w-[1000px] rounded-2xl p-6" style={{ background: "var(--color-panel)", border: "1px solid var(--color-border-default)" }}>
             <h2 className="mb-4 font-display text-[18px] font-extrabold">{t("chapter.comments")}</h2>
             <CommentsPanel entityType="manga_chapter" entityId={`${view.projectId}:${view.chapterId}`} />
@@ -283,7 +318,7 @@ function StudioChapterReader({ view }: { view: StudioChapterView }) {
 
       {/* Menu latéral droit : collé aux bords (comme la sidebar du site) */}
       <aside
-        className="flex shrink-0 flex-col gap-6 border-t p-5 lg:sticky lg:top-0 lg:h-screen lg:w-[300px] lg:border-l lg:border-t-0"
+        className="hidden shrink-0 flex-col gap-6 border-t p-5 md:flex lg:sticky lg:top-0 lg:h-screen lg:w-[300px] lg:border-l lg:border-t-0"
         style={{ ...readerPanel, borderColor: "var(--color-border-default)" }}
       >
         {/* 1. Mode de lecture */}

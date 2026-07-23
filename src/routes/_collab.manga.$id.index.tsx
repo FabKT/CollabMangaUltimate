@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Play, ArrowLeft, BookOpen, Megaphone, Handshake, Users, Star } from "lucide-react";
+import { Play, ArrowLeft, BookOpen, Megaphone, Handshake, Users, Star, Info } from "lucide-react";
 import { loadPublicStudioProjects } from "@/lib/studio-projects";
 import { ProjectCard, DetailsModal, AnnouncementWorkflowModal, type ProjectAnnouncement } from "./_collab.announcements";
 import { projectAnnouncementFromRecruit } from "@/lib/recruit-map";
@@ -12,6 +12,7 @@ import { getMangaRating } from "@/lib/manga-ratings";
 import { SponsorshipContactDialog } from "./_collab.sponsorship";
 import type { Announcement } from "@/lib/sponsorship-data";
 import { useI18n } from "@/lib/i18n";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type StudioCollaborator = { id: string; name: string; role: string; level: string };
 
@@ -42,7 +43,7 @@ type StudioReadableProject = {
   collaborators?: StudioCollaborator[];
 };
 
-type MangaTab = "chapters" | "recrutement" | "parrainage" | "collaborateurs";
+type MangaTab = "informations" | "chapters" | "recrutement" | "parrainage" | "collaborateurs";
 
 export const Route = createFileRoute("/_collab/manga/$id/")({
   loader: ({ params }) => ({ id: params.id }),
@@ -76,6 +77,7 @@ function MangaDetailSwitch() {
 function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<MangaTab>("chapters");
+  const isMobile = useIsMobile();
   const [viewRecruit, setViewRecruit] = useState<ProjectAnnouncement | null>(null);
   const [applyRecruit, setApplyRecruit] = useState<ProjectAnnouncement | null>(null);
   const [applyNotice, setApplyNotice] = useState<string | null>(null);
@@ -87,6 +89,14 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
   useEffect(() => {
     void getMangaRating(project.id).then(setRating).catch(() => setRating(0));
   }, [project.id]);
+
+  useEffect(() => {
+    setTab((current) => {
+      if (isMobile && current === "chapters") return "informations";
+      if (!isMobile && current === "informations") return "chapters";
+      return current;
+    });
+  }, [isMobile]);
 
   const published = project.chapters.filter((c) => c.status === "Published");
 
@@ -123,6 +133,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
   const collaborators = project.collaborators ?? [];
 
   const TABS: { id: MangaTab; label: string; icon: typeof BookOpen; count: number }[] = [
+    ...(isMobile ? [{ id: "informations" as const, label: "Informations", icon: Info, count: 0 }] : []),
     { id: "chapters", label: t("mangaDetail.tabChapters"), icon: BookOpen, count: published.length },
     { id: "recrutement", label: t("mangaDetail.tabRecruitment"), icon: Megaphone, count: recruits.length },
     { id: "parrainage", label: t("mangaDetail.tabSponsorship"), icon: Handshake, count: sponsors.length },
@@ -139,7 +150,7 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
         </Link>
       </div>
 
-      <section className="mb-6 p-6 md:p-8" style={panel}>
+      <section className="mb-6 hidden p-6 md:block md:p-8" style={panel}>
         <div className="grid gap-6 md:grid-cols-[minmax(200px,260px)_1fr] md:gap-8">
           <div className="mx-auto w-full max-w-[260px] md:mx-0">
             <div className="aspect-[3/4] overflow-hidden rounded-2xl" style={{ border: "1px solid var(--color-border-default)" }}>
@@ -183,6 +194,19 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
         </div>
       </section>
 
+      <section className="mb-6 overflow-hidden md:hidden" style={panel}>
+        <h1 className="px-4 py-3 font-display text-[22px] font-extrabold leading-7">{project.title}</h1>
+        <div className="aspect-[3/4] w-full overflow-hidden border-y border-[var(--color-border-default)]">
+          {project.coverDataUrl ? (
+            <img src={project.coverDataUrl} alt={`${project.title} cover`} className="h-full w-full object-cover" />
+          ) : (
+            <div className="grid h-full w-full place-items-center bg-gradient-to-br from-[#0E1736] to-[#050B1D] text-[13px] font-bold uppercase tracking-widest text-[color:var(--color-text-muted)]">
+              {t("mangaDetail.coverPending")}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Onglets — même design que la page « projet sélectionné » (studio) */}
       <div className="scrollbar-thin mb-6 flex gap-1 overflow-x-auto rounded-[16px] border border-[var(--border-default)] bg-[var(--panel)] p-1.5">
         {TABS.map((tabItem) => {
@@ -205,6 +229,29 @@ function StudioMangaDetail({ project }: { project: StudioReadableProject }) {
         <div className="mb-4 rounded-2xl px-4 py-3 text-[13px] font-semibold" style={{ background: "rgba(57,255,136,0.10)", border: "1px solid rgba(57,255,136,0.35)", color: "#39ff88" }}>
           {applyNotice}
         </div>
+      )}
+
+      {tab === "informations" && (
+        <section className="p-4 md:hidden" style={panel}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="chip-active">{project.status}</span>
+            <span className="chip-neutral">{project.language || "FR"}</span>
+            <span className="ml-auto inline-flex items-center gap-1 text-sm font-bold text-[var(--star)]">
+              <Star className="h-4 w-4 fill-current" /> {rating.toFixed(1)}
+            </span>
+          </div>
+          <p className="mt-4 text-[13px] font-semibold text-[color:var(--color-text-muted)]">
+            {t("catalog.by")} {project.creator || "Créateur CollabManga"}
+          </p>
+          <p className="mt-3 text-[14px] leading-[23px] text-[color:var(--color-text-secondary)]">{project.synopsis}</p>
+          <div className="mt-5">
+            <p className="meta-label mb-2">{t("mangaDetail.genreSubgenres")}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {project.genres.map((genre) => <span key={genre} className="chip-active font-bold">{genre}</span>)}
+              {(project.subgenres ?? []).map((genre) => <span key={genre} className="chip-neutral">{genre}</span>)}
+            </div>
+          </div>
+        </section>
       )}
 
       {tab === "chapters" && (

@@ -1622,13 +1622,14 @@ export function DetailsModal({
         }}
       >
         <div
+          className="cm-detail-layout"
           style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr) minmax(280px, 2fr)",
             minWidth: 980,
           }}
         >
-          <aside style={{ padding: 24, borderRight: `1px solid ${C.border}` }}>
+          <aside className="cm-detail-section-start" style={{ padding: 24, borderRight: `1px solid ${C.border}` }}>
             {isProject ? (
               <div
                 style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}` }}
@@ -1750,7 +1751,7 @@ export function DetailsModal({
             </div>
           </section>
 
-          <aside style={{ padding: 18, borderLeft: `1px solid ${C.border}` }}>
+          <aside className="cm-detail-section-end" style={{ padding: 18, borderLeft: `1px solid ${C.border}` }}>
             <div
               className="cm-popup-tabs"
               role="tablist"
