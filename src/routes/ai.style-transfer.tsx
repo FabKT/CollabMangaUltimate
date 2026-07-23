@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/cma/Layout";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { MANGA_STYLES } from "@/lib/manga-styles";
@@ -26,6 +26,7 @@ import {
   Layers,
   User,
 } from "lucide-react";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/style-transfer")({
   head: () => ({ meta: [{ title: "Transfert de style — CollabManga AI" }] }),
@@ -47,28 +48,30 @@ type ModeConfig = {
   resultEmpty: string;
 };
 
-const MODE_CONFIG: Record<TransferMode, ModeConfig> = {
-  planche: {
-    label: "Planche",
-    icon: Layers,
-    endpoint: "/api/planche-transfer/generate",
-    baseBadge: "Avant",
-    baseTitle: "Planche de base",
-    importCta: "Importer la planche de base",
-    resultTitle: "Planche restylée",
-    resultEmpty: "La planche restylée apparaîtra ici.",
-  },
-  personnage: {
-    label: "Personnage",
-    icon: User,
-    endpoint: "/api/style-transfer/generate",
-    baseBadge: "Avant",
-    baseTitle: "Personnage de base",
-    importCta: "Importer le personnage de base",
-    resultTitle: "Carte personnage",
-    resultEmpty: "La carte personnage restylée apparaîtra ici.",
-  },
-};
+function modeConfig(t: (key: TranslationKey) => string): Record<TransferMode, ModeConfig> {
+  return {
+    planche: {
+      label: t("ai.styleTransferModePlanche"),
+      icon: Layers,
+      endpoint: "/api/planche-transfer/generate",
+      baseBadge: t("ai.beforeBadge"),
+      baseTitle: t("ai.baseTitlePlanche"),
+      importCta: t("ai.importBasePlanche"),
+      resultTitle: t("ai.resultTitlePlanche"),
+      resultEmpty: t("ai.resultEmptyPlanche"),
+    },
+    personnage: {
+      label: t("ai.styleTransferModePersonnage"),
+      icon: User,
+      endpoint: "/api/style-transfer/generate",
+      baseBadge: t("ai.beforeBadge"),
+      baseTitle: t("ai.baseTitlePersonnage"),
+      importCta: t("ai.importBasePersonnage"),
+      resultTitle: t("ai.resultTitlePersonnage"),
+      resultEmpty: t("ai.resultEmptyPersonnage"),
+    },
+  };
+}
 
 const MODES: TransferMode[] = ["planche", "personnage"];
 
@@ -122,6 +125,8 @@ async function imageSourceToDataUrl(src?: string) {
 }
 
 function StyleTransferPage() {
+  const { t } = useI18n();
+  const MODE_CONFIG = useMemo(() => modeConfig(t), [t]);
   const [mode, setMode] = useState<TransferMode>("personnage");
   const [targetStyleId, setTargetStyleId] = useState<string>(MANGA_STYLES[0].id);
   const [customStyles, setCustomStyles] = useState<CustomMangaStyle[]>([]);
@@ -172,8 +177,9 @@ function StyleTransferPage() {
           window.localStorage.removeItem("collabmanga.ai-job.style-transfer.mode");
         }
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Style transfer failed."))
+      .catch((err) => setError(err instanceof Error ? err.message : t("ai.styleTransferFailed")))
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -245,7 +251,7 @@ function StyleTransferPage() {
           references: [
             {
               id: `${mode}-source`,
-              name: "Image source",
+              name: t("ai.sourceImageName"),
               imageDataUrl: baseImage,
               role: "Inspiration" as const,
             },
@@ -262,7 +268,7 @@ function StyleTransferPage() {
       });
       notifyCreditsChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Style transfer failed.");
+      setError(err instanceof Error ? err.message : t("ai.styleTransferFailed"));
     } finally {
       setIsGenerating(false);
     }
@@ -286,8 +292,8 @@ function StyleTransferPage() {
   return (
     <div className="manga-canvas-page flex h-[calc(100dvh-93px)] w-full min-w-0 flex-col overflow-hidden text-text-primary md:h-[calc(100dvh-48px)] lg:h-[calc(100dvh-64px)]">
       <PageHeader
-        title="Transfert de style"
-        description="Prends une planche ou un personnage comme base et régénère-le dans un autre style."
+        title={t("ai.styleTransfer")}
+        description={t("ai.styleTransferDesc")}
       />
 
       {/* Onglets : Planche / Personnage */}
@@ -316,7 +322,7 @@ function StyleTransferPage() {
       {/* Style band — full width */}
       <section className="shadow-panel mb-3 shrink-0 rounded-[18px] border border-border bg-surface-2 p-2.5 md:mb-4 md:p-3">
         <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-          Style cible
+          {t("ai.targetStyle")}
         </div>
         <div className="scroll-dark flex gap-3 overflow-x-auto pb-1">
           {MANGA_STYLES.map((style) => {
@@ -382,7 +388,7 @@ function StyleTransferPage() {
               <Plus className="h-6 w-6" />
             </span>
             <span className="truncate text-center text-[12px] font-bold text-text-primary">
-              Créer un style
+              {t("ai.createStyle")}
             </span>
           </button>
         </div>
@@ -402,7 +408,7 @@ function StyleTransferPage() {
             {baseImage && (
               <button
                 onClick={() => setBaseImage(null)}
-                aria-label="Retirer"
+                aria-label={t("ai.remove")}
                 className="rounded-md p-1 text-text-muted hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
@@ -429,7 +435,7 @@ function StyleTransferPage() {
               onClick={download}
               disabled={!result}
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Download"
+              aria-label={t("ai.download")}
             >
               <Download className="h-4 w-4" />
             </button>
@@ -451,7 +457,7 @@ function StyleTransferPage() {
                   type="button"
                   onClick={() => setLightbox(true)}
                   className="h-full w-full cursor-zoom-in"
-                  title="Voir en grand"
+                  title={t("ai.viewFullSize")}
                 >
                   <img
                     src={result.imageUrl}
@@ -477,7 +483,7 @@ function StyleTransferPage() {
         className="mt-3 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-accent px-5 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 md:mt-4"
       >
         <Wand2 className="h-4 w-4" />
-        {isGenerating ? "Transfert…" : "Transférer le style"}
+        {isGenerating ? t("ai.transferringEllipsis") : t("ai.transferStyle")}
       </button>
 
       {lightbox && result && (
@@ -492,7 +498,7 @@ function StyleTransferPage() {
           >
             <button
               onClick={() => setLightbox(false)}
-              aria-label="Close"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary"
             >
               <X className="h-4 w-4" />
@@ -527,6 +533,7 @@ function BeforeArea({
   importCta: string;
   onImport: (files: FileList | null) => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   if (baseImage) {
@@ -534,7 +541,7 @@ function BeforeArea({
       <button
         onClick={() => inputRef.current?.click()}
         className="h-full w-full overflow-hidden rounded-[12px] bg-stage"
-        title="Remplacer l'image"
+        title={t("ai.replaceImageTitle")}
       >
         <input
           ref={inputRef}
@@ -547,7 +554,7 @@ function BeforeArea({
           }}
         />
         {/* Cadre fixe, image entière conservée dans son ratio d'origine. */}
-        <img src={baseImage} alt="Image de base" className="h-full w-full object-contain" />
+        <img src={baseImage} alt={t("ai.baseImageAlt")} className="h-full w-full object-contain" />
       </button>
     );
   }
@@ -579,12 +586,13 @@ function BeforeArea({
         <Upload className="h-4 w-4" />
         {importCta}
       </button>
-      <p className="text-[12px] text-text-muted">ou glisse-dépose une image ici</p>
+      <p className="text-[12px] text-text-muted">{t("ai.orDragDropImageHere")}</p>
     </div>
   );
 }
 
 function GeneratingIndicator() {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center gap-4 px-8 text-center text-text-secondary">
       <div className="relative h-14 w-14">
@@ -593,8 +601,8 @@ function GeneratingIndicator() {
         <Sparkles className="absolute inset-0 m-auto h-6 w-6 animate-pulse text-accent" />
       </div>
       <div>
-        <p className="text-[14px] font-bold text-text-primary">Transfert en cours</p>
-        <p className="mt-1 text-[12px] text-text-muted">Re-rendu dans le style choisi…</p>
+        <p className="text-[14px] font-bold text-text-primary">{t("ai.transferInProgress")}</p>
+        <p className="mt-1 text-[12px] text-text-muted">{t("ai.reRenderingInStyle")}</p>
       </div>
       <div className="flex items-center gap-1.5">
         {[0, 1, 2].map((index) => (

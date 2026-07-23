@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/cma/Layout";
 import { loadCreatedDecors, removeCreatedDecor, type CreatedDecor } from "@/lib/decor-store";
 import { ImagePlus, ImageIcon, Trash2 } from "lucide-react";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/decor")({
   head: () => ({ meta: [{ title: "Bibliothèque de décors — CollabManga AI" }] }),
@@ -90,7 +91,17 @@ const BASE_CATEGORIES: DecorCategory[] = [
 
 const CREATED_ID = "created";
 
+const CATEGORY_NAME_KEYS: Record<string, TranslationKey> = {
+  sport: "ai.catSport",
+  forests: "ai.catForests",
+  plains: "ai.catPlains",
+  cities: "ai.catCities",
+  castles: "ai.catCastles",
+  [CREATED_ID]: "ai.catCreatedDecors",
+};
+
 function DecorLibraryPage() {
+  const { t } = useI18n();
   const [created, setCreated] = useState<CreatedDecor[]>([]);
   const [active, setActive] = useState<string>("all");
 
@@ -112,20 +123,20 @@ function DecorLibraryPage() {
     },
   ];
 
-  const chips = [{ id: "all", name: "Tous" }, ...categories.map((c) => ({ id: c.id, name: c.name }))];
+  const chips = [{ id: "all", name: t("ai.all") }, ...categories.map((c) => ({ id: c.id, name: t(CATEGORY_NAME_KEYS[c.id]) }))];
   const shown = categories.filter((category) => active === "all" || category.id === active);
 
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
-        title="Bibliothèque de décors"
-        description="Une base de décors par catégorie, plus tes décors générés."
+        title={t("ai.decorLibrary")}
+        description={t("ai.decorLibraryDesc")}
         actions={
           <Link
             to="/ai/decor-create"
             className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
           >
-            <ImagePlus size={16} /> Créer un décor
+            <ImagePlus size={16} /> {t("ai.createDecor")}
           </Link>
         }
       />
@@ -154,7 +165,7 @@ function DecorLibraryPage() {
         {shown.map((category) => (
           <section key={category.id}>
             <div className="mb-3 flex items-center gap-2">
-              <h2 className="font-display text-base font-bold">{category.name}</h2>
+              <h2 className="font-display text-base font-bold">{t(CATEGORY_NAME_KEYS[category.id])}</h2>
               <span className="rounded-full border border-border bg-surface-3 px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
                 {category.decors.length}
               </span>
@@ -164,13 +175,13 @@ function DecorLibraryPage() {
               <div className="rounded-[16px] border border-dashed border-border bg-surface-2/40 p-8 text-center">
                 <ImageIcon className="mx-auto mb-2 h-6 w-6 text-text-muted" />
                 <p className="text-[13px] font-semibold text-text-secondary">
-                  Aucun décor créé pour l'instant.
+                  {t("ai.noDecorCreatedYet")}
                 </p>
                 <Link
                   to="/ai/decor-create"
                   className="mt-3 inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-surface-2 px-3 text-[12px] font-bold text-text-primary hover:border-accent hover:text-accent"
                 >
-                  <ImagePlus size={14} /> Créer un décor
+                  <ImagePlus size={14} /> {t("ai.createDecor")}
                 </Link>
               </div>
             ) : (
@@ -200,6 +211,7 @@ function DecorLibraryCard({
   decor: DecorCard;
   onRemove?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="group flex flex-col gap-2 rounded-[14px] border border-border bg-surface-2 p-2">
       <div className="relative aspect-[3/2] w-full overflow-hidden rounded-[10px] border border-border bg-surface-3">
@@ -211,7 +223,7 @@ function DecorLibraryCard({
         {onRemove && (
           <button
             onClick={onRemove}
-            aria-label="Supprimer"
+            aria-label={t("ai.remove")}
             className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white/80 opacity-0 transition hover:text-danger group-hover:opacity-100"
           >
             <Trash2 className="h-3.5 w-3.5" />

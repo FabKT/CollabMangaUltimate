@@ -9,6 +9,7 @@ import {
 } from "@/lib/manga-history";
 import { Search, Image as ImageIcon, Download, Trash2, Wand2, X } from "lucide-react";
 import { openImageEditor } from "@/lib/image-edit-workspace";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/history")({
   head: () => ({ meta: [{ title: "History — CollabManga AI" }] }),
@@ -48,6 +49,7 @@ function editEntry(entry: MangaHistoryEntry) {
 }
 
 function HistoryPage() {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<MangaHistoryEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
@@ -87,12 +89,12 @@ function HistoryPage() {
   return (
     <>
       <PageHeader
-        title="History"
-        description="Toutes les images generees sont conservees localement sur cet appareil."
+        title={t("ai.historyTitle")}
+        description={t("ai.historyDesc")}
         actions={
           entries.length > 0 ? (
             <button className="cma-btn-secondary" onClick={clearAll}>
-              <Trash2 size={16} /> Vider l'historique
+              <Trash2 size={16} /> {t("ai.clearHistory")}
             </button>
           ) : undefined
         }
@@ -111,7 +113,7 @@ function HistoryPage() {
             }}
           />
           <Input
-            placeholder="Rechercher par prompt ou par outil"
+            placeholder={t("ai.searchByPrompt")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ paddingLeft: 38 }}
@@ -129,13 +131,13 @@ function HistoryPage() {
               <ImageIcon size={24} style={{ color: "var(--text-muted)" }} />
             </div>
             <div>
-              <div className="text-[15px] font-bold">Aucune image generee</div>
+              <div className="text-[15px] font-bold">{t("ai.noGeneratedImage")}</div>
               <div className="mt-1 text-[13px]" style={{ color: "var(--text-muted)" }}>
-                Les images de tous les outils AI apparaitront automatiquement ici.
+                {t("ai.noGeneratedImageText")}
               </div>
             </div>
             <Link to="/ai/manga-page" className="cma-btn-primary" style={{ marginTop: 4 }}>
-              <Wand2 size={16} /> Ouvrir Manga Page Creator
+              <Wand2 size={16} /> {t("ai.openMangaPageCreator")}
             </Link>
           </div>
         </Panel>
@@ -162,7 +164,7 @@ function HistoryPage() {
                   className="line-clamp-2 text-[12px] font-semibold"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  {entry.title || entry.prompt || "Image generee"}
+                  {entry.title || entry.prompt || t("ai.generatedImageFallback")}
                 </p>
                 {entry.source && (
                   <p className="mt-1 truncate text-[10px] font-bold uppercase text-accent">
@@ -175,21 +177,21 @@ function HistoryPage() {
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     className="cma-icon-btn"
-                    aria-label="Modify"
+                    aria-label={t("ai.modify")}
                     onClick={() => editEntry(entry)}
                   >
                     <Wand2 size={14} />
                   </button>
                   <button
                     className="cma-icon-btn"
-                    aria-label="Download"
+                    aria-label={t("ai.download")}
                     onClick={() => downloadEntry(entry)}
                   >
                     <Download size={14} />
                   </button>
                   <button
                     className="cma-icon-btn"
-                    aria-label="Delete"
+                    aria-label={t("ai.delete")}
                     onClick={() => remove(entry.id)}
                   >
                     <Trash2 size={14} />
@@ -213,7 +215,7 @@ function HistoryPage() {
           >
             <button
               onClick={() => setPreview(null)}
-              aria-label="Close"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid place-items-center rounded-full"
               style={{
                 width: 34,
@@ -239,10 +241,10 @@ function HistoryPage() {
                 {preview.prompt}
               </p>
               <button className="cma-btn-secondary" onClick={() => downloadEntry(preview)}>
-                <Download size={16} /> Download
+                <Download size={16} /> {t("ai.download")}
               </button>
               <button className="cma-btn-primary" onClick={() => editEntry(preview)}>
-                <Wand2 size={16} /> Modifier
+                <Wand2 size={16} /> {t("ai.modify")}
               </button>
             </div>
           </div>

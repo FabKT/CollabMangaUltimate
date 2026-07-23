@@ -28,6 +28,7 @@ import {
   ImageIcon,
   Plus,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/character-create")({
   head: () => ({ meta: [{ title: "Création de personnage — CollabManga AI" }] }),
@@ -80,6 +81,7 @@ async function imageSourceToDataUrl(src?: string) {
 }
 
 function CharacterCreatePage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"style" | "references" | "prompt">("style");
   const [styleId, setStyleId] = useState<string>(DEFAULT_STYLE_ID);
   const [customStyles, setCustomStyles] = useState<CustomMangaStyle[]>([]);
@@ -116,8 +118,9 @@ function CharacterCreatePage() {
       .then((generated) => {
         if (generated) setResult(generated);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Character generation failed."))
+      .catch((err) => setError(err instanceof Error ? err.message : t("ai.characterGenerationFailed")))
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -163,7 +166,7 @@ function CharacterCreatePage() {
   const generate = async () => {
     if (!identityReference?.imageDataUrl) {
       setTab("references");
-      setError("Importe d'abord l'image d'identite du personnage.");
+      setError(t("ai.importIdentityFirst"));
       return;
     }
     setError(null);
@@ -245,7 +248,7 @@ function CharacterCreatePage() {
       });
       notifyCreditsChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Character generation failed.");
+      setError(err instanceof Error ? err.message : t("ai.characterGenerationFailed"));
     } finally {
       setIsGenerating(false);
     }
@@ -262,8 +265,8 @@ function CharacterCreatePage() {
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
-        title="Création de personnage"
-        description="Choisis un style, ajoute des références, décris ton personnage : une carte complète (face / profil / dos + 6 expressions) est générée en 3:2."
+        title={t("ai.characterCreateTitle")}
+        description={t("ai.characterCreateDesc")}
       />
 
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
@@ -272,9 +275,9 @@ function CharacterCreatePage() {
           <div className="flex items-center gap-1 border-b border-border p-3">
             {(
               [
-                { id: "style", label: "Style", icon: Palette },
-                { id: "references", label: "Référence", icon: ImagesIcon },
-                { id: "prompt", label: "Prompt", icon: FileText },
+                { id: "style", label: t("ai.styleTab"), icon: Palette },
+                { id: "references", label: t("ai.referenceTab"), icon: ImagesIcon },
+                { id: "prompt", label: t("ai.promptTab"), icon: FileText },
               ] as const
             ).map((entry) => (
               <button
@@ -296,7 +299,7 @@ function CharacterCreatePage() {
             {tab === "style" && (
               <div className="flex flex-col gap-3">
                 <p className="text-[12px] leading-5 text-text-secondary">
-                  Choisis le style de rendu.
+                  {t("ai.chooseRenderStyle")}
                 </p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {STYLES.map((style) => {
@@ -368,7 +371,7 @@ function CharacterCreatePage() {
                       <Plus className="h-6 w-6" />
                     </span>
                     <span className="truncate text-center text-[12px] font-bold text-text-primary">
-                      Créer un style
+                      {t("ai.createStyle")}
                     </span>
                   </button>
                 </div>
@@ -398,13 +401,13 @@ function CharacterCreatePage() {
             {tab === "prompt" && (
               <div className="flex flex-col gap-3">
                 <p className="text-[12px] leading-5 text-text-secondary">
-                  Décris ton personnage aussi précisément que possible.
+                  {t("ai.describeYourCharacter")}
                 </p>
                 <textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   rows={10}
-                  placeholder="Nom, âge, morphologie, cheveux, tenue, traits distinctifs, personnalité…"
+                  placeholder={t("ai.characterPromptPlaceholder")}
                   className="w-full resize-none rounded-[14px] border border-border bg-input px-4 py-3 text-[14px] leading-relaxed text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                 />
                 <button
@@ -413,7 +416,7 @@ function CharacterCreatePage() {
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Wand2 className="h-4 w-4" />
-                  {isGenerating ? "Génération…" : "Générer la carte personnage"}
+                  {isGenerating ? t("ai.generatingEllipsis") : t("ai.generateCharacterCard")}
                 </button>
               </div>
             )}
@@ -425,13 +428,13 @@ function CharacterCreatePage() {
           <header className="flex items-center justify-between gap-2 border-b border-border p-4">
             <div className="flex min-w-0 items-center gap-2">
               <Sparkles className="h-4 w-4 shrink-0 text-accent" />
-              <h2 className="truncate font-display text-base font-bold">Carte personnage</h2>
+              <h2 className="truncate font-display text-base font-bold">{t("ai.characterCardWord")}</h2>
             </div>
             <button
               onClick={download}
               disabled={!result}
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Download"
+              aria-label={t("ai.download")}
             >
               <Download className="h-4 w-4" />
             </button>
@@ -447,7 +450,7 @@ function CharacterCreatePage() {
               ) : error ? (
                 <div className="flex h-full flex-col items-center justify-center bg-[#f7faff] px-8 text-center text-[#0b1430]">
                   <X className="mb-4 h-10 w-10 text-danger" />
-                  <p className="text-[15px] font-bold">Échec de la génération</p>
+                  <p className="text-[15px] font-bold">{t("ai.generationFailedTitle")}</p>
                   <p className="mt-2 max-w-[340px] text-[12px] leading-5 text-[#5e6a90]">{error}</p>
                 </div>
               ) : result ? (
@@ -455,11 +458,11 @@ function CharacterCreatePage() {
                   type="button"
                   onClick={() => setLightbox(true)}
                   className="block h-full w-full cursor-zoom-in"
-                  title="Voir en grand"
+                  title={t("ai.viewFullSize")}
                 >
                   <img
                     src={result.imageUrl}
-                    alt="Carte personnage générée"
+                    alt={t("ai.generatedCharacterCardAlt")}
                     className="h-full w-full object-contain"
                   />
                 </button>
@@ -467,7 +470,7 @@ function CharacterCreatePage() {
                 <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#f7faff] px-8 text-center text-[#5e6a90]">
                   <ImageIcon className="h-10 w-10" />
                   <p className="text-[13px] font-semibold">
-                    La carte (face / profil / dos + 6 expressions) apparaîtra ici.
+                    {t("ai.cardWillAppear")}
                   </p>
                 </div>
               )}
@@ -490,7 +493,7 @@ function CharacterCreatePage() {
               <h2 className="font-display text-base font-bold">{confirmStyle.name}</h2>
               <button
                 onClick={() => setConfirmStyle(null)}
-                aria-label="Close"
+                aria-label={t("ai.close")}
                 className="rounded-md p-1 text-text-muted hover:text-text-primary"
               >
                 <X className="h-5 w-5" />
@@ -499,7 +502,7 @@ function CharacterCreatePage() {
             <div className="scroll-dark min-h-0 flex-1 overflow-y-auto p-4">
               <img
                 src={confirmStyle.card}
-                alt={`Carte ${confirmStyle.name}`}
+                alt={`${t("ai.cardWordShort")} ${confirmStyle.name}`}
                 className="w-full rounded-[12px] object-contain"
                 style={{ maxHeight: "60vh" }}
               />
@@ -509,7 +512,7 @@ function CharacterCreatePage() {
                 onClick={() => setConfirmStyle(null)}
                 className="inline-flex h-10 items-center gap-2 rounded-[12px] border border-border bg-surface-2 px-4 text-[13px] font-bold text-text-secondary hover:text-text-primary"
               >
-                Annuler
+                {t("ai.cancel")}
               </button>
               <button
                 onClick={() => {
@@ -519,7 +522,7 @@ function CharacterCreatePage() {
                 className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
               >
                 <Check className="h-4 w-4" />
-                Confirmer ce style
+                {t("ai.confirmThisStyle")}
               </button>
             </div>
           </div>
@@ -538,14 +541,14 @@ function CharacterCreatePage() {
           >
             <button
               onClick={() => setLightbox(false)}
-              aria-label="Close"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary"
             >
               <X className="h-4 w-4" />
             </button>
             <img
               src={result.imageUrl}
-              alt="Carte personnage générée"
+              alt={t("ai.generatedCharacterCardAlt")}
               className="w-full rounded-[14px] object-contain"
               style={{ maxHeight: "82vh" }}
             />
@@ -555,7 +558,7 @@ function CharacterCreatePage() {
                 className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
               >
                 <Download className="h-4 w-4" />
-                Télécharger
+                {t("ai.download")}
               </button>
             </div>
           </div>
@@ -590,6 +593,7 @@ function ReferencesTab({
   onUpdate: (id: string, patch: Partial<CharacterReference>) => void;
   onRemove: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const identityInputRef = useRef<HTMLInputElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
@@ -607,15 +611,15 @@ function ReferencesTab({
       <div className="rounded-[14px] border border-border bg-surface-3 p-3">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
-            <p className="text-[13px] font-bold text-text-primary">Image d'identite</p>
+            <p className="text-[13px] font-bold text-text-primary">{t("ai.identityImageLabel")}</p>
             <p className="mt-0.5 text-[11px] text-text-muted">
-              Obligatoire pour generer une carte.
+              {t("ai.mandatoryToGenerateCard")}
             </p>
           </div>
           {identityReference && (
             <button
               onClick={onRemoveIdentity}
-              aria-label="Supprimer l'image d'identite"
+              aria-label={t("ai.removeIdentityImage")}
               className="rounded-md p-1 text-text-muted hover:text-danger"
             >
               <Trash2 className="h-4 w-4" />
@@ -640,7 +644,7 @@ function ReferencesTab({
                 {identityReference.name}
               </p>
               <p className="mt-1 text-[11px] leading-4 text-text-secondary">
-                Cliquer pour remplacer.
+                {t("ai.clickToReplace")}
               </p>
             </div>
           </button>
@@ -650,12 +654,12 @@ function ReferencesTab({
             className="flex min-h-[96px] w-full flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-2 px-3 text-text-primary hover:border-accent hover:text-accent"
           >
             <Upload className="h-5 w-5" />
-            <span className="text-[13px] font-bold">Importer l'image d'identite</span>
+            <span className="text-[13px] font-bold">{t("ai.importIdentityImage")}</span>
           </button>
         )}
       </div>
       <p className="text-[12px] leading-5 text-text-secondary">
-        Ajoute des références (tenue, accessoires, coiffure…) et précise à quoi elles servent.
+        {t("ai.characterRefIntro")}
       </p>
       <input
         ref={inputRef}
@@ -673,13 +677,13 @@ function ReferencesTab({
         className="flex min-h-[64px] w-full flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-2 px-3 text-text-primary hover:border-accent hover:text-accent"
       >
         <Upload className="h-5 w-5" />
-        <span className="text-[13px] font-bold">Importer des références</span>
+        <span className="text-[13px] font-bold">{t("ai.importReferences")}</span>
       </button>
 
       {references.length === 0 ? (
         <div className="rounded-[14px] border border-dashed border-border bg-surface-3/50 p-5 text-center">
           <ImagesIcon className="mx-auto mb-2 h-5 w-5 text-text-muted" />
-          <p className="text-[13px] font-semibold text-text-secondary">Aucune référence</p>
+          <p className="text-[13px] font-semibold text-text-secondary">{t("ai.noReference")}</p>
         </div>
       ) : (
         references.map((reference) => (
@@ -698,7 +702,7 @@ function ReferencesTab({
                 <p className="truncate text-[13px] font-bold text-text-primary">{reference.name}</p>
                 <button
                   onClick={() => onRemove(reference.id)}
-                  aria-label="Supprimer"
+                  aria-label={t("ai.remove")}
                   className="mt-auto self-start rounded-md p-1 text-text-muted hover:text-danger"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -709,7 +713,7 @@ function ReferencesTab({
               value={reference.description ?? ""}
               onChange={(event) => onUpdate(reference.id, { description: event.target.value })}
               rows={2}
-              placeholder="À quoi sert cette référence ? (tenue, accessoire…)"
+              placeholder={t("ai.characterRefPlaceholder")}
               className="mt-3 w-full resize-none rounded-[10px] border border-border bg-input px-3 py-2 text-[12px] leading-5 text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
             />
           </div>
@@ -720,6 +724,7 @@ function ReferencesTab({
 }
 
 function GeneratingIndicator() {
+  const { t } = useI18n();
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#f7faff] px-8 text-center text-[#0b1430]">
       <div className="relative h-14 w-14">
@@ -728,8 +733,8 @@ function GeneratingIndicator() {
         <Sparkles className="absolute inset-0 m-auto h-6 w-6 animate-pulse text-[#12b76a]" />
       </div>
       <div>
-        <p className="text-[15px] font-bold">Génération en cours</p>
-        <p className="mt-1 text-[12px] text-[#5e6a90]">Composition de la carte personnage…</p>
+        <p className="text-[15px] font-bold">{t("ai.generationInProgress")}</p>
+        <p className="mt-1 text-[12px] text-[#5e6a90]">{t("ai.characterCardComposition")}</p>
       </div>
       <div className="flex items-center gap-1.5">
         {[0, 1, 2].map((index) => (

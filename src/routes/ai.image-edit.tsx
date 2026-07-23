@@ -31,6 +31,7 @@ import type {
   MangaImageGenerationInput,
   MangaImageGenerationResult,
 } from "@/server-functions/manga-image";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/image-edit")({
   head: () => ({ meta: [{ title: "Modification d'image - CollabManga AI" }] }),
@@ -63,15 +64,17 @@ async function readTargetImage(file: File) {
   };
 }
 
-const referenceRoles: Array<{ value: ImageEditReferenceRole; label: string }> = [
-  { value: "Inspiration", label: "Inspiration ciblée" },
-  { value: "Pose", label: "Pose" },
-  { value: "Style", label: "Style" },
-  { value: "Background", label: "Décor" },
-  { value: "Object", label: "Objet" },
-  { value: "Storyboard", label: "Structure" },
-  { value: "Target", label: "Cible précise" },
-];
+function referenceRoles(t: (key: TranslationKey) => string): Array<{ value: ImageEditReferenceRole; label: string }> {
+  return [
+    { value: "Inspiration", label: t("ai.roleTargetedInspiration") },
+    { value: "Pose", label: "Pose" },
+    { value: "Style", label: "Style" },
+    { value: "Background", label: t("ai.roleBackground") },
+    { value: "Object", label: t("ai.roleObject") },
+    { value: "Storyboard", label: t("ai.roleStoryboard") },
+    { value: "Target", label: t("ai.roleTargetPrecise") },
+  ];
+}
 
 function downloadImage(url: string) {
   const link = document.createElement("a");
@@ -85,6 +88,8 @@ function characterThumbnail(character: MangaCharacterProfile) {
 }
 
 function ImageEditPage() {
+  const { t } = useI18n();
+  const roles = useMemo(() => referenceRoles(t), [t]);
   const [draft, setDraft] = useState<ImageEditDraft | null>(null);
   const [characters, setCharacters] = useState<MangaCharacterProfile[]>([]);
   const [tab, setTab] = useState<EditorTab>("image");
@@ -118,9 +123,10 @@ function ImageEditPage() {
         );
       })
       .catch((reason) =>
-        setError(reason instanceof Error ? reason.message : "Image modification failed."),
+        setError(reason instanceof Error ? reason.message : t("ai.imageModificationFailed")),
       )
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -182,7 +188,7 @@ function ImageEditPage() {
       }));
       setTab("image");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Image import failed.");
+      setError(reason instanceof Error ? reason.message : t("ai.imageImportFailed"));
     }
   };
 
@@ -281,19 +287,19 @@ function ImageEditPage() {
         editContext: nextDraft,
       });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Image modification failed.");
+      setError(reason instanceof Error ? reason.message : t("ai.imageModificationFailed"));
     } finally {
       setIsGenerating(false);
     }
   };
 
-  if (!loaded) return <div className="py-20 text-center text-text-muted">Loading...</div>;
+  if (!loaded) return <div className="py-20 text-center text-text-muted">{t("ai.loadingEllipsis")}</div>;
   if (!draft) {
     return (
       <>
         <PageHeader
-          title="Modification d'image"
-          description="Importez une image ou ouvrez une génération depuis l'historique."
+          title={t("ai.imageEditTitle")}
+          description={t("ai.imageEditDescNoImage")}
         />
         <Panel className="mx-auto max-w-2xl py-16 text-center">
           <input
@@ -307,10 +313,9 @@ function ImageEditPage() {
             }}
           />
           <ImageIcon className="mx-auto h-10 w-10 text-accent" />
-          <h1 className="mt-4 text-xl font-bold">Importer l'image à modifier</h1>
+          <h1 className="mt-4 text-xl font-bold">{t("ai.importImageToModifyTitle")}</h1>
           <p className="mt-2 text-sm text-text-secondary">
-            Cette image devient la cible principale et reste verrouillée hors des changements
-            demandés.
+            {t("ai.imageBecomesTargetText")}
           </p>
           {error && (
             <p className="mt-4 rounded-[10px] border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
@@ -323,10 +328,10 @@ function ImageEditPage() {
               onClick={() => targetUploadRef.current?.click()}
               className="cma-btn-primary"
             >
-              <Upload className="h-4 w-4" /> Importer une image
+              <Upload className="h-4 w-4" /> {t("ai.importAnImage")}
             </button>
             <Link to="/ai/history" className="cma-btn-secondary">
-              Ouvrir l'historique
+              {t("ai.openHistory")}
             </Link>
           </div>
         </Panel>
@@ -336,17 +341,17 @@ function ImageEditPage() {
 
   const tabs: Array<{ id: EditorTab; label: string; icon: typeof ImageIcon }> = [
     { id: "image", label: "Image", icon: ImageIcon },
-    { id: "characters", label: "Personnages", icon: UserRound },
-    { id: "references", label: "Références", icon: Images },
-    { id: "prompt", label: "Prompt", icon: Sparkles },
+    { id: "characters", label: t("ai.charactersTab"), icon: UserRound },
+    { id: "references", label: t("ai.referencesLabel"), icon: Images },
+    { id: "prompt", label: t("ai.promptTab"), icon: Sparkles },
   ];
   const portrait = draft.aspectRatio === "2:3";
 
   return (
     <>
       <PageHeader
-        title="Modification d'image"
-        description="Conservez l'image et ses références, puis décrivez uniquement les changements souhaités."
+        title={t("ai.imageEditTitle")}
+        description={t("ai.imageEditDescWithImage")}
       />
       <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
         <Panel padding={0} className="min-w-0 overflow-hidden">
@@ -382,20 +387,20 @@ function ImageEditPage() {
                 />
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="truncate text-xs text-text-muted">
-                    {draft.source || "Image cible"}
+                    {draft.source || t("ai.targetImageFallback")}
                   </p>
                   <button
                     type="button"
                     onClick={() => targetUploadRef.current?.click()}
                     className="cma-btn-secondary shrink-0"
                   >
-                    <Upload className="h-4 w-4" /> Remplacer
+                    <Upload className="h-4 w-4" /> {t("ai.replace")}
                   </button>
                 </div>
                 <div className="flex h-full min-h-[470px] items-center justify-center rounded-[16px] bg-stage p-4">
                   <img
                     src={draft.currentImageUrl}
-                    alt="Image à modifier"
+                    alt={t("ai.imageToModifyAlt")}
                     className="max-h-[470px] max-w-full rounded-[10px] object-contain"
                   />
                 </div>
@@ -457,7 +462,7 @@ function ImageEditPage() {
                   onClick={() => uploadRef.current?.click()}
                   className="cma-btn-secondary w-full justify-center"
                 >
-                  <Upload className="h-4 w-4" /> Importer des références
+                  <Upload className="h-4 w-4" /> {t("ai.importReferences")}
                 </button>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {draft.references.map((reference) => (
@@ -474,7 +479,7 @@ function ImageEditPage() {
                       </div>
                       <p className="mt-2 truncate text-[11px] font-bold">{reference.name}</p>
                       <select
-                        aria-label={`Rôle de ${reference.name}`}
+                        aria-label={`${t("ai.roleOfPrefix")} ${reference.name}`}
                         value={reference.role ?? "Inspiration"}
                         onChange={(event) =>
                           setDraft((current) =>
@@ -495,14 +500,14 @@ function ImageEditPage() {
                         }
                         className="mt-2 h-9 w-full rounded-[8px] border border-border bg-surface px-2 text-[11px] text-text-primary outline-none focus:border-accent"
                       >
-                        {referenceRoles.map((role) => (
+                        {roles.map((role) => (
                           <option key={role.value} value={role.value}>
                             {role.label}
                           </option>
                         ))}
                       </select>
                       <textarea
-                        aria-label={`Consignes pour ${reference.name}`}
+                        aria-label={`${t("ai.instructionsForPrefix")} ${reference.name}`}
                         value={reference.description ?? ""}
                         onChange={(event) =>
                           setDraft((current) =>
@@ -518,13 +523,13 @@ function ImageEditPage() {
                               : current,
                           )
                         }
-                        placeholder="Éléments précis à reprendre..."
+                        placeholder={t("ai.specificElementsPlaceholder")}
                         rows={2}
                         className="mt-2 w-full resize-none rounded-[8px] border border-border bg-surface px-2 py-2 text-[11px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
                       />
                       <button
                         type="button"
-                        aria-label="Supprimer"
+                        aria-label={t("ai.remove")}
                         onClick={() =>
                           setDraft((current) =>
                             current
@@ -549,11 +554,11 @@ function ImageEditPage() {
 
             {tab === "prompt" && (
               <div>
-                <label className="cma-label mb-2 block">Modifications demandées</label>
+                <label className="cma-label mb-2 block">{t("ai.requestedChanges")}</label>
                 <Textarea
                   value={draft.prompt}
                   onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
-                  placeholder="Décrivez précisément ce qui doit changer et ce qui doit rester identique..."
+                  placeholder={t("ai.describeChangesPlaceholder")}
                   style={{ minHeight: 360 }}
                 />
               </div>
@@ -563,13 +568,13 @@ function ImageEditPage() {
 
         <Panel className="flex min-h-[640px] min-w-0 flex-col">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-[16px] font-bold">Nouvelle image</h2>
+            <h2 className="text-[16px] font-bold">{t("ai.newImageTitle")}</h2>
             {result && (
               <button
                 type="button"
                 onClick={() => downloadImage(result.imageUrl)}
                 className="cma-icon-btn"
-                aria-label="Download"
+                aria-label={t("ai.download")}
               >
                 <Download className="h-4 w-4" />
               </button>
@@ -587,17 +592,17 @@ function ImageEditPage() {
               {isGenerating ? (
                 <div className="flex flex-col items-center gap-3 text-center text-text-secondary">
                   <Sparkles className="h-8 w-8 animate-pulse text-accent" />
-                  <span className="text-sm font-bold">Modification en cours...</span>
+                  <span className="text-sm font-bold">{t("ai.modificationInProgress")}</span>
                 </div>
               ) : result ? (
                 <img
                   src={result.imageUrl}
-                  alt="Image modifiée"
+                  alt={t("ai.modifiedImageAlt")}
                   className="h-full w-full object-contain"
                 />
               ) : (
                 <div className="px-8 text-center text-sm text-text-muted">
-                  La nouvelle image apparaîtra ici.
+                  {t("ai.newImageWillAppear")}
                 </div>
               )}
             </div>
@@ -613,7 +618,7 @@ function ImageEditPage() {
             disabled={isGenerating || !draft.prompt.trim()}
             className="cma-btn-primary mt-4 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Wand2 className="h-4 w-4" /> {result ? "Modifier à nouveau" : "Modifier l'image"}
+            <Wand2 className="h-4 w-4" /> {result ? t("ai.modifyAgain") : t("ai.modifyImageBtn")}
           </button>
         </Panel>
       </div>

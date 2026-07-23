@@ -53,6 +53,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/manga-page")({
   head: () => ({
@@ -123,16 +124,18 @@ type MangaSessionSnapshot = {
   generationResult?: MangaImageGenerationResult | null;
 };
 
-const roleOptions: Array<{ value: Role; label: string }> = [
-  { value: "Character", label: "Character identity" },
-  { value: "Storyboard", label: "Storyboard structure" },
-  { value: "Pose", label: "Pose reference" },
-  { value: "Style", label: "Style reference" },
-  { value: "Inspiration", label: "Inspiration" },
-  { value: "Background", label: "Background" },
-  { value: "Object", label: "Object" },
-  { value: "Target", label: "Image to modify" },
-];
+function roleOptionsList(t: (key: TranslationKey) => string): Array<{ value: Role; label: string }> {
+  return [
+    { value: "Character", label: t("ai.roleCharacterIdentity") },
+    { value: "Storyboard", label: t("ai.roleStoryboardStructure") },
+    { value: "Pose", label: t("ai.rolePoseReference") },
+    { value: "Style", label: t("ai.roleStyleReference") },
+    { value: "Inspiration", label: "Inspiration" },
+    { value: "Background", label: t("ai.roleBackground") },
+    { value: "Object", label: t("ai.roleObject") },
+    { value: "Target", label: t("ai.imageToModifyRole") },
+  ];
+}
 
 function normalizeAspectRatio(value: unknown): AspectRatio {
   if (value === "3:2" || value === "4:3") return "3:2";
@@ -278,6 +281,7 @@ const STRUCTURE_ROLES: Role[] = ["Storyboard", "Target", "Generated Page"];
 function enforceImageBudget(
   items: StoredItem[],
   characters: CharacterProfile[],
+  t: (key: TranslationKey) => string,
 ): { items: StoredItem[]; notice: string | null } {
   const withImages = items.filter((item) => item.imageDataUrl);
   const structure = withImages.filter((item) => STRUCTURE_ROLES.includes(item.role));
@@ -295,21 +299,21 @@ function enforceImageBudget(
   }
   const cardCandidates = characters
     .filter((character) => (perCharacter.get(character.id) ?? 0) > 1 && !character.cardImageDataUrl)
-    .map((character) => character.name || "Personnage");
+    .map((character) => character.name || t("ai.characterFallback"));
 
   const notices: string[] = [];
   if (droppedStructure > 0) {
     notices.push(
-      `Une seule image de structure est conservée (${droppedStructure} ignorée${droppedStructure > 1 ? "s" : ""}).`,
+      `${t("ai.budgetStructureNoticePrefix")} (${droppedStructure} ${t(droppedStructure > 1 ? "ai.ignoredPlural" : "ai.ignoredSingular")}).`,
     );
   }
   if (kept.length > MAX_REFERENCE_IMAGES) {
     notices.push(
-      `Tu envoies ${kept.length} images alors que la limite est de ${MAX_REFERENCE_IMAGES}. Le backend n'en gardera que ${MAX_REFERENCE_IMAGES}, réparties équitablement entre les personnages.`,
+      `${t("ai.budgetLimitNoticePart1")} ${kept.length} ${t("ai.budgetLimitNoticePart2")} ${MAX_REFERENCE_IMAGES}${t("ai.budgetLimitNoticePart3")} ${MAX_REFERENCE_IMAGES}${t("ai.budgetLimitNoticePart4")}`,
     );
     if (cardCandidates.length) {
       notices.push(
-        `Pour que chaque personnage tienne dans le budget, génère une carte pour : ${cardCandidates.join(", ")} (1 carte = 1 image au lieu de plusieurs).`,
+        `${t("ai.budgetCardHintPrefix")} ${cardCandidates.join(", ")} ${t("ai.budgetCardHintSuffix")}`,
       );
     }
   }
@@ -504,6 +508,7 @@ async function prepareSelectedAssetsForGeneration(
 }
 
 function CollabMangaAIPage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<WorkspaceTab>("structure");
   const [items, setItems] = useState<StoredItem[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -593,8 +598,9 @@ function CollabMangaAIPage() {
         });
         setShowCanvas(false);
       })
-      .catch((error) => setGenerationError(error instanceof Error ? error.message : "Image generation failed."))
+      .catch((error) => setGenerationError(error instanceof Error ? error.message : t("ai.imageGenerationFailed")))
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aspectRatio]);
 
   useEffect(() => {
@@ -816,7 +822,7 @@ function CollabMangaAIPage() {
       const status = await checkMangaBackendViaApi();
       setBackendStatus(status);
       if (!status.ok) {
-        throw new Error(status.error || "AI backend is not ready yet.");
+        throw new Error(status.error || t("ai.backendNotReady"));
       }
       if (!backendSupportsGeneratedImageSize(status, aspectRatio)) {
         const expectedSize = generatedImageDimensions[aspectRatio].size;
@@ -831,7 +837,7 @@ function CollabMangaAIPage() {
         aspectRatio,
         status.manga?.referenceImageAspectGuard === true,
       );
-      const budget = enforceImageBudget(preparedSelectedItems, characters);
+      const budget = enforceImageBudget(preparedSelectedItems, characters, t);
       setBudgetNotice(budget.notice);
       const generationPayload: MangaImageGenerationInput = {
         operation,
@@ -893,7 +899,7 @@ function CollabMangaAIPage() {
       setShowCanvas(false);
       setTab("references");
     } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : "Image generation failed.");
+      setGenerationError(error instanceof Error ? error.message : t("ai.imageGenerationFailed"));
     } finally {
       setIsGenerating(false);
     }
@@ -973,7 +979,7 @@ function CollabMangaAIPage() {
         <div>
           <h1 className="font-display text-[28px] font-bold leading-9">Manga Page Creator</h1>
           <p className="mt-1 text-[13px] text-text-secondary">
-            Characters, references, panel plan, and AI generation.
+            {t("ai.mangaPageCreatorDesc")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -983,7 +989,7 @@ function CollabMangaAIPage() {
             className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Wand2 className="h-4 w-4" />
-            {isGenerating ? "Generating..." : "Generate page"}
+            {isGenerating ? t("ai.generatingPageEllipsis") : t("ai.generatePageBtn")}
           </button>
         </div>
       </div>
@@ -1116,24 +1122,25 @@ function SelectedElementsList({
   selectedCharacterIds: Record<string, boolean>;
   characters: CharacterProfile[];
 }) {
+  const { t } = useI18n();
   const entries: Array<{ key: string; title: string; item?: StoredItem }> = [
     ...items
       .filter((item) => item.role === "Storyboard" && selected[item.id])
-      .map((item) => ({ key: item.id, title: "Structure de la planche", item })),
+      .map((item) => ({ key: item.id, title: t("ai.pageStructureLabel"), item })),
     ...characters
       .filter((character) => selectedCharacterIds[character.id])
       .map((character) => ({
         key: `character-${character.id}`,
-        title: character.name || "Personnage",
+        title: character.name || t("ai.characterFallback"),
         item: firstCharacterImageItem(character, items),
       })),
     ...items
       .filter((item) => referenceRoles.includes(item.role) && selected[item.id])
-      .map((item) => ({ key: item.id, title: "Référence", item })),
+      .map((item) => ({ key: item.id, title: t("ai.referenceTab"), item })),
   ];
 
   if (entries.length === 0) {
-    return <EmptyState icon={ImageIcon} title="Aucun élément sélectionné" />;
+    return <EmptyState icon={ImageIcon} title={t("ai.noElementSelected")} />;
   }
 
   return (
@@ -1162,6 +1169,7 @@ function getPromptSelectedEntries(
   selected: Record<string, boolean>,
   selectedCharacterIds: Record<string, boolean>,
   characters: CharacterProfile[],
+  t: (key: TranslationKey) => string,
 ) {
   return [
     ...items
@@ -1171,12 +1179,12 @@ function getPromptSelectedEntries(
       .filter((character) => selectedCharacterIds[character.id])
       .map((character) => ({
         key: `character-${character.id}`,
-        title: character.name || "Personnage",
+        title: character.name || t("ai.characterFallback"),
         item: firstCharacterImageItem(character, items),
       })),
     ...items
       .filter((item) => referenceRoles.includes(item.role) && selected[item.id])
-      .map((item) => ({ key: item.id, title: "Reference", item })),
+      .map((item) => ({ key: item.id, title: t("ai.referenceTab"), item })),
   ];
 }
 
@@ -1191,7 +1199,8 @@ function SelectedElementsInline({
   selectedCharacterIds: Record<string, boolean>;
   characters: CharacterProfile[];
 }) {
-  const entries = getPromptSelectedEntries(items, selected, selectedCharacterIds, characters);
+  const { t } = useI18n();
+  const entries = getPromptSelectedEntries(items, selected, selectedCharacterIds, characters, t);
   const visibleEntries = entries.slice(0, 6);
   const remainingCount = entries.length - visibleEntries.length;
 
@@ -1200,14 +1209,14 @@ function SelectedElementsInline({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Layers className="h-4 w-4 shrink-0 text-accent" />
-          <p className="truncate text-[12px] font-bold text-text-primary">Elements selectionnes</p>
+          <p className="truncate text-[12px] font-bold text-text-primary">{t("ai.selectedElementsTitle")}</p>
         </div>
         <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
           {entries.length}
         </span>
       </div>
       {entries.length === 0 ? (
-        <p className="text-[12px] text-text-muted">Aucun element selectionne.</p>
+        <p className="text-[12px] text-text-muted">{t("ai.noElementSelected")}</p>
       ) : (
         <div className="grid grid-cols-4 gap-2">
           {visibleEntries.map((entry) => (
@@ -1246,6 +1255,7 @@ function Modal({
   children: React.ReactNode;
   maxWidth?: number;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -1261,7 +1271,7 @@ function Modal({
           <h2 className="font-display text-base font-bold">{title}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("ai.close")}
             className="rounded-md p-1 text-text-muted hover:text-text-primary"
           >
             <X className="h-5 w-5" />
@@ -1290,6 +1300,8 @@ function ImageImporter({
   isImporting: boolean;
   importFiles: (files: FileList | File[], forcedRole?: Role) => void;
 }) {
+  const { t } = useI18n();
+  const roleOptions = roleOptionsList(t);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -1320,7 +1332,7 @@ function ImageImporter({
         >
           <Upload className="h-5 w-5" />
           <span className="text-[13px] font-bold">
-            {isImporting ? "Importing..." : "Import images"}
+            {isImporting ? t("ai.importingEllipsis") : t("ai.importImages")}
           </span>
         </button>
         <select
@@ -1342,7 +1354,7 @@ function ImageImporter({
             className="h-9 rounded-[10px] border border-border bg-input px-2 text-[12px] font-semibold text-text-primary outline-none focus:border-accent"
           >
             <option value="">
-              {characters.length === 0 ? "Create a profile first" : "No profile"}
+              {characters.length === 0 ? t("ai.createProfileFirst") : t("ai.noProfile")}
             </option>
             {characters.map((character) => (
               <option key={character.id} value={character.id}>
@@ -1371,6 +1383,8 @@ function LibraryItemCard({
   updateItem: (patch: Partial<StoredItem>) => void;
   removeItem: () => void;
 }) {
+  const { t } = useI18n();
+  const roleOptions = roleOptionsList(t);
   return (
     <div
       className={`rounded-[14px] border p-3 transition ${
@@ -1403,7 +1417,7 @@ function LibraryItemCard({
                 onChange={(event) => updateItem({ characterId: event.target.value })}
                 className="h-8 rounded-[9px] border border-border bg-input px-2 text-[11px] font-semibold text-text-primary outline-none focus:border-accent"
               >
-                <option value="">No profile</option>
+                <option value="">{t("ai.noProfile")}</option>
                 {characters.map((character) => (
                   <option key={character.id} value={character.id}>
                     {character.name}
@@ -1416,7 +1430,7 @@ function LibraryItemCard({
         <div className="flex flex-col items-end justify-between">
           <button
             onClick={removeItem}
-            aria-label={`Remove ${item.name}`}
+            aria-label={`${t("ai.remove")} ${item.name}`}
             className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-danger"
           >
             <Trash2 className="h-4 w-4" />
@@ -1438,7 +1452,7 @@ function LibraryItemCard({
         value={item.description ?? ""}
         onChange={(event) => updateItem({ description: event.target.value })}
         rows={2}
-        placeholder="Role details for the prompt"
+        placeholder={t("ai.roleDetailsPlaceholder")}
         className="mt-3 w-full resize-none rounded-[10px] border border-border bg-input px-3 py-2 text-[12px] leading-5 text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
       />
     </div>
@@ -1467,6 +1481,7 @@ function AssetThumb({ item, sizeClass }: { item: StoredItem; sizeClass: string }
 }
 
 function GenerationDiagnostics({ diagnostics }: { diagnostics: MangaImageDiagnostics }) {
+  const { t } = useI18n();
   const perCharacter = Object.entries(diagnostics.perCharacterImageCount ?? {});
   const missing = diagnostics.charactersWithoutImage ?? [];
   const overPromptLimit =
@@ -1475,25 +1490,25 @@ function GenerationDiagnostics({ diagnostics }: { diagnostics: MangaImageDiagnos
     <div className="rounded-[14px] border border-border bg-surface-3 p-3 text-[12px] text-text-secondary">
       <div className="mb-2 flex items-center gap-2 text-[12px] font-bold text-text-primary">
         <Info className="h-4 w-4 text-accent" />
-        Diagnostic de génération
+        {t("ai.diagnosticsTitle")}
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
         <span>
-          Prompt : {diagnostics.promptLength ?? "?"}
-          {diagnostics.promptLimit ? `/${diagnostics.promptLimit}` : ""} car.
+          {t("ai.promptColon")} {diagnostics.promptLength ?? "?"}
+          {diagnostics.promptLimit ? `/${diagnostics.promptLimit}` : ""} {t("ai.charsAbbrev")}
         </span>
         <span className={diagnostics.promptCompacted ? "text-warning" : ""}>
-          Compaction : {diagnostics.promptCompacted ? "oui" : "non"}
+          {t("ai.compactionLabel")} {diagnostics.promptCompacted ? t("ai.yesWord") : t("ai.noWord")}
         </span>
         <span className={diagnostics.droppedImageCount ? "text-warning" : ""}>
-          Images : {diagnostics.imagesSentToOpenAI ?? "?"}/{diagnostics.maxImages ?? 16}
+          {t("ai.imagesColon")} {diagnostics.imagesSentToOpenAI ?? "?"}/{diagnostics.maxImages ?? 16}
           {diagnostics.droppedImageCount
-            ? ` (${diagnostics.droppedImageCount} ignorée${diagnostics.droppedImageCount > 1 ? "s" : ""})`
+            ? ` (${diagnostics.droppedImageCount} ${t(diagnostics.droppedImageCount > 1 ? "ai.ignoredPlural" : "ai.ignoredSingular")})`
             : ""}
         </span>
-        <span>Structure : {diagnostics.structureImages ?? 0}</span>
-        <span>Références : {diagnostics.referenceImages ?? 0}</span>
-        <span>Personnages : {diagnostics.charactersUsed ?? 0}</span>
+        <span>{t("ai.structureColon")} {diagnostics.structureImages ?? 0}</span>
+        <span>{t("ai.referencesColon")} {diagnostics.referenceImages ?? 0}</span>
+        <span>{t("ai.charactersColon")} {diagnostics.charactersUsed ?? 0}</span>
       </div>
       {perCharacter.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1502,7 +1517,7 @@ function GenerationDiagnostics({ diagnostics }: { diagnostics: MangaImageDiagnos
               key={name}
               className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold text-text-primary"
             >
-              {name} · {count} img
+              {name} · {count} {t("ai.imgAbbrev")}
             </span>
           ))}
         </div>
@@ -1510,8 +1525,8 @@ function GenerationDiagnostics({ diagnostics }: { diagnostics: MangaImageDiagnos
       {(missing.length > 0 || overPromptLimit) && (
         <div className="mt-2 text-[11px] font-semibold text-warning">
           {missing.length > 0 &&
-            `Sans image utilisée : ${missing.join(", ")}. Génère une carte pour ces personnages. `}
-          {overPromptLimit && "Prompt au-delà de la limite : contenu condensé."}
+            `${t("ai.noImageUsedPrefix")} ${missing.join(", ")}. ${t("ai.generateCardForThese")} `}
+          {overPromptLimit && t("ai.promptOverLimit")}
         </div>
       )}
     </div>
@@ -1550,6 +1565,7 @@ function GenerationPanel({
   onDownload: () => void;
   onEdit: () => void;
 }) {
+  const { t } = useI18n();
   const [lightbox, setLightbox] = useState<{
     imageUrl: string;
     prompt?: string;
@@ -1567,12 +1583,12 @@ function GenerationPanel({
   return (
     <>
       <PanelCard className="xl:max-h-[calc(100vh-105px)]">
-        <SectionHeader icon={FileImage} title="Generated page" />
+        <SectionHeader icon={FileImage} title={t("ai.generatedPageTitle")} />
       <div className="flex flex-1 flex-col p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-border bg-surface-3 px-3 py-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-border bg-accent-soft px-2.5 py-1 text-[12px] font-bold text-accent">
             <Sparkles className="h-3.5 w-3.5" />
-            {selectedImageCount} image refs
+            {selectedImageCount} {t("ai.imageRefsSuffix")}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -1588,13 +1604,13 @@ function GenerationPanel({
               className="flex h-9 items-center gap-1.5 rounded-[10px] border border-border bg-surface-2 px-2.5 text-[12px] font-bold text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Wand2 className="h-3.5 w-3.5" />
-              Modify
+              {t("ai.modify")}
             </button>
             <button
               onClick={onDownload}
               disabled={!result}
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Download"
+              aria-label={t("ai.download")}
             >
               <Download className="h-4 w-4" />
             </button>
@@ -1602,7 +1618,7 @@ function GenerationPanel({
               onClick={onRegenerate}
               disabled={isGenerating || !prompt.trim()}
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Regenerate"
+              aria-label={t("ai.regenerateAria")}
             >
               <RefreshCw className={`h-4 w-4 ${isGenerating ? "animate-spin" : ""}`} />
             </button>
@@ -1626,7 +1642,7 @@ function GenerationPanel({
               ) : error ? (
                 <div className="flex h-full flex-col items-center justify-center bg-[#f7faff] px-8 text-center text-[#0b1430]">
                   <X className="mb-4 h-10 w-10 text-danger" />
-                  <p className="text-[16px] font-bold">Generation failed</p>
+                  <p className="text-[16px] font-bold">{t("ai.generationFailedTitle")}</p>
                   <p className="mt-2 max-w-[340px] text-[12px] leading-5 text-[#5e6a90]">{error}</p>
                 </div>
               ) : result ? (
@@ -1636,11 +1652,11 @@ function GenerationPanel({
                     setLightbox({ imageUrl: result.imageUrl, prompt: result.finalPrompt })
                   }
                   className="block h-full w-full cursor-zoom-in"
-                  title="Voir en grand"
+                  title={t("ai.viewFullSize")}
                 >
                   <img
                     src={result.imageUrl}
-                    alt="Generated manga page"
+                    alt={t("ai.generatedMangaPageAlt")}
                     className="h-full w-full object-contain"
                   />
                 </button>
@@ -1657,7 +1673,7 @@ function GenerationPanel({
           <div className="rounded-[14px] border border-border bg-surface-3 p-3">
             <div className="mb-2 flex items-center gap-2 text-[12px] font-bold text-text-primary">
               <History className="h-4 w-4 text-accent" />
-              History
+              {t("ai.historyTitle")}
               <span className="text-text-muted">({history.length})</span>
             </div>
             <div className="scroll-dark flex gap-2 overflow-x-auto pb-1">
@@ -1682,7 +1698,7 @@ function GenerationPanel({
                   </button>
                   <button
                     onClick={() => onDeleteHistory(entry.id)}
-                    aria-label="Delete from history"
+                    aria-label={t("ai.deleteFromHistory")}
                     className="absolute right-0.5 top-0.5 rounded-md bg-black/60 p-0.5 text-white/80 opacity-0 transition hover:text-danger group-hover:opacity-100"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -1699,7 +1715,7 @@ function GenerationPanel({
           className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Wand2 className="h-4 w-4" />
-          {isGenerating ? "Generating..." : "Generate with current setup"}
+          {isGenerating ? t("ai.generatingPageEllipsis") : t("ai.generateWithCurrentSetup")}
         </button>
       </div>
       </PanelCard>
@@ -1716,14 +1732,14 @@ function GenerationPanel({
           >
             <button
               onClick={() => setLightbox(null)}
-              aria-label="Close"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary"
             >
               <X className="h-4 w-4" />
             </button>
             <img
               src={lightbox.imageUrl}
-              alt={lightbox.prompt ?? "Generated manga page"}
+              alt={lightbox.prompt ?? t("ai.generatedMangaPageAlt")}
               className="min-h-0 w-full rounded-[14px] object-contain"
               style={{ maxHeight: "82vh" }}
             />
@@ -1737,7 +1753,7 @@ function GenerationPanel({
                   className="inline-flex h-10 items-center gap-2 rounded-[12px] border border-border bg-surface-2 px-3 text-[13px] font-bold text-text-primary hover:border-accent hover:text-accent"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Utiliser cette image
+                  {t("ai.useThisImage")}
                 </button>
               )}
               <button
@@ -1745,7 +1761,7 @@ function GenerationPanel({
                 className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
               >
                 <Download className="h-4 w-4" />
-                Download
+                {t("ai.download")}
               </button>
             </div>
           </div>
@@ -1756,6 +1772,7 @@ function GenerationPanel({
 }
 
 function GeneratingIndicator() {
+  const { t } = useI18n();
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#f7faff] px-8 text-center text-[#0b1430]">
       <div className="relative h-14 w-14">
@@ -1764,8 +1781,8 @@ function GeneratingIndicator() {
         <Sparkles className="absolute inset-0 m-auto h-6 w-6 animate-pulse text-[#12b76a]" />
       </div>
       <div>
-        <p className="text-[15px] font-bold">Génération en cours</p>
-        <p className="mt-1 text-[12px] text-[#5e6a90]">L'IA compose votre planche…</p>
+        <p className="text-[15px] font-bold">{t("ai.generationInProgress")}</p>
+        <p className="mt-1 text-[12px] text-[#5e6a90]">{t("ai.aiComposingPage")}</p>
       </div>
       <div className="flex items-center gap-1.5">
         {[0, 1, 2].map((index) => (
@@ -1846,15 +1863,16 @@ function WorkspacePanel(props: {
   onGenerate: () => void;
   onApplyEdit: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <PanelCard className="xl:max-h-[calc(100vh-105px)]">
       <div className="flex items-center gap-1 border-b border-border p-3">
         {(
           [
             { id: "structure", label: "Structure" },
-            { id: "characters", label: "Personnages" },
-            { id: "references", label: "Références" },
-            { id: "prompt", label: "Prompt" },
+            { id: "characters", label: t("ai.charactersTab") },
+            { id: "references", label: t("ai.referencesLabel") },
+            { id: "prompt", label: t("ai.promptTab") },
           ] as const
         ).map((tab) => (
           <button
@@ -1893,7 +1911,7 @@ function WorkspacePanel(props: {
           className="flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Sparkles className="h-4 w-4" />
-          {props.isGenerating ? "Generating..." : "Generate Final Page"}
+          {props.isGenerating ? t("ai.generatingPageEllipsis") : t("ai.generateFinalPage")}
         </button>
         {props.generationError && (
           <div className="rounded-[12px] border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-semibold leading-relaxed text-danger">
@@ -1912,7 +1930,7 @@ function WorkspacePanel(props: {
             className="flex h-10 w-full items-center justify-center gap-2 rounded-[12px] border border-border-strong px-4 text-[13px] font-bold text-text-primary hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <PencilRuler className="h-4 w-4" />
-            Apply edit to result
+            {t("ai.applyEditToResult")}
           </button>
         )}
       </div>
@@ -1937,14 +1955,15 @@ function PromptTab({
   setAspectRatio,
   hasResult,
 }: Parameters<typeof WorkspacePanel>[0]) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col gap-4">
-      <FieldLabel label="Describe the page" />
+      <FieldLabel label={t("ai.describeThePage")} />
       <textarea
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
         rows={8}
-        placeholder="Scene, action, panel hierarchy, emotions, dialogue, style..."
+        placeholder={t("ai.pagePromptPlaceholder")}
         className="w-full resize-none rounded-[14px] border border-border bg-input px-4 py-3.5 text-[14px] leading-relaxed text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
       />
 
@@ -1954,9 +1973,9 @@ function PromptTab({
           value={styleMode}
           onChange={(value) => setStyleMode(value as "auto" | "black-white" | "color")}
           options={[
-            ["black-white", "Black and white"],
-            ["color", "Color"],
-            ["auto", "Prompt decides"],
+            ["black-white", t("ai.blackAndWhite")],
+            ["color", t("ai.colorWord")],
+            ["auto", t("ai.promptDecides")],
           ]}
         />
         <SelectField
@@ -1966,19 +1985,19 @@ function PromptTab({
             setBackgroundLevel(value as "auto" | "empty" | "minimal" | "detailed")
           }
           options={[
-            ["minimal", "Minimal"],
-            ["detailed", "Detailed"],
-            ["empty", "Empty"],
-            ["auto", "Prompt decides"],
+            ["minimal", t("ai.minimalWord")],
+            ["detailed", t("ai.detailedWord")],
+            ["empty", t("ai.emptyWord")],
+            ["auto", t("ai.promptDecides")],
           ]}
         />
         <SelectField
-          label="Reading"
+          label={t("ai.readingLabel")}
           value={readingDirection}
           onChange={(value) => setReadingDirection(value as "right-to-left" | "left-to-right")}
           options={[
-            ["right-to-left", "Right to left"],
-            ["left-to-right", "Left to right"],
+            ["right-to-left", t("ai.rightToLeft")],
+            ["left-to-right", t("ai.leftToRight")],
           ]}
         />
         <SelectField
@@ -1986,8 +2005,8 @@ function PromptTab({
           value={aspectRatio}
           onChange={(value) => setAspectRatio(value as AspectRatio)}
           options={[
-            ["2:3", "Portrait 2:3"],
-            ["3:2", "Paysage 3:2"],
+            ["2:3", t("ai.portraitRatio")],
+            ["3:2", t("ai.landscapeRatio")],
           ]}
         />
       </div>
@@ -2005,16 +2024,16 @@ function PromptTab({
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
-                {scope === "single" ? "Single panel" : "Full page"}
+                {scope === "single" ? t("ai.singlePanel") : t("ai.fullPage")}
               </button>
             ))}
           </div>
-          <FieldLabel label="Modification prompt" />
+          <FieldLabel label={t("ai.modificationPromptLabel")} />
           <textarea
             value={editPrompt}
             onChange={(event) => setEditPrompt(event.target.value)}
             rows={4}
-            placeholder="Precise correction to apply..."
+            placeholder={t("ai.preciseCorrectionPlaceholder")}
             className="w-full resize-none rounded-[12px] border border-border bg-input px-3 py-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
           />
         </div>
@@ -2029,8 +2048,9 @@ function CharactersTab({
   selectedCharacterIds,
   toggleCharacter,
 }: Parameters<typeof WorkspacePanel>[0]) {
+  const { t } = useI18n();
   if (characters.length === 0) {
-    return <EmptyState icon={User} title="No character profile yet" />;
+    return <EmptyState icon={User} title={t("ai.noCharacterProfileYet")} />;
   }
 
   return (
@@ -2052,7 +2072,7 @@ function CharactersTab({
               {firstImage?.imageDataUrl ? (
                 <img
                   src={firstImage.imageDataUrl}
-                  alt={character.name || "Character"}
+                  alt={character.name || t("ai.characterFallback")}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -2071,7 +2091,7 @@ function CharactersTab({
               </span>
             </div>
             <p className="mt-1 truncate text-center text-[11px] font-bold text-text-primary">
-              {character.name || "Personnage"}
+              {character.name || t("ai.characterFallback")}
             </p>
           </button>
         );
@@ -2188,20 +2208,21 @@ function StructureTab({
   importFiles,
   isImporting,
 }: Parameters<typeof WorkspacePanel>[0]) {
+  const { t } = useI18n();
   const structureItems = items.filter((item) => item.role === "Storyboard");
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12px] leading-5 text-text-secondary">
-        Import an image that defines the panel layout and structure of the page.
+        {t("ai.structureTabIntro")}
       </p>
       <TabImportButton
-        label="Import page structure"
+        label={t("ai.importPageStructure")}
         role="Storyboard"
         importFiles={importFiles}
         isImporting={isImporting}
       />
       {structureItems.length === 0 ? (
-        <EmptyState icon={FileImage} title="No structure image imported" />
+        <EmptyState icon={FileImage} title={t("ai.noStructureImage")} />
       ) : (
         structureItems.map((item) => (
           <WorkspaceAssetTile
@@ -2226,20 +2247,21 @@ function ReferencesTab({
   importFiles,
   isImporting,
 }: Parameters<typeof WorkspacePanel>[0]) {
+  const { t } = useI18n();
   const refItems = items.filter((item) => referenceRoles.includes(item.role));
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12px] leading-5 text-text-secondary">
-        Import reference images and add details describing what each reference is used for.
+        {t("ai.referencesTabIntro")}
       </p>
       <TabImportButton
-        label="Import a reference"
+        label={t("ai.importAReference")}
         role="Inspiration"
         importFiles={importFiles}
         isImporting={isImporting}
       />
       {refItems.length === 0 ? (
-        <EmptyState icon={BookImage} title="No reference imported" />
+        <EmptyState icon={BookImage} title={t("ai.noReferenceImported")} />
       ) : (
         refItems.map((item) => (
           <div
@@ -2258,7 +2280,7 @@ function ReferencesTab({
                   <button
                     onClick={() => toggleSelect(item.id)}
                     aria-pressed={!!selected[item.id]}
-                    aria-label={`Select ${item.name}`}
+                    aria-label={`${t("ai.selectWord")} ${item.name}`}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border ${
                       selected[item.id]
                         ? "border-accent bg-accent text-accent-foreground"
@@ -2269,7 +2291,7 @@ function ReferencesTab({
                   </button>
                   <button
                     onClick={() => removeItem(item.id)}
-                    aria-label={`Remove ${item.name}`}
+                    aria-label={`${t("ai.remove")} ${item.name}`}
                     className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-danger"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -2281,7 +2303,7 @@ function ReferencesTab({
               value={item.description ?? ""}
               onChange={(event) => updateItem(item.id, { description: event.target.value })}
               rows={2}
-              placeholder="What is this reference for?"
+              placeholder={t("ai.whatIsThisReferenceFor")}
               className="mt-3 w-full resize-none rounded-[10px] border border-border bg-input px-3 py-2 text-[12px] leading-5 text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
             />
           </div>
@@ -2304,6 +2326,7 @@ function TabImportButton({
   importFiles: (files: FileList | File[], forcedRole?: Role, forcedCharacterId?: string) => void;
   isImporting: boolean;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <div>
@@ -2325,7 +2348,7 @@ function TabImportButton({
         className="flex min-h-[64px] w-full flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-2 px-3 text-text-primary hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       >
         <Upload className="h-5 w-5" />
-        <span className="text-[13px] font-bold">{isImporting ? "Importing..." : label}</span>
+        <span className="text-[13px] font-bold">{isImporting ? t("ai.importingEllipsis") : label}</span>
       </button>
     </div>
   );
@@ -2342,6 +2365,7 @@ function WorkspaceAssetTile({
   onToggle: () => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className={`flex items-center gap-3 rounded-[12px] border p-2 ${
@@ -2356,7 +2380,7 @@ function WorkspaceAssetTile({
       <button
         onClick={onToggle}
         aria-pressed={selected}
-        aria-label={`Select ${item.name}`}
+        aria-label={`${t("ai.selectWord")} ${item.name}`}
         className={`flex h-7 w-7 items-center justify-center rounded-md border ${
           selected
             ? "border-accent bg-accent text-accent-foreground"
@@ -2367,7 +2391,7 @@ function WorkspaceAssetTile({
       </button>
       <button
         onClick={onRemove}
-        aria-label={`Remove ${item.name}`}
+        aria-label={`${t("ai.remove")} ${item.name}`}
         className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-danger"
       >
         <Trash2 className="h-4 w-4" />
@@ -2377,6 +2401,8 @@ function WorkspaceAssetTile({
 }
 
 function ReferencesSummary({ selectedItems }: { selectedItems: StoredItem[] }) {
+  const { t } = useI18n();
+  const roleOptions = roleOptionsList(t);
   const groups = roleOptions
     .map((role) => ({
       role: role.value,
@@ -2388,7 +2414,7 @@ function ReferencesSummary({ selectedItems }: { selectedItems: StoredItem[] }) {
   return (
     <div className="flex flex-col gap-4">
       {groups.length === 0 ? (
-        <EmptyState icon={BookImage} title="No selected references" />
+        <EmptyState icon={BookImage} title={t("ai.noSelectedReferences")} />
       ) : (
         groups.map((group) => (
           <div key={group.role} className="rounded-[14px] border border-border bg-surface-3 p-3">
@@ -2414,12 +2440,10 @@ function ReferencesSummary({ selectedItems }: { selectedItems: StoredItem[] }) {
       <div className="rounded-[14px] border border-border bg-surface-3 p-3">
         <div className="flex items-center gap-2">
           <Lightbulb className="h-4 w-4 text-accent" />
-          <p className="text-[12px] font-bold text-text-primary">Prompt lock summary</p>
+          <p className="text-[12px] font-bold text-text-primary">{t("ai.promptLockSummaryTitle")}</p>
         </div>
         <p className="mt-2 text-[12px] leading-5 text-text-secondary">
-          Character images define identity, storyboard images define structure, pose images define
-          body mechanics, style images define rendering, and inspiration images cannot override
-          identities or panel functions.
+          {t("ai.promptLockSummaryText")}
         </p>
       </div>
     </div>

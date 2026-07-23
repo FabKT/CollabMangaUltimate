@@ -19,6 +19,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/sketch-final")({
   head: () => ({ meta: [{ title: "Raw to Final - CollabManga AI" }] }),
@@ -72,6 +73,7 @@ function getImageSizeForGeneration(src: string): Promise<"1024x1536" | "1536x102
 }
 
 function SketchFinalPage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<SketchTab>("raw");
   const [sketchImage, setSketchImage] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -98,8 +100,9 @@ function SketchFinalPage() {
     setIsGenerating(true);
     void resumeDurableGeneration<SketchFinalResult>("sketch-final").then((generated) => {
       if (generated) setResult(generated);
-    }).catch((err) => setError(err instanceof Error ? err.message : "Sketch finishing failed."))
+    }).catch((err) => setError(err instanceof Error ? err.message : t("ai.sketchFinishingFailed")))
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -125,7 +128,7 @@ function SketchFinalPage() {
   const generate = async () => {
     if (!sketchImage) {
       setTab("raw");
-      setError("Importe d'abord l'image raw.");
+      setError(t("ai.importRawFirst"));
       return;
     }
 
@@ -134,7 +137,7 @@ function SketchFinalPage() {
     try {
       const styleImageDataUrl = await imageSourceToDataUrl(activeStyle?.face);
       if (!styleImageDataUrl) {
-        throw new Error("Le style de finition par défaut est indisponible.");
+        throw new Error(t("ai.defaultStyleUnavailable"));
       }
 
       const size = await getImageSizeForGeneration(sketchImage);
@@ -173,7 +176,7 @@ function SketchFinalPage() {
       });
       notifyCreditsChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sketch finishing failed.");
+      setError(err instanceof Error ? err.message : t("ai.sketchFinishingFailed"));
     } finally {
       setIsGenerating(false);
     }
@@ -191,7 +194,7 @@ function SketchFinalPage() {
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
         title="Raw to Final"
-        description="Transforme une image raw en rendu final tout en conservant sa composition et son cadrage."
+        description={t("ai.sketchFinalDesc")}
         actions={
           <button
             onClick={generate}
@@ -199,7 +202,7 @@ function SketchFinalPage() {
             className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Wand2 className="h-4 w-4" />
-            {isGenerating ? "Generation..." : "Generer l'image"}
+            {isGenerating ? t("ai.generatingEllipsis") : t("ai.generateImage")}
           </button>
         }
       />
@@ -210,7 +213,7 @@ function SketchFinalPage() {
             {(
               [
                 { id: "raw", label: "Raw", icon: PenLine },
-                { id: "prompt", label: "Prompt", icon: FileText },
+                { id: "prompt", label: t("ai.promptTab"), icon: FileText },
               ] as const
             ).map((entry) => (
               <button
@@ -232,13 +235,13 @@ function SketchFinalPage() {
             {tab === "raw" && (
               <div className="flex flex-col gap-3">
                 <SectionIntro
-                  title="Image raw"
-                  text="L'image raw contrôle la composition, la pose, l'expression, la caméra, les bulles et tous les placements."
+                  title={t("ai.rawImageTitle")}
+                  text={t("ai.rawImageIntroText")}
                 />
                 <UploadPreview
                   image={sketchImage}
-                  title="Importer l'image raw"
-                  emptyText="Glisse l'image raw ici"
+                  title={t("ai.importRawImage")}
+                  emptyText={t("ai.dragRawImageHere")}
                   onImport={importSketch}
                   onRemove={() => {
                     setSketchImage(null);
@@ -251,14 +254,14 @@ function SketchFinalPage() {
             {tab === "prompt" && (
               <div className="flex flex-col gap-3">
                 <SectionIntro
-                  title="Instructions optionnelles"
-                  text="Ajoute seulement ce qui doit etre precise. La pose, le cadrage et les placements restent verrouilles par le croquis."
+                  title={t("ai.optionalInstructions")}
+                  text={t("ai.optionalInstructionsText")}
                 />
                 <textarea
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   rows={10}
-                  placeholder="Ex: garder le regard plus intense, rendre le manteau noir uni, nettoyer les mains sans changer leur position..."
+                  placeholder={t("ai.sketchNotesPlaceholder")}
                   className="w-full resize-none rounded-[14px] border border-border bg-input px-4 py-3 text-[14px] leading-relaxed text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                 />
                 <GenerationChecklist
@@ -270,7 +273,7 @@ function SketchFinalPage() {
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Wand2 className="h-4 w-4" />
-                  {isGenerating ? "Generation..." : "Generer l'image finale"}
+                  {isGenerating ? t("ai.generatingEllipsis") : t("ai.generateFinalImage")}
                 </button>
               </div>
             )}
@@ -281,13 +284,13 @@ function SketchFinalPage() {
           <header className="flex items-center justify-between gap-2 border-b border-border p-4">
             <div className="flex min-w-0 items-center gap-2">
               <Sparkles className="h-4 w-4 shrink-0 text-accent" />
-              <h2 className="truncate font-display text-base font-bold">Image finale</h2>
+              <h2 className="truncate font-display text-base font-bold">{t("ai.finalImageTitle")}</h2>
             </div>
             <button
               onClick={download}
               disabled={!result}
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Download"
+              aria-label={t("ai.download")}
             >
               <Download className="h-4 w-4" />
             </button>
@@ -306,14 +309,14 @@ function SketchFinalPage() {
                   type="button"
                   onClick={() => setLightbox(true)}
                   className="flex h-full w-full cursor-zoom-in items-center justify-center"
-                  title="Voir en grand"
+                  title={t("ai.viewFullSize")}
                 >
-                  <img src={result.imageUrl} alt="Rendu final" className="max-h-full max-w-full object-contain" />
+                  <img src={result.imageUrl} alt={t("ai.finalRenderAlt")} className="max-h-full max-w-full object-contain" />
                 </button>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2 px-8 text-center text-text-muted">
                   <Sparkles className="h-8 w-8" />
-                  <p className="text-[13px] font-semibold">Le rendu final apparaitra ici.</p>
+                  <p className="text-[13px] font-semibold">{t("ai.finalRenderWillAppear")}</p>
                 </div>
               )}
             </div>
@@ -333,14 +336,14 @@ function SketchFinalPage() {
           >
             <button
               onClick={() => setLightbox(false)}
-              aria-label="Close"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary"
             >
               <X className="h-4 w-4" />
             </button>
             <img
               src={result.imageUrl}
-              alt="Rendu final"
+              alt={t("ai.finalRenderAlt")}
               className="w-full rounded-[14px] object-contain"
               style={{ maxHeight: "82vh" }}
             />
@@ -350,7 +353,7 @@ function SketchFinalPage() {
                 className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
               >
                 <Download className="h-4 w-4" />
-                Telecharger
+                {t("ai.download")}
               </button>
             </div>
           </div>
@@ -382,6 +385,7 @@ function UploadPreview({
   onImport: (files: FileList | null) => void;
   onRemove?: () => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -409,7 +413,7 @@ function UploadPreview({
             type="button"
             onClick={() => inputRef.current?.click()}
             className="flex min-h-[220px] w-full items-center justify-center overflow-hidden rounded-[12px] border border-border bg-stage"
-            title="Remplacer l'image"
+            title={t("ai.replaceImageTitle")}
           >
             <img src={image} alt={title} className="max-h-[360px] max-w-full object-contain" />
           </button>
@@ -419,12 +423,12 @@ function UploadPreview({
               className="flex h-10 flex-1 items-center justify-center gap-2 rounded-[10px] border border-border bg-surface-2 text-[12px] font-bold text-text-secondary hover:border-accent hover:text-accent"
             >
               <Upload className="h-4 w-4" />
-              Remplacer
+              {t("ai.replace")}
             </button>
             {onRemove && (
               <button
                 onClick={onRemove}
-                aria-label="Supprimer"
+                aria-label={t("ai.remove")}
                 className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-muted hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
@@ -451,9 +455,10 @@ function GenerationChecklist({
 }: {
   hasSketch: boolean;
 }) {
+  const { t } = useI18n();
   const items = [
-    { label: "Image raw importée", done: hasSketch },
-    { label: "Cadrage de sortie conservé", done: hasSketch },
+    { label: t("ai.rawImageImported"), done: hasSketch },
+    { label: t("ai.outputFramingPreserved"), done: hasSketch },
   ];
   return (
     <div className="rounded-[14px] border border-border bg-surface-3 p-3">
@@ -478,6 +483,7 @@ function GenerationChecklist({
 }
 
 function GeneratingIndicator() {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center gap-4 px-8 text-center text-text-secondary">
       <div className="relative h-14 w-14">
@@ -486,8 +492,8 @@ function GeneratingIndicator() {
         <Sparkles className="absolute inset-0 m-auto h-6 w-6 animate-pulse text-accent" />
       </div>
       <div>
-        <p className="text-[14px] font-bold text-text-primary">Finalisation en cours</p>
-        <p className="mt-1 text-[12px] text-text-muted">Le croquis est nettoye et rendu dans le style choisi...</p>
+        <p className="text-[14px] font-bold text-text-primary">{t("ai.finalizingInProgress")}</p>
+        <p className="mt-1 text-[12px] text-text-muted">{t("ai.sketchCleanedRendered")}</p>
       </div>
       <div className="flex items-center gap-1.5">
         {[0, 1, 2].map((index) => (

@@ -23,6 +23,7 @@ import {
   Sparkles,
   ImageIcon,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/decor-create")({
   head: () => ({ meta: [{ title: "Création de décor — CollabManga AI" }] }),
@@ -57,6 +58,7 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 function DecorCreatePage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"style" | "references" | "prompt">("style");
   const [styleId, setStyleId] = useState<string>(STYLES[0].id);
   const [styleImages, setStyleImages] = useState<Record<string, string>>({});
@@ -88,8 +90,9 @@ function DecorCreatePage() {
     setIsGenerating(true);
     void resumeDurableGeneration<DecorImageResult>("decor-create").then((generated) => {
       if (generated) setResult(generated);
-    }).catch((err) => setError(err instanceof Error ? err.message : "Decor generation failed."))
+    }).catch((err) => setError(err instanceof Error ? err.message : t("ai.decorGenerationFailed")))
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -181,7 +184,7 @@ function DecorCreatePage() {
         imageUrl: decorResult.imageUrl,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Decor generation failed.");
+      setError(err instanceof Error ? err.message : t("ai.decorGenerationFailed"));
     } finally {
       setIsGenerating(false);
     }
@@ -198,8 +201,8 @@ function DecorCreatePage() {
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
-        title="Création de décor"
-        description="Choisis un style, ajoute des références, décris ton décor : un décor complet est généré en 3:2."
+        title={t("ai.decorCreateTitle")}
+        description={t("ai.decorCreateDesc")}
       />
 
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
@@ -208,9 +211,9 @@ function DecorCreatePage() {
           <div className="flex items-center gap-1 border-b border-border p-3">
             {(
               [
-                { id: "style", label: "Style", icon: Palette },
-                { id: "references", label: "Référence", icon: ImagesIcon },
-                { id: "prompt", label: "Prompt", icon: FileText },
+                { id: "style", label: t("ai.styleTab"), icon: Palette },
+                { id: "references", label: t("ai.referenceTab"), icon: ImagesIcon },
+                { id: "prompt", label: t("ai.promptTab"), icon: FileText },
               ] as const
             ).map((entry) => (
               <button
@@ -231,7 +234,7 @@ function DecorCreatePage() {
           <div className="scroll-dark min-h-[280px] flex-1 overflow-y-auto p-4">
             {tab === "style" && (
               <div className="flex flex-col gap-3">
-                <p className="text-[12px] leading-5 text-text-secondary">Choisis le style de rendu.</p>
+                <p className="text-[12px] leading-5 text-text-secondary">{t("ai.chooseRenderStyle")}</p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {STYLES.map((style) => {
                     const selected = style.id === styleId;
@@ -267,7 +270,7 @@ function DecorCreatePage() {
 
                 <div className="rounded-[14px] border border-border bg-surface-3 p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                    {activeStyle.name} — image de référence (optionnel)
+                    {activeStyle.name} {t("ai.styleRefImageSuffix")}
                   </div>
                   <StyleImageImporter
                     onImport={importStyleImage}
@@ -282,7 +285,7 @@ function DecorCreatePage() {
                     ) : (
                       <Copy className="h-3.5 w-3.5" />
                     )}
-                    {copiedStyle === activeStyle.id ? "Prompt copié" : "Copier le prompt de ce style"}
+                    {copiedStyle === activeStyle.id ? t("ai.promptCopied") : t("ai.copyStylePrompt")}
                   </button>
                 </div>
               </div>
@@ -308,13 +311,13 @@ function DecorCreatePage() {
             {tab === "prompt" && (
               <div className="flex flex-col gap-3">
                 <p className="text-[12px] leading-5 text-text-secondary">
-                  Décris ton décor aussi précisément que possible.
+                  {t("ai.describeYourDecor")}
                 </p>
                 <textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   rows={10}
-                  placeholder="Lieu, ambiance, époque, éléments, éclairage, perspective, profondeur…"
+                  placeholder={t("ai.decorPromptPlaceholder")}
                   className="w-full resize-none rounded-[14px] border border-border bg-input px-4 py-3 text-[14px] leading-relaxed text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                 />
                 <button
@@ -323,7 +326,7 @@ function DecorCreatePage() {
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Wand2 className="h-4 w-4" />
-                  {isGenerating ? "Génération…" : "Générer le décor"}
+                  {isGenerating ? t("ai.generatingEllipsis") : t("ai.generateDecor")}
                 </button>
               </div>
             )}
@@ -335,13 +338,13 @@ function DecorCreatePage() {
           <header className="flex items-center justify-between gap-2 border-b border-border p-4">
             <div className="flex min-w-0 items-center gap-2">
               <Sparkles className="h-4 w-4 shrink-0 text-accent" />
-              <h2 className="truncate font-display text-base font-bold">Décor</h2>
+              <h2 className="truncate font-display text-base font-bold">{t("ai.decorWord")}</h2>
             </div>
             <button
               onClick={download}
               disabled={!result}
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-surface-2 text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Download"
+              aria-label={t("ai.download")}
             >
               <Download className="h-4 w-4" />
             </button>
@@ -357,7 +360,7 @@ function DecorCreatePage() {
               ) : error ? (
                 <div className="flex h-full flex-col items-center justify-center bg-[#f7faff] px-8 text-center text-[#0b1430]">
                   <X className="mb-4 h-10 w-10 text-danger" />
-                  <p className="text-[15px] font-bold">Échec de la génération</p>
+                  <p className="text-[15px] font-bold">{t("ai.generationFailedTitle")}</p>
                   <p className="mt-2 max-w-[340px] text-[12px] leading-5 text-[#5e6a90]">{error}</p>
                 </div>
               ) : result ? (
@@ -365,18 +368,18 @@ function DecorCreatePage() {
                   type="button"
                   onClick={() => setLightbox(true)}
                   className="block h-full w-full cursor-zoom-in"
-                  title="Voir en grand"
+                  title={t("ai.viewFullSize")}
                 >
                   <img
                     src={result.imageUrl}
-                    alt="Décor généré"
+                    alt={t("ai.generatedDecorAlt")}
                     className="h-full w-full object-contain"
                   />
                 </button>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#f7faff] px-8 text-center text-[#5e6a90]">
                   <ImageIcon className="h-10 w-10" />
-                  <p className="text-[13px] font-semibold">Le décor généré apparaîtra ici.</p>
+                  <p className="text-[13px] font-semibold">{t("ai.decorWillAppear")}</p>
                 </div>
               )}
             </div>
@@ -396,14 +399,14 @@ function DecorCreatePage() {
           >
             <button
               onClick={() => setLightbox(false)}
-              aria-label="Close"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary"
             >
               <X className="h-4 w-4" />
             </button>
             <img
               src={result.imageUrl}
-              alt="Décor généré"
+              alt={t("ai.generatedDecorAlt")}
               className="w-full rounded-[14px] object-contain"
               style={{ maxHeight: "82vh" }}
             />
@@ -413,7 +416,7 @@ function DecorCreatePage() {
                 className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-accent px-4 text-[13px] font-bold text-accent-foreground hover:bg-accent-hover"
               >
                 <Download className="h-4 w-4" />
-                Télécharger
+                {t("ai.download")}
               </button>
             </div>
           </div>
@@ -430,6 +433,7 @@ function StyleImageImporter({
   onImport: (files: FileList | null) => void;
   hasImage: boolean;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <div>
@@ -448,7 +452,7 @@ function StyleImageImporter({
         className="flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-[12px] font-bold text-text-secondary hover:border-accent hover:text-accent"
       >
         <Upload className="h-4 w-4" />
-        {hasImage ? "Remplacer l'image de style" : "Importer l'image de style"}
+        {hasImage ? t("ai.replaceStyleImage") : t("ai.importStyleImage")}
       </button>
     </div>
   );
@@ -465,11 +469,12 @@ function ReferencesTab({
   onUpdate: (id: string, patch: Partial<DecorReference>) => void;
   onRemove: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12px] leading-5 text-text-secondary">
-        Ajoute des références (lieu, architecture, ambiance…) et précise à quoi elles servent.
+        {t("ai.decorRefIntro")}
       </p>
       <input
         ref={inputRef}
@@ -487,13 +492,13 @@ function ReferencesTab({
         className="flex min-h-[64px] w-full flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-2 px-3 text-text-primary hover:border-accent hover:text-accent"
       >
         <Upload className="h-5 w-5" />
-        <span className="text-[13px] font-bold">Importer des références</span>
+        <span className="text-[13px] font-bold">{t("ai.importReferences")}</span>
       </button>
 
       {references.length === 0 ? (
         <div className="rounded-[14px] border border-dashed border-border bg-surface-3/50 p-5 text-center">
           <ImagesIcon className="mx-auto mb-2 h-5 w-5 text-text-muted" />
-          <p className="text-[13px] font-semibold text-text-secondary">Aucune référence</p>
+          <p className="text-[13px] font-semibold text-text-secondary">{t("ai.noReference")}</p>
         </div>
       ) : (
         references.map((reference) => (
@@ -512,7 +517,7 @@ function ReferencesTab({
                 <p className="truncate text-[13px] font-bold text-text-primary">{reference.name}</p>
                 <button
                   onClick={() => onRemove(reference.id)}
-                  aria-label="Supprimer"
+                  aria-label={t("ai.remove")}
                   className="mt-auto self-start rounded-md p-1 text-text-muted hover:text-danger"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -523,7 +528,7 @@ function ReferencesTab({
               value={reference.description ?? ""}
               onChange={(event) => onUpdate(reference.id, { description: event.target.value })}
               rows={2}
-              placeholder="À quoi sert cette référence ? (lieu, architecture, ambiance…)"
+              placeholder={t("ai.decorRefPlaceholder")}
               className="mt-3 w-full resize-none rounded-[10px] border border-border bg-input px-3 py-2 text-[12px] leading-5 text-text-primary placeholder:text-text-muted outline-none focus:border-accent"
             />
           </div>
@@ -534,6 +539,7 @@ function ReferencesTab({
 }
 
 function GeneratingIndicator() {
+  const { t } = useI18n();
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#f7faff] px-8 text-center text-[#0b1430]">
       <div className="relative h-14 w-14">
@@ -542,8 +548,8 @@ function GeneratingIndicator() {
         <Sparkles className="absolute inset-0 m-auto h-6 w-6 animate-pulse text-[#12b76a]" />
       </div>
       <div>
-        <p className="text-[15px] font-bold">Génération en cours</p>
-        <p className="mt-1 text-[12px] text-[#5e6a90]">Composition du décor…</p>
+        <p className="text-[15px] font-bold">{t("ai.generationInProgress")}</p>
+        <p className="mt-1 text-[12px] text-[#5e6a90]">{t("ai.decorComposition")}</p>
       </div>
       <div className="flex items-center gap-1.5">
         {[0, 1, 2].map((index) => (

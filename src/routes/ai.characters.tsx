@@ -13,6 +13,7 @@ import { Check, Download, ImageIcon, Plus, Save, Trash2, Upload, UserSquare2 } f
 import { recordGeneratedImage } from "@/lib/manga-history";
 import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import type { CharacterImageResult } from "@/server-functions/character-image";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/characters")({
   head: () => ({ meta: [{ title: "Character Studio - CollabManga AI" }] }),
@@ -87,6 +88,7 @@ async function readCharacterImage(file: File, view: string): Promise<MangaCharac
 }
 
 function CharacterStudio() {
+  const { t } = useI18n();
   const [characters, setCharacters] = useState<MangaCharacterProfile[]>([]);
   const [activeId, setActiveId] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -126,8 +128,9 @@ function CharacterStudio() {
         ));
         window.localStorage.removeItem("collabmanga.ai-job.characters-card.target");
       })
-      .catch((error) => setCardError(error instanceof Error ? error.message : "Échec de la récupération de la carte."))
+      .catch((error) => setCardError(error instanceof Error ? error.message : t("ai.cardFetchFailed")))
       .finally(() => setCardLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -256,7 +259,7 @@ function CharacterStudio() {
     if (!activeCharacter) return;
     const referenceImages = (activeCharacter.images ?? []).filter((image) => image.imageDataUrl);
     if (!referenceImages.length) {
-      setCardError("Ajoute au moins une image de référence avant de générer la carte.");
+      setCardError(t("ai.addRefImageBeforeCard"));
       return;
     }
     setCardError(null);
@@ -293,7 +296,7 @@ function CharacterStudio() {
         },
       );
       const cardUrl = payload.imageUrl;
-      if (!cardUrl) throw new Error("Le backend n'a renvoyé aucune carte.");
+      if (!cardUrl) throw new Error(t("ai.backendNoCard"));
       void recordGeneratedImage({
         source: "Bibliotheque de personnages",
         title: activeCharacter.name,
@@ -307,7 +310,7 @@ function CharacterStudio() {
       });
       window.localStorage.removeItem("collabmanga.ai-job.characters-card.target");
     } catch (error) {
-      setCardError(error instanceof Error ? error.message : "Échec de la génération de carte.");
+      setCardError(error instanceof Error ? error.message : t("ai.cardGenerationFailed"));
     } finally {
       setCardLoading(false);
     }
@@ -317,11 +320,11 @@ function CharacterStudio() {
     <>
       <PageHeader
         title="Character Studio"
-        description="Create reusable profiles for Manga Page Creator."
+        description={t("ai.characterStudioDesc")}
         actions={
           <>
             <button className="cma-btn-secondary" onClick={createCharacter} type="button">
-              <Plus size={16} /> New character
+              <Plus size={16} /> {t("ai.newCharacterBtn")}
             </button>
             <button
               className="cma-btn-secondary"
@@ -329,7 +332,7 @@ function CharacterStudio() {
               disabled={isImporting}
               type="button"
             >
-              <Upload size={16} /> {isImporting ? "Importing..." : "Import images"}
+              <Upload size={16} /> {isImporting ? t("ai.importingEllipsis") : t("ai.importImages")}
             </button>
             <button
               className="cma-btn-primary"
@@ -339,12 +342,12 @@ function CharacterStudio() {
             >
               {saveState === "saved" ? <Check size={16} /> : <Save size={16} />}
               {saveState === "saving"
-                ? "Saving..."
+                ? t("ai.savingEllipsis")
                 : saveState === "saved"
-                  ? "Saved"
+                  ? t("ai.savedWord")
                   : saveState === "error"
-                    ? "Save failed"
-                    : "Save"}
+                    ? t("ai.saveFailed")
+                    : t("ai.saveWord")}
             </button>
           </>
         }
@@ -370,18 +373,18 @@ function CharacterStudio() {
                 className="cma-icon-btn"
                 onClick={createCharacter}
                 type="button"
-                aria-label="New character"
+                aria-label={t("ai.newCharacterBtn")}
               >
                 <Plus size={15} />
               </button>
             }
           >
-            Characters
+            {t("ai.charactersTab")}
           </SectionTitle>
 
           <div className="flex flex-col gap-2">
             {characters.length === 0 ? (
-              <EmptyState icon={UserSquare2} title="No character yet" />
+              <EmptyState icon={UserSquare2} title={t("ai.noCharacterYet")} />
             ) : (
               characters.map((character) => (
                 <button
@@ -413,17 +416,17 @@ function CharacterStudio() {
 
         <Panel className="min-w-0">
           {!activeCharacter ? (
-            <EmptyState icon={UserSquare2} title="Select or create a character" />
+            <EmptyState icon={UserSquare2} title={t("ai.selectOrCreateCharacter")} />
           ) : (
             <>
               {/* Nom du personnage — seul champ de détails conservé */}
               <div className="mb-6 flex items-end gap-3">
                 <div className="min-w-0 flex-1">
-                  <Field label="Nom du personnage">
+                  <Field label={t("ai.characterNameLabel")}>
                     <Input
                       value={activeCharacter.name}
                       onChange={(event) => updateActiveCharacter({ name: event.target.value })}
-                      placeholder="Character name"
+                      placeholder={t("ai.characterNamePlaceholder")}
                     />
                   </Field>
                 </div>
@@ -431,7 +434,7 @@ function CharacterStudio() {
                   className="cma-icon-btn mb-0.5 shrink-0"
                   onClick={deleteActiveCharacter}
                   type="button"
-                  aria-label="Delete character"
+                  aria-label={t("ai.deleteCharacterAria")}
                 >
                   <Trash2 size={15} />
                 </button>
@@ -462,7 +465,7 @@ function CharacterStudio() {
                       </select>
                     }
                   >
-                    Images du personnage
+                    {t("ai.characterImagesTitle")}
                   </SectionTitle>
 
                   <button
@@ -479,13 +482,13 @@ function CharacterStudio() {
               <span className="flex flex-col items-center gap-2">
                 <Upload size={22} />
                 <span className="text-[13px] font-bold">
-                  {isImporting ? "Importing..." : "Import character references"}
+                  {isImporting ? t("ai.importingEllipsis") : t("ai.importCharacterRefs")}
                 </span>
               </span>
             </button>
 
                   {(activeCharacter.images ?? []).length === 0 ? (
-                    <EmptyState icon={ImageIcon} title="No reference image yet" />
+                    <EmptyState icon={ImageIcon} title={t("ai.noReferenceImageYet")} />
                   ) : (
                     <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                       {(activeCharacter.images ?? []).map((image) => (
@@ -510,7 +513,7 @@ function CharacterStudio() {
                           </div>
                           <div className="mt-3 grid gap-2">
                             <ToggleRow
-                              label={image.enabled === false ? "Désactivée" : "Utilisée"}
+                              label={image.enabled === false ? t("ai.disabledWord") : t("ai.usedWord")}
                               checked={image.enabled !== false}
                               onChange={(checked) => updateImage(image.id, { enabled: checked })}
                             />
@@ -519,7 +522,7 @@ function CharacterStudio() {
                               onChange={(event) =>
                                 updateImage(image.id, { name: event.target.value })
                               }
-                              aria-label="Image name"
+                              aria-label={t("ai.imageNameAria")}
                             />
                             <select
                               value={image.view}
@@ -539,7 +542,7 @@ function CharacterStudio() {
                               onClick={() => deleteImage(image.id)}
                               type="button"
                             >
-                              <Trash2 size={15} /> Remove
+                              <Trash2 size={15} /> {t("ai.remove")}
                             </button>
                           </div>
                         </div>
@@ -556,8 +559,8 @@ function CharacterStudio() {
                         <ToggleRow
                           label={
                             activeCharacter.cardEnabled !== false
-                              ? "Carte utilisée"
-                              : "Carte désactivée"
+                              ? t("ai.cardUsed")
+                              : t("ai.cardDisabled")
                           }
                           checked={activeCharacter.cardEnabled !== false}
                           onChange={(checked) => updateActiveCharacter({ cardEnabled: checked })}
@@ -565,7 +568,7 @@ function CharacterStudio() {
                       ) : null
                     }
                   >
-                    Carte de personnage
+                    {t("ai.characterCardSectionTitle")}
                   </SectionTitle>
 
                   <div
@@ -576,10 +579,7 @@ function CharacterStudio() {
                     }}
                   >
                     <div className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-                      Consolide la bibliothèque en une seule image (profils + expressions), utilisée
-                      comme référence unique dans la planche pour rester dans le budget de 16
-                      images. Si la carte est désactivée, ce sont les images actives de la
-                      bibliothèque qui sont envoyées.
+                      {t("ai.cardExplanation")}
                     </div>
 
                     <button
@@ -589,10 +589,10 @@ function CharacterStudio() {
                       disabled={cardLoading || (activeCharacter.images ?? []).length === 0}
                     >
                       {cardLoading
-                        ? "Génération..."
+                        ? t("ai.generatingEllipsis")
                         : activeCharacter.cardImageDataUrl
-                          ? "Régénérer la carte"
-                          : "Générer la carte"}
+                          ? t("ai.regenerateCard")
+                          : t("ai.generateCard")}
                     </button>
 
                     {cardError && (
@@ -611,15 +611,15 @@ function CharacterStudio() {
                         >
                           <img
                             src={activeCharacter.cardImageDataUrl}
-                            alt="Carte de personnage"
+                            alt={t("ai.characterCardAlt")}
                             className="w-full object-contain"
                           />
                         </div>
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
                             {activeCharacter.cardImageGeneratedAt
-                              ? `Générée le ${new Date(activeCharacter.cardImageGeneratedAt).toLocaleString()}`
-                              : "Carte disponible"}
+                              ? `${t("ai.generatedOnPrefix")} ${new Date(activeCharacter.cardImageGeneratedAt).toLocaleString()}`
+                              : t("ai.cardAvailable")}
                           </span>
                           <div className="flex items-center gap-3">
                             <button
@@ -627,7 +627,7 @@ function CharacterStudio() {
                               className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent"
                               onClick={() => void downloadCard()}
                             >
-                              <Download className="h-4 w-4" /> Télécharger
+                              <Download className="h-4 w-4" /> {t("ai.download")}
                             </button>
                             <button
                               type="button"
@@ -640,7 +640,7 @@ function CharacterStudio() {
                                 })
                               }
                             >
-                              Supprimer la carte
+                              {t("ai.deleteCard")}
                             </button>
                           </div>
                         </div>

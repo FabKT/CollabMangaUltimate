@@ -5,6 +5,7 @@ import { Download, ShieldAlert } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getAdminBilling } from "@/server-functions/admin-billing";
 import { isLocalAiClientMode } from "@/lib/local-ai-mode";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/admin")({
   head: () => ({ meta: [{ title: "Admin — Facturation CollabManga AI" }] }),
@@ -50,7 +51,41 @@ function downloadCsv(filename: string, rows: Row[]) {
   URL.revokeObjectURL(url);
 }
 
+const USER_COL_KEYS: TranslationKey[] = [
+  "ai.colUser",
+  "ai.colPlan",
+  "ai.colStatus",
+  "ai.colRenewalShort",
+  "ai.colCreditsUsedGranted",
+  "ai.colExpired",
+  "ai.colPaid",
+  "ai.colStripeFees",
+  "ai.colOpenaiCost",
+  "ai.realizedMargin",
+  "ai.colGenerations",
+];
+
+const PERIOD_COL_KEYS: TranslationKey[] = [
+  "ai.colUser",
+  "ai.colPlan",
+  "ai.colStart",
+  "ai.colPlannedEnd",
+  "ai.colClosure",
+  "ai.colReason",
+  "ai.colQuota",
+  "ai.colUsedShort",
+  "ai.colExpired",
+  "ai.colPaid",
+  "ai.colFeesShort",
+  "ai.colOpenaiShort",
+  "ai.colEstMargin",
+  "ai.colRealMargin",
+  "ai.colTech",
+  "ai.colFin",
+];
+
 function AdminBilling() {
+  const { t } = useI18n();
   const [data, setData] = useState<AdminData | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "denied">("loading");
   const [planFilter, setPlanFilter] = useState("all");
@@ -85,7 +120,7 @@ function AdminBilling() {
   if (state === "loading") {
     return (
       <>
-        <PageHeader title="Admin — Facturation" description="Chargement…" />
+        <PageHeader title={t("ai.adminBillingTitle")} description={t("ai.loadingEllipsis")} />
       </>
     );
   }
@@ -93,10 +128,10 @@ function AdminBilling() {
   if (state === "denied") {
     return (
       <>
-        <PageHeader title="Admin — Facturation" />
+        <PageHeader title={t("ai.adminBillingTitle")} />
         <Panel>
           <div className="flex items-center gap-3 text-[14px]" style={{ color: "var(--warning)" }}>
-            <ShieldAlert size={18} /> Accès réservé aux administrateurs.
+            <ShieldAlert size={18} /> {t("ai.adminAccessDenied")}
           </div>
         </Panel>
       </>
@@ -105,21 +140,21 @@ function AdminBilling() {
 
   const metrics = data?.metrics;
   const metricCards = [
-    { label: "Images générées", value: num(metrics?.count) },
-    { label: "Coût total", value: usd(metrics?.totalCostUsd) },
-    { label: "Coût minimum", value: usd(metrics?.minimumCostUsd) },
-    { label: "Coût maximum", value: usd(metrics?.maximumCostUsd) },
-    { label: "Coût moyen", value: usd(metrics?.averageCostUsd) },
+    { label: t("ai.metricImagesGenerated"), value: num(metrics?.count) },
+    { label: t("ai.metricTotalCost"), value: usd(metrics?.totalCostUsd) },
+    { label: t("ai.metricMinCost"), value: usd(metrics?.minimumCostUsd) },
+    { label: t("ai.metricMaxCost"), value: usd(metrics?.maximumCostUsd) },
+    { label: t("ai.metricAvgCost"), value: usd(metrics?.averageCostUsd) },
   ];
 
   if (data && !data.configured) {
     return (
       <>
         <PageHeader
-          title="Admin — Générations IA"
-          description="Mesure du volume et du coût des images générées depuis les outils CollabManga AI."
+          title={t("ai.adminGenerationsTitle")}
+          description={t("ai.adminGenerationsDesc")}
         />
-        <SectionTitle>Statistiques d'images</SectionTitle>
+        <SectionTitle>{t("ai.imageStats")}</SectionTitle>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
           {metricCards.map((card) => (
             <Panel key={card.label}>
@@ -134,15 +169,13 @@ function AdminBilling() {
         </div>
         <Panel className="mb-4">
           <div className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
-            {metrics?.backendReported ?? 0} mesure(s) remontée(s) par le backend et{" "}
-            {metrics?.estimated ?? 0} estimation(s) basées sur le tarif de sortie officiel du
-            modèle, de la qualité et des dimensions.
+            {metrics?.backendReported ?? 0} {t("ai.measuresReportedSuffix")}{" "}
+            {metrics?.estimated ?? 0} {t("ai.estimationsBasedSuffix")}
           </div>
         </Panel>
         <Panel>
           <div className="text-[14px]" style={{ color: "var(--text-secondary)" }}>
-            Mode local sans abonnement actif. Les générations restent comptabilisées dans ce
-            tableau.
+            {t("ai.localModeNotice")}
           </div>
         </Panel>
       </>
@@ -156,28 +189,28 @@ function AdminBilling() {
     : { active: 0, canceled: 0, pastDue: 0, cancelScheduled: 0, downgradeScheduled: 0 };
 
   const globalCards: { label: string; value: string }[] = [
-    { label: "Chiffre d'affaires brut", value: eur(g?.gross_revenue_cents) },
-    { label: "CA net (après frais Stripe)", value: eur(g?.net_revenue_cents) },
-    { label: "Revenu en attente", value: eur(g?.pending_revenue_cents) },
-    { label: "Coûts OpenAI", value: eur(g?.openai_cost_cents) },
-    { label: "Marge estimée", value: eur(g?.margin_estimated_cents) },
-    { label: "Marge réalisée", value: eur(g?.margin_realized_cents) },
-    { label: "Crédits vendus", value: num(g?.credits_sold) },
-    { label: "Crédits utilisés", value: num(g?.credits_used) },
-    { label: "Crédits expirés", value: num(g?.credits_expired) },
-    { label: "Abonnements actifs", value: num(counts.active) },
-    { label: "Annulations programmées", value: num(counts.cancelScheduled) },
-    { label: "Montées / baisses", value: `${num(g?.upgrades)} / ${num(g?.downgrades)}` },
+    { label: t("ai.grossRevenue"), value: eur(g?.gross_revenue_cents) },
+    { label: t("ai.netRevenue"), value: eur(g?.net_revenue_cents) },
+    { label: t("ai.pendingRevenue"), value: eur(g?.pending_revenue_cents) },
+    { label: t("ai.openaiCosts"), value: eur(g?.openai_cost_cents) },
+    { label: t("ai.estimatedMargin"), value: eur(g?.margin_estimated_cents) },
+    { label: t("ai.realizedMargin"), value: eur(g?.margin_realized_cents) },
+    { label: t("ai.creditsSold"), value: num(g?.credits_sold) },
+    { label: t("ai.creditsUsed"), value: num(g?.credits_used) },
+    { label: t("ai.creditsExpired"), value: num(g?.credits_expired) },
+    { label: t("ai.activeSubs"), value: num(counts.active) },
+    { label: t("ai.scheduledCancellations"), value: num(counts.cancelScheduled) },
+    { label: t("ai.upgradesDowngrades"), value: `${num(g?.upgrades)} / ${num(g?.downgrades)}` },
   ];
 
   return (
     <>
       <PageHeader
-        title="Admin — Générations et facturation"
-        description="Vue d'ensemble des images, abonnements, crédits, coûts et marges."
+        title={t("ai.adminFullTitle")}
+        description={t("ai.adminFullDesc")}
       />
 
-      <SectionTitle>Statistiques d'images</SectionTitle>
+      <SectionTitle>{t("ai.imageStats")}</SectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-4">
         {metricCards.map((card) => (
           <Panel key={card.label}>
@@ -192,13 +225,12 @@ function AdminBilling() {
       </div>
       <Panel className="mb-6">
         <div className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
-          {metrics?.backendReported ?? 0} mesure(s) remontée(s) par le backend et{" "}
-          {metrics?.estimated ?? 0} estimation(s) basées sur le tarif de sortie officiel du modèle,
-          de la qualité et des dimensions.
+          {metrics?.backendReported ?? 0} {t("ai.measuresReportedSuffix")}{" "}
+          {metrics?.estimated ?? 0} {t("ai.estimationsBasedSuffix")}
         </div>
       </Panel>
 
-      <SectionTitle>Global</SectionTitle>
+      <SectionTitle>{t("ai.globalSection")}</SectionTitle>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
         {globalCards.map((c) => (
           <Panel key={c.label}>
@@ -216,7 +248,7 @@ function AdminBilling() {
       </div>
 
       <div className="flex items-center justify-between mb-2">
-        <SectionTitle>Par utilisateur ({users.length})</SectionTitle>
+        <SectionTitle>{t("ai.byUserPrefix")} ({users.length})</SectionTitle>
         <button
           className="cma-btn-secondary"
           onClick={() => downloadCsv("collabmanga-utilisateurs.csv", users)}
@@ -231,24 +263,12 @@ function AdminBilling() {
         >
           <thead>
             <tr style={{ color: "var(--text-muted)", textAlign: "left" }}>
-              {[
-                "Utilisateur",
-                "Plan",
-                "Statut",
-                "Renouv.",
-                "Crédits (util./accord.)",
-                "Expirés",
-                "Payé",
-                "Frais Stripe",
-                "Coût OpenAI",
-                "Marge réalisée",
-                "Générations",
-              ].map((h) => (
+              {USER_COL_KEYS.map((key) => (
                 <th
-                  key={h}
+                  key={key}
                   className="py-2 pr-4 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap"
                 >
-                  {h}
+                  {t(key)}
                 </th>
               ))}
             </tr>
@@ -257,7 +277,7 @@ function AdminBilling() {
             {users.length === 0 && (
               <tr>
                 <td colSpan={11} className="py-4">
-                  Aucun abonné pour l'instant.
+                  {t("ai.noSubscriberYet")}
                 </td>
               </tr>
             )}
@@ -290,14 +310,14 @@ function AdminBilling() {
       </Panel>
 
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-        <SectionTitle>Par période ({periods.length})</SectionTitle>
+        <SectionTitle>{t("ai.byPeriodPrefix")} ({periods.length})</SectionTitle>
         <div className="flex items-center gap-2">
           <select
             className="cma-input !h-9"
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
           >
-            <option value="all">Tous les plans</option>
+            <option value="all">{t("ai.allPlans")}</option>
             <option value="starter">Starter</option>
             <option value="creator">Creator</option>
             <option value="studio">Studio</option>
@@ -307,7 +327,7 @@ function AdminBilling() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="all">Tous les statuts</option>
+            <option value="all">{t("ai.allStatuses")}</option>
             <option value="active">Active</option>
             <option value="closed">Closed</option>
             <option value="payment_failed">Payment failed</option>
@@ -328,29 +348,12 @@ function AdminBilling() {
         >
           <thead>
             <tr style={{ color: "var(--text-muted)", textAlign: "left" }}>
-              {[
-                "Utilisateur",
-                "Plan",
-                "Début",
-                "Fin prévue",
-                "Clôture",
-                "Motif",
-                "Quota",
-                "Util.",
-                "Expirés",
-                "Payé",
-                "Frais",
-                "OpenAI",
-                "Marge est.",
-                "Marge réal.",
-                "Tech",
-                "Fin.",
-              ].map((h) => (
+              {PERIOD_COL_KEYS.map((key) => (
                 <th
-                  key={h}
+                  key={key}
                   className="py-2 pr-3 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap"
                 >
-                  {h}
+                  {t(key)}
                 </th>
               ))}
             </tr>
@@ -359,7 +362,7 @@ function AdminBilling() {
             {periods.length === 0 && (
               <tr>
                 <td colSpan={16} className="py-4">
-                  Aucune période.
+                  {t("ai.noPeriodYet")}
                 </td>
               </tr>
             )}

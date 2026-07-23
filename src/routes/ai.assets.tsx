@@ -2,27 +2,32 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { PageHeader, Panel, Card, Input, Chip, SectionTitle } from "@/components/cma/Layout";
 import { Search, Grid3x3, List, Image as ImageIcon, Plus, MoreHorizontal } from "lucide-react";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/assets")({
   head: () => ({ meta: [{ title: "Asset Library — CollabManga AI" }] }),
   component: AssetLibrary,
 });
 
-const cats = ["All", "Characters", "Backgrounds", "Objects", "References", "Generated Pages", "Style Variants", "Scenes"];
+const CAT_KEYS: TranslationKey[] = ["ai.catAll", "ai.catCharacters", "ai.catBackgrounds", "ai.catObjects", "ai.catReferences", "ai.catGeneratedPages", "ai.catStyleVariants", "ai.catScenes"];
 
 function AssetLibrary() {
-  const [cat, setCat] = useState("All");
+  const { t } = useI18n();
+  const [cat, setCat] = useState(0);
   const [view, setView] = useState<"grid" | "list">("grid");
+  const cats = CAT_KEYS.map((key) => t(key));
+  const typeAbbr = ["Char", "Bg", "Obj", "Ref"];
+  const typeWords = [t("ai.typeCharacter"), t("ai.typeBackground"), t("ai.typeObject"), t("ai.typeReference")];
 
   return (
     <>
       <PageHeader
-        title="Asset Library"
-        description="All your reusable AI assets in one place."
+        title={t("ai.assetLibrary")}
+        description={t("ai.assetLibraryDesc")}
         actions={
           <>
-            <button className="cma-btn-secondary">Import</button>
-            <button className="cma-btn-primary"><Plus size={16} /> New asset</button>
+            <button className="cma-btn-secondary">{t("ai.import")}</button>
+            <button className="cma-btn-primary"><Plus size={16} /> {t("ai.newAsset")}</button>
           </>
         }
       />
@@ -31,7 +36,7 @@ function AssetLibrary() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">
             <Search size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
-            <Input placeholder="Search assets" style={{ paddingLeft: 38 }} />
+            <Input placeholder={t("ai.searchAssets")} style={{ paddingLeft: 38 }} />
           </div>
           <div className="flex items-center gap-1 p-1" style={{ background: "var(--bg-input)", borderRadius: 12, border: "1px solid var(--border-default)" }}>
             <ViewBtn active={view === "grid"} onClick={() => setView("grid")} icon={<Grid3x3 size={14} />} />
@@ -39,8 +44,8 @@ function AssetLibrary() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
-          {cats.map((c) => (
-            <Chip key={c} active={c === cat} onClick={() => setCat(c)}>{c}</Chip>
+          {cats.map((c, i) => (
+            <Chip key={c} active={i === cat} onClick={() => setCat(i)}>{c}</Chip>
           ))}
         </div>
       </Panel>
@@ -54,11 +59,11 @@ function AssetLibrary() {
               </div>
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <div className="text-[13px] font-bold truncate">Asset {i + 1}</div>
-                  <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>Last used —</div>
+                  <div className="text-[13px] font-bold truncate">{t("ai.assetPrefix")} {i + 1}</div>
+                  <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{t("ai.lastUsed")} —</div>
                 </div>
                 <span className="cma-chip" style={{ height: 22, padding: "0 8px" }}>
-                  {["Char", "Bg", "Obj", "Ref"][i % 4]}
+                  {typeAbbr[i % 4]}
                 </span>
               </div>
             </Card>
@@ -67,7 +72,7 @@ function AssetLibrary() {
       ) : (
         <Panel padding={0}>
           <div className="grid grid-cols-[1fr_120px_140px_60px] gap-4 px-5 py-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-default)" }}>
-            <div>Asset</div><div>Type</div><div>Last used</div><div></div>
+            <div>{t("ai.assetPrefix")}</div><div>{t("ai.typeCol")}</div><div>{t("ai.lastUsed")}</div><div></div>
           </div>
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="grid grid-cols-[1fr_120px_140px_60px] gap-4 items-center px-5 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
@@ -75,9 +80,9 @@ function AssetLibrary() {
                 <div className="grid place-items-center shrink-0" style={{ width: 36, height: 36, borderRadius: 10, background: "var(--bg-input)" }}>
                   <ImageIcon size={16} style={{ color: "var(--text-muted)" }} />
                 </div>
-                <div className="text-[13px] font-bold truncate">Asset {i + 1}</div>
+                <div className="text-[13px] font-bold truncate">{t("ai.assetPrefix")} {i + 1}</div>
               </div>
-              <Chip>{["Character","Background","Object","Reference"][i % 4]}</Chip>
+              <Chip>{typeWords[i % 4]}</Chip>
               <div className="text-[12px]" style={{ color: "var(--text-muted)" }}>—</div>
               <button className="cma-icon-btn"><MoreHorizontal size={14} /></button>
             </div>

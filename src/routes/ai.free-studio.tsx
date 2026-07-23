@@ -18,6 +18,7 @@ import { recordGeneratedImage } from "@/lib/manga-history";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { FreeImageResult } from "@/server-functions/free-image";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/free-studio")({
   head: () => ({ meta: [{ title: "Studio libre - CollabManga AI" }] }),
@@ -69,6 +70,7 @@ function fileName(file: File) {
 }
 
 function FreeStudioPage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<StudioTab>("references");
   const [references, setReferences] = useState<StudioReference[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -102,8 +104,9 @@ function FreeStudioPage() {
     setIsGenerating(true);
     void resumeDurableGeneration<FreeImageResult>("free-studio").then((generated) => {
       if (generated) setResult(generated);
-    }).catch((err) => setError(err instanceof Error ? err.message : "Free generation failed."))
+    }).catch((err) => setError(err instanceof Error ? err.message : t("ai.freeGenerationFailed")))
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -143,7 +146,7 @@ function FreeStudioPage() {
   const generate = async () => {
     if (!prompt.trim()) {
       setTab("prompt");
-      setError("Decris l'image que tu veux generer.");
+      setError(t("ai.describeImageToGenerate"));
       return;
     }
     setError(null);
@@ -176,7 +179,7 @@ function FreeStudioPage() {
       notifyCreditsChanged();
     } catch (generationError) {
       setError(
-        generationError instanceof Error ? generationError.message : "Free generation failed.",
+        generationError instanceof Error ? generationError.message : t("ai.freeGenerationFailed"),
       );
     } finally {
       setIsGenerating(false);
@@ -194,8 +197,8 @@ function FreeStudioPage() {
   return (
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
-        title="Studio libre"
-        description="Decris librement ton image : le prompt est structure avant la generation."
+        title={t("ai.freeStudioTitle")}
+        description={t("ai.freeStudioDesc")}
       />
 
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
@@ -203,8 +206,8 @@ function FreeStudioPage() {
           <div className="flex items-center gap-1 border-b border-border p-3">
             {(
               [
-                { id: "references", label: "References", icon: Images },
-                { id: "prompt", label: "Prompt", icon: FileText },
+                { id: "references", label: t("ai.referencesTab"), icon: Images },
+                { id: "prompt", label: t("ai.promptTab"), icon: FileText },
               ] as const
             ).map((entry) => (
               <button
@@ -241,11 +244,11 @@ function FreeStudioPage() {
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   rows={18}
-                  placeholder="Decris la scene, les personnages, leurs expressions, la prise de vue, le style ou la structure de la planche..."
+                  placeholder={t("ai.freeStudioPromptPlaceholder")}
                   className="w-full resize-none rounded-[14px] border border-border bg-input px-4 py-3 text-[14px] leading-relaxed text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                 />
                 <div>
-                  <p className="mb-2 text-[12px] font-bold text-text-secondary">Format</p>
+                  <p className="mb-2 text-[12px] font-bold text-text-secondary">{t("ai.format")}</p>
                   <div className="grid grid-cols-2 gap-2">
                     {(["2:3", "3:2"] as const).map((ratio) => (
                       <button
@@ -276,7 +279,7 @@ function FreeStudioPage() {
               className="flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-extrabold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" />
-              {isGenerating ? "Generation..." : "Generer l'image"}
+              {isGenerating ? t("ai.generatingEllipsis") : t("ai.generateImage")}
             </button>
           </div>
         </section>
@@ -285,13 +288,13 @@ function FreeStudioPage() {
           <header className="flex h-[65px] items-center justify-between border-b border-border px-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <h2 className="font-display text-base font-bold">Image generee</h2>
+              <h2 className="font-display text-base font-bold">{t("ai.generatedImageFallback")}</h2>
             </div>
             <button
               type="button"
               onClick={download}
               disabled={!result}
-              aria-label="Telecharger"
+              aria-label={t("ai.download")}
               className="grid h-9 w-9 place-items-center rounded-[10px] border border-border bg-surface-3 text-text-secondary disabled:opacity-40"
             >
               <Download className="h-4 w-4" />
@@ -305,7 +308,7 @@ function FreeStudioPage() {
               {isGenerating ? (
                 <div className="flex flex-col items-center gap-3 text-text-secondary">
                   <Sparkles className="h-8 w-8 animate-pulse text-accent" />
-                  <p className="text-[13px] font-semibold">Optimisation et generation...</p>
+                  <p className="text-[13px] font-semibold">{t("ai.optimizingGenerating")}</p>
                 </div>
               ) : result ? (
                 <button
@@ -315,14 +318,14 @@ function FreeStudioPage() {
                 >
                   <img
                     src={result.imageUrl}
-                    alt="Generation du Studio libre"
+                    alt={t("ai.freeStudioGenerationAlt")}
                     className="h-full w-full object-contain"
                   />
                 </button>
               ) : (
                 <div className="flex flex-col items-center gap-3 px-8 text-center text-text-muted">
                   <ImageIcon className="h-9 w-9" />
-                  <p className="text-[13px] font-semibold">L'image generee apparaitra ici.</p>
+                  <p className="text-[13px] font-semibold">{t("ai.generatedImageWillAppear")}</p>
                 </div>
               )}
             </div>
@@ -342,14 +345,14 @@ function FreeStudioPage() {
             <button
               type="button"
               onClick={() => setLightbox(false)}
-              aria-label="Fermer"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2"
             >
               <X className="h-4 w-4" />
             </button>
             <img
               src={result.imageUrl}
-              alt="Generation du Studio libre"
+              alt={t("ai.freeStudioGenerationAlt")}
               className="max-h-[88vh] max-w-full rounded-[14px] object-contain"
             />
           </div>
@@ -370,6 +373,7 @@ function ReferenceLibrary({
   onUpdate: (id: string, patch: Partial<StudioReference>) => void;
   onRemove: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <div className="flex flex-col gap-3">
@@ -390,7 +394,7 @@ function ReferenceLibrary({
         className="flex min-h-[150px] w-full flex-col items-center justify-center gap-3 rounded-[14px] border border-dashed border-border-strong bg-surface-3 hover:border-accent"
       >
         <Upload className="h-8 w-8 text-text-muted" />
-        <span className="text-[13px] font-bold">Ajouter des references</span>
+        <span className="text-[13px] font-bold">{t("ai.addReferences")}</span>
       </button>
 
       {references.map((reference) => (
@@ -417,15 +421,15 @@ function ReferenceLibrary({
                 onChange={(event) =>
                   onUpdate(reference.id, { role: event.target.value as StudioReferenceRole })
                 }
-                aria-label={`Rôle de ${reference.name}`}
+                aria-label={`${t("ai.roleOfPrefix")} ${reference.name}`}
                 className="h-9 min-w-0 rounded-[9px] border border-border bg-input px-2 text-[11px] font-bold outline-none focus:border-accent"
               >
                 <option value="Inspiration">Inspiration</option>
-                <option value="Character">Personnage</option>
+                <option value="Character">{t("ai.roleCharacter")}</option>
                 <option value="Pose">Pose</option>
-                <option value="Storyboard">Structure</option>
-                <option value="Background">Décor</option>
-                <option value="Object">Objet</option>
+                <option value="Storyboard">{t("ai.roleStoryboard")}</option>
+                <option value="Background">{t("ai.roleBackground")}</option>
+                <option value="Object">{t("ai.roleObject")}</option>
                 <option value="Style">Style</option>
               </select>
             </div>
@@ -433,14 +437,14 @@ function ReferenceLibrary({
               value={reference.description}
               onChange={(event) => onUpdate(reference.id, { description: event.target.value })}
               rows={2}
-              placeholder="Utilite : pose, personnage, decor, style..."
+              placeholder={t("ai.referenceUtilityPlaceholder")}
               className="w-full resize-none rounded-[9px] border border-border bg-input px-3 py-2 text-[11px] outline-none focus:border-accent"
             />
           </div>
           <button
             type="button"
             onClick={() => onRemove(reference.id)}
-            aria-label="Supprimer"
+            aria-label={t("ai.remove")}
             className="grid h-9 w-9 place-items-center rounded-[9px] border border-border bg-surface-2 text-text-muted hover:text-danger"
           >
             <Trash2 className="h-4 w-4" />
@@ -454,7 +458,7 @@ function ReferenceLibrary({
           onClick={() => inputRef.current?.click()}
           className="flex h-10 items-center justify-center gap-2 rounded-[10px] border border-border bg-surface-3 text-[12px] font-bold text-text-secondary hover:text-accent"
         >
-          <Plus className="h-4 w-4" /> Ajouter
+          <Plus className="h-4 w-4" /> {t("ai.addWord")}
         </button>
       )}
     </div>

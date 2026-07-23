@@ -10,6 +10,7 @@ import {
   cancelMySubscription,
   openBillingPortal,
 } from "@/server-functions/stripe-billing";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/plan")({
   head: () => ({ meta: [{ title: "Plan & Images — CollabManga AI" }] }),
@@ -18,15 +19,18 @@ export const Route = createFileRoute("/ai/plan")({
 
 type BillingState = Awaited<ReturnType<typeof getMyBilling>>;
 
-const PLAN_FEATURES: Record<PlanId, string[]> = {
-  starter: ["80 images / mois", "Manga Page Creator", "Character Studio", "Bibliothèque d'assets"],
-  creator: ["300 images / mois", "Génération prioritaire", "Raw to Final", "Transfert de style"],
-  studio: ["1200 images / mois", "Priorité maximale", "Cohérence avancée", "Bibliothèque d'équipe"],
-};
-const PLAN_TAGLINE: Record<PlanId, string> = {
-  starter: "For exploring CollabManga AI",
-  creator: "For ongoing manga projects",
-  studio: "For teams and studios",
+function planFeatures(t: (key: TranslationKey) => string): Record<PlanId, string[]> {
+  const perMonth = t("ai.imagesPerMonth");
+  return {
+    starter: [`${PLANS.starter.quota} ${perMonth}`, "Manga Page Creator", "Character Studio", t("ai.assetLibrary")],
+    creator: [`${PLANS.creator.quota} ${perMonth}`, t("ai.priorityGeneration"), "Raw to Final", t("ai.styleTransfer")],
+    studio: [`${PLANS.studio.quota} ${perMonth}`, t("ai.maxPriority"), t("ai.advancedConsistency"), t("ai.teamLibrary")],
+  };
+}
+const PLAN_TAGLINE_KEYS: Record<PlanId, TranslationKey> = {
+  starter: "ai.taglineStarter",
+  creator: "ai.taglineCreator",
+  studio: "ai.taglineStudio",
 };
 
 async function accessToken(): Promise<string | null> {
@@ -36,6 +40,8 @@ async function accessToken(): Promise<string | null> {
 }
 
 function PlanImages() {
+  const { t } = useI18n();
+  const PLAN_FEATURES = useMemo(() => planFeatures(t), [t]);
   const [billing, setBilling] = useState<BillingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
@@ -67,16 +73,15 @@ function PlanImages() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("success"))
-      setNotice(
-        "Paiement confirmé — ton quota sera crédité dès la confirmation Stripe (quelques secondes).",
-      );
+      setNotice(t("ai.paymentConfirmedNotice"));
     else if (params.get("upgraded"))
-      setNotice("Montée en gamme effectuée : ton nouveau quota est disponible.");
+      setNotice(t("ai.upgradedNotice"));
     else if (params.get("downgrade"))
-      setNotice("Baisse de gamme programmée : elle prendra effet au prochain renouvellement.");
+      setNotice(t("ai.downgradeScheduledNotice"));
     else if (params.get("canceled"))
-      setNotice("Paiement annulé — aucun changement n'a été appliqué.");
+      setNotice(t("ai.paymentCanceledNotice"));
     if (params.toString()) window.history.replaceState({}, "", "/ai/plan");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subscription = billing?.configured ? billing.subscription : null;
@@ -108,7 +113,7 @@ function PlanImages() {
     try {
       const token = await accessToken();
       if (!token) {
-        setNotice("Connecte-toi pour souscrire à un abonnement.");
+        setNotice(t("ai.loginToSubscribe"));
         setBusy(false);
         return;
       }
@@ -122,20 +127,20 @@ function PlanImages() {
       if (res.mode === "immediate") {
         // Montée en gamme : la carte enregistrée a été débitée. On attend le webhook.
         setConfirmPlan(null);
-        setNotice("Paiement en cours de traitement…");
+        setNotice(t("ai.paymentProcessing"));
         const confirmed = await pollUntilPlan(plan);
         setNotice(
           confirmed
-            ? `Plan mis à jour : ${PLANS[plan].label} — ${PLANS[plan].quota} crédits disponibles.`
-            : "Le paiement est encore en cours de confirmation. Aucun nouveau crédit ne sera utilisable avant la confirmation Stripe.",
+            ? `${t("ai.planUpdatedPrefix")} ${PLANS[plan].label} — ${PLANS[plan].quota} ${t("ai.creditsAvailableSuffix")}`
+            : t("ai.paymentStillConfirming"),
         );
       } else {
         setConfirmPlan(null);
-        setNotice("Baisse de gamme programmée : elle prendra effet au prochain renouvellement.");
+        setNotice(t("ai.downgradeScheduledNotice"));
         refresh();
       }
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Échec du paiement.");
+      setNotice(err instanceof Error ? err.message : t("ai.paymentFailed"));
     }
     setBusy(false);
   };
@@ -155,13 +160,11 @@ function PlanImages() {
       const token = await accessToken();
       if (token) {
         await cancelMySubscription({ data: { accessToken: token } });
-        setNotice(
-          "Renouvellement annulé : ton accès reste actif jusqu'à la fin de la période payée.",
-        );
+        setNotice(t("ai.renewalCanceledNotice"));
         refresh();
       }
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Échec de l'annulation.");
+      setNotice(err instanceof Error ? err.message : t("ai.cancelFailed"));
     }
     setBusy(false);
   };
@@ -171,14 +174,14 @@ function PlanImages() {
     setNotice(null);
     try {
       const token = await accessToken();
-      if (!token) throw new Error("Connecte-toi pour gérer ta facturation.");
+      if (!token) throw new Error(t("ai.loginToManageBilling"));
       const { url } = await openBillingPortal({
         data: { accessToken: token, origin: window.location.origin },
       });
       window.location.href = url;
       return;
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Impossible d'ouvrir la facturation.");
+      setNotice(err instanceof Error ? err.message : t("ai.billingOpenFailed"));
     }
     setBusy(false);
   };
@@ -192,8 +195,8 @@ function PlanImages() {
   return (
     <>
       <PageHeader
-        title="Plan & Images"
-        description="Gère ton abonnement CollabManga AI et ton quota d'images générées."
+        title={t("ai.planTitle")}
+        description={t("ai.planDesc")}
         actions={
           <>
             <button
@@ -201,7 +204,7 @@ function PlanImages() {
               onClick={() => void openPortal()}
               disabled={busy || !subscription}
             >
-              <Receipt size={16} /> Billing
+              <Receipt size={16} /> {t("ai.billingBtn")}
             </button>
             {currentPlan && !billing?.subscription?.cancelAtPeriodEnd && (
               <button
@@ -209,7 +212,7 @@ function PlanImages() {
                 onClick={() => setConfirmCancel(true)}
                 disabled={busy}
               >
-                Annuler le renouvellement
+                {t("ai.cancelRenewal")}
               </button>
             )}
           </>
@@ -238,7 +241,7 @@ function PlanImages() {
             color: "var(--warning)",
           }}
         >
-          Paiements pas encore activés : les clés Stripe doivent être configurées côté serveur.
+          {t("ai.paymentsNotEnabled")}
         </div>
       )}
 
@@ -247,15 +250,15 @@ function PlanImages() {
           <SectionTitle
             right={
               currentPlan && period ? (
-                <span className="cma-chip cma-chip-active">Active</span>
+                <span className="cma-chip cma-chip-active">{t("ai.activeChip")}</span>
               ) : undefined
             }
           >
-            Current plan
+            {t("ai.currentPlan")}
           </SectionTitle>
           {loading ? (
             <div className="text-[13px]" style={{ color: "var(--text-muted)" }}>
-              Chargement…
+              {t("ai.loadingEllipsis")}
             </div>
           ) : currentPlan ? (
             <>
@@ -265,13 +268,13 @@ function PlanImages() {
                     className="text-[12px] uppercase tracking-wider"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    Plan
+                    {t("ai.planLabel")}
                   </div>
                   <div style={{ font: "700 28px/36px var(--font-display)" }}>
                     {PLANS[currentPlan].label}
                   </div>
                   <div className="text-[13px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                    {PLANS[currentPlan].quota} images incluses par mois
+                    {PLANS[currentPlan].quota} {t("ai.imagesIncludedPerMonth")}
                   </div>
                 </div>
                 <div className="text-right">
@@ -279,13 +282,13 @@ function PlanImages() {
                     className="text-[12px] uppercase tracking-wider"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    Price
+                    {t("ai.priceLabel")}
                   </div>
                   <div style={{ font: "700 28px/36px var(--font-display)" }}>
                     {PLANS[currentPlan].priceEuros.toFixed(2)} €
                     <span className="text-[13px]" style={{ color: "var(--text-muted)" }}>
                       {" "}
-                      / mois
+                      {t("ai.perMonth")}
                     </span>
                   </div>
                 </div>
@@ -295,7 +298,7 @@ function PlanImages() {
                   className="flex items-center justify-between text-[13px]"
                   style={{ color: "var(--text-secondary)" }}
                 >
-                  <span>Crédits restants cette période</span>
+                  <span>{t("ai.creditsRemainingPeriod")}</span>
                   <span>
                     <strong style={{ color: "var(--text-primary)" }}>
                       {period?.remaining ?? 0}
@@ -323,10 +326,10 @@ function PlanImages() {
                     style={{ color: "var(--text-muted)" }}
                   >
                     <span>
-                      {period.used} générée{period.used > 1 ? "s" : ""}
+                      {period.used} {t(period.used > 1 ? "ai.generatedPlural" : "ai.generatedSingular")}
                     </span>
                     <span>
-                      Renouvellement : {new Date(period.renewalAt).toLocaleDateString("fr-FR")}
+                      {t("ai.renewalLabel")} {new Date(period.renewalAt).toLocaleDateString("fr-FR")}
                     </span>
                   </div>
                 )}
@@ -335,7 +338,7 @@ function PlanImages() {
                     className="mt-2 text-[12px] font-semibold"
                     style={{ color: "var(--warning)" }}
                   >
-                    Renouvellement annulé — accès jusqu'à la fin de la période.
+                    {t("ai.renewalCanceledBadge")}
                   </div>
                 )}
                 {billing?.subscription?.scheduledDowngrade && (
@@ -343,8 +346,8 @@ function PlanImages() {
                     className="mt-1 text-[12px] font-semibold"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    Passage à {PLANS[billing.subscription.scheduledDowngrade].label} au prochain
-                    renouvellement.
+                    {t("ai.scheduledDowngradeToPrefix")} {PLANS[billing.subscription.scheduledDowngrade].label}{" "}
+                    {t("ai.scheduledDowngradeToSuffix")}
                   </div>
                 )}
                 {!period && (
@@ -352,7 +355,7 @@ function PlanImages() {
                     className="mt-2 text-[12px] font-semibold"
                     style={{ color: "var(--warning)" }}
                   >
-                    Paiement en cours de confirmation : aucun crédit n'est encore disponible.
+                    {t("ai.paymentConfirmingNoCredits")}
                   </div>
                 )}
               </div>
@@ -360,34 +363,34 @@ function PlanImages() {
           ) : (
             <div className="text-[13px]" style={{ color: "var(--text-secondary)" }}>
               {subscription?.status === "past_due" || subscription?.status === "incomplete"
-                ? "Un paiement est en attente ou a échoué. Ouvre Billing pour le régulariser."
-                : "Aucun abonnement actif. Choisis un plan ci-dessous pour commencer à générer des images."}
+                ? t("ai.paymentPendingOrFailed")
+                : t("ai.noActiveSubscription")}
             </div>
           )}
         </Panel>
 
         <Panel>
-          <SectionTitle>Ce qui consomme une image</SectionTitle>
+          <SectionTitle>{t("ai.whatConsumesImage")}</SectionTitle>
           <ul
             className="flex flex-col gap-2 text-[13px]"
             style={{ color: "var(--text-secondary)" }}
           >
             {[
-              "Génération d'une planche manga",
-              "Génération d'une carte de personnage",
-              "Variante de transfert de style",
-              "Finalisation Raw to Final",
-              "Génération de décor",
-            ].map((t) => (
-              <li key={t} className="flex items-center gap-2">
-                <Check size={14} color="var(--neon)" /> {t}
+              t("ai.consumeMangaPage"),
+              t("ai.consumeCharacterCard"),
+              t("ai.consumeStyleVariant"),
+              t("ai.consumeRawToFinal"),
+              t("ai.consumeDecorGen"),
+            ].map((item) => (
+              <li key={item} className="flex items-center gap-2">
+                <Check size={14} color="var(--neon)" /> {item}
               </li>
             ))}
           </ul>
         </Panel>
       </div>
 
-      <SectionTitle>Compare plans</SectionTitle>
+      <SectionTitle>{t("ai.comparePlans")}</SectionTitle>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         {PLAN_ORDER.map((id) => {
           const p = PLANS[id];
@@ -400,9 +403,9 @@ function PlanImages() {
                   className="text-[12px] uppercase tracking-wider"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  {PLAN_TAGLINE[id]}
+                  {t(PLAN_TAGLINE_KEYS[id])}
                 </div>
-                {isCurrent && <Chip active>Current</Chip>}
+                {isCurrent && <Chip active>{t("ai.currentPlan")}</Chip>}
               </div>
               <div className="mt-2" style={{ font: "700 22px/28px var(--font-display)" }}>
                 {p.label}
@@ -417,11 +420,11 @@ function PlanImages() {
                   {p.priceEuros.toFixed(2)} €
                 </span>
                 <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>
-                  / mois
+                  {t("ai.perMonth")}
                 </span>
               </div>
               <div className="text-[13px] mt-1 font-bold" style={{ color: "var(--neon)" }}>
-                {p.quota} images / mois
+                {p.quota} {t("ai.imagesPerMonth")}
               </div>
               <ul
                 className="mt-5 flex flex-col gap-2 text-[13px]"
@@ -443,12 +446,12 @@ function PlanImages() {
                 onClick={() => onChoose(id)}
               >
                 {isCurrent
-                  ? "Plan actuel"
+                  ? t("ai.planActionCurrent")
                   : currentPlan
                     ? PLANS[id].amountCents > PLANS[currentPlan].amountCents
-                      ? "Passer à ce plan"
-                      : "Rétrograder"
-                    : "Choisir ce plan"}
+                      ? t("ai.planActionUpgrade")
+                      : t("ai.planActionDowngrade")
+                    : t("ai.planActionChoose")}
               </button>
             </Card>
           );
@@ -456,18 +459,18 @@ function PlanImages() {
       </div>
 
       <Panel>
-        <SectionTitle>Billing history</SectionTitle>
+        <SectionTitle>{t("ai.billingHistory")}</SectionTitle>
         <div
           className="grid grid-cols-[1fr_140px_140px_120px] gap-4 px-1 pb-3 text-[12px] font-bold uppercase tracking-wider"
           style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border-default)" }}
         >
-          <div>Description</div>
-          <div>Date</div>
-          <div>Amount</div>
-          <div className="text-right">Invoice</div>
+          <div>{t("ai.descriptionCol")}</div>
+          <div>{t("ai.dateCol")}</div>
+          <div>{t("ai.amountCol")}</div>
+          <div className="text-right">{t("ai.invoiceCol")}</div>
         </div>
         <div className="px-1 py-4 text-[13px]" style={{ color: "var(--text-secondary)" }}>
-          L'historique de facturation détaillé apparaîtra ici après tes paiements.
+          {t("ai.billingHistoryEmpty")}
         </div>
       </Panel>
 
@@ -484,13 +487,13 @@ function PlanImages() {
 
       {confirmCancel && (
         <ConfirmDialog
-          title="Annuler le renouvellement"
+          title={t("ai.cancelRenewal")}
           message={
             period
-              ? `Ton abonnement restera actif jusqu'au ${new Date(period.renewalAt).toLocaleDateString("fr-FR")} (crédits inclus). Il ne sera pas renouvelé ensuite. Aucun remboursement.`
-              : "Ton abonnement restera actif jusqu'à la fin de la période payée puis ne sera pas renouvelé. Aucun remboursement."
+              ? `${t("ai.cancelMsgWithDatePrefix")} ${new Date(period.renewalAt).toLocaleDateString("fr-FR")} ${t("ai.cancelMsgWithDateSuffix")}`
+              : t("ai.cancelMsgNoDate")
           }
-          confirmLabel="Annuler le renouvellement"
+          confirmLabel={t("ai.cancelRenewal")}
           busy={busy}
           onCancel={() => setConfirmCancel(false)}
           onConfirm={() => void cancel()}
@@ -515,6 +518,7 @@ function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
@@ -535,7 +539,7 @@ function ConfirmDialog({
             <AlertTriangle size={18} color="var(--warning)" />
             <h3 className="text-[18px] font-bold">{title}</h3>
           </div>
-          <button onClick={onCancel} aria-label="Fermer" style={{ color: "var(--text-muted)" }}>
+          <button onClick={onCancel} aria-label={t("ai.close")} style={{ color: "var(--text-muted)" }}>
             <X size={18} />
           </button>
         </div>
@@ -544,10 +548,10 @@ function ConfirmDialog({
         </p>
         <div className="mt-6 flex items-center justify-end gap-2">
           <button className="cma-btn-secondary" onClick={onCancel} disabled={busy}>
-            Retour
+            {t("ai.back")}
           </button>
           <button className="cma-btn-primary" onClick={onConfirm} disabled={busy}>
-            {busy ? "Traitement…" : confirmLabel}
+            {busy ? t("ai.processingEllipsis") : confirmLabel}
           </button>
         </div>
       </div>
@@ -570,6 +574,7 @@ function UpgradeConfirm({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useI18n();
   const p = PLANS[to];
   return (
     <div
@@ -589,41 +594,42 @@ function UpgradeConfirm({
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertTriangle size={18} color="var(--warning)" />
-            <h3 className="text-[18px] font-bold">Confirmer la montée en gamme</h3>
+            <h3 className="text-[18px] font-bold">{t("ai.confirmUpgradeTitle")}</h3>
           </div>
-          <button onClick={onCancel} aria-label="Fermer" style={{ color: "var(--text-muted)" }}>
+          <button onClick={onCancel} aria-label={t("ai.close")} style={{ color: "var(--text-muted)" }}>
             <X size={18} />
           </button>
         </div>
         <p className="text-[14px] leading-[22px]" style={{ color: "var(--text-secondary)" }}>
-          Vous disposez actuellement de{" "}
+          {t("ai.upgradeSentence1")}{" "}
           <strong style={{ color: "var(--text-primary)" }}>
-            {remaining} crédits {PLANS[from].label}
+            {remaining} {t("ai.creditsWord")} {PLANS[from].label}
           </strong>
-          . En passant immédiatement au plan{" "}
-          <strong style={{ color: "var(--text-primary)" }}>{p.label}</strong>, ces {remaining}{" "}
-          crédits expireront. Vous paierez{" "}
+          {t("ai.upgradeSentence2")}{" "}
+          <strong style={{ color: "var(--text-primary)" }}>{p.label}</strong>
+          {t("ai.upgradeSentence3")} {remaining}{" "}
+          {t("ai.upgradeSentence3b")}{" "}
           <strong style={{ color: "var(--text-primary)" }}>{p.priceEuros.toFixed(2)} €</strong>{" "}
-          aujourd'hui et recevrez immédiatement{" "}
-          <strong style={{ color: "var(--text-primary)" }}>{p.quota} crédits</strong>. Votre
-          abonnement sera ensuite renouvelé chaque mois à la date d'aujourd'hui au tarif de{" "}
+          {t("ai.upgradeSentence4")}{" "}
+          <strong style={{ color: "var(--text-primary)" }}>{p.quota} {t("ai.creditsWord")}</strong>.{" "}
+          {t("ai.upgradeSentence5")}{" "}
           {p.priceEuros.toFixed(2)} €.
         </p>
         <ul
           className="mt-4 flex flex-col gap-1.5 text-[13px]"
           style={{ color: "var(--text-muted)" }}
         >
-          <li>• Débit immédiat sur ta carte enregistrée (pas de nouvelle page de paiement).</li>
-          <li>• Aucun report des crédits actuels.</li>
-          <li>• Aucun remboursement de l'ancien plan.</li>
-          <li>• Nouvelle date de renouvellement = aujourd'hui.</li>
+          <li>• {t("ai.upgradeBullet1")}</li>
+          <li>• {t("ai.upgradeBullet2")}</li>
+          <li>• {t("ai.upgradeBullet3")}</li>
+          <li>• {t("ai.upgradeBullet4")}</li>
         </ul>
         <div className="mt-6 flex items-center justify-end gap-2">
           <button className="cma-btn-secondary" onClick={onCancel} disabled={busy}>
-            Annuler
+            {t("ai.cancel")}
           </button>
           <button className="cma-btn-primary" onClick={onConfirm} disabled={busy}>
-            {busy ? "Traitement…" : `Payer ${p.priceEuros.toFixed(2)} €`}
+            {busy ? t("ai.processingEllipsis") : `${t("ai.payPrefix")} ${p.priceEuros.toFixed(2)} €`}
           </button>
         </div>
       </div>

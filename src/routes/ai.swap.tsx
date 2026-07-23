@@ -21,6 +21,7 @@ import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } f
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { recordGeneratedImage } from "@/lib/manga-history";
 import type { SwapImageResult } from "@/server-functions/swap-image";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/ai/swap")({
   head: () => ({ meta: [{ title: "Swap - CollabManga AI" }] }),
@@ -121,6 +122,7 @@ function profileReferences(profile: MangaCharacterProfile) {
 }
 
 function SwapPage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<SwapTab>("page");
   const [pageImage, setPageImage] = useState<string | null>(null);
   // Ratio de la planche : les cadres (import + résultat) gardent une taille fixe
@@ -168,8 +170,9 @@ function SwapPage() {
     setIsGenerating(true);
     void resumeDurableGeneration<SwapImageResult>("swap").then((generated) => {
       if (generated) setResult(generated);
-    }).catch((err) => setError(err instanceof Error ? err.message : "Character swap failed."))
+    }).catch((err) => setError(err instanceof Error ? err.message : t("ai.characterSwapFailed")))
       .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -233,14 +236,12 @@ function SwapPage() {
   const generate = async () => {
     if (!pageImage) {
       setTab("page");
-      setError("Importe d'abord la planche a modifier.");
+      setError(t("ai.importPageFirst"));
       return;
     }
     if (!canGenerate) {
       setTab("characters");
-      setError(
-        "Complete chaque paire : un original (personnage de la bibliotheque ou image importee) et un remplacant de la bibliotheque.",
-      );
+      setError(t("ai.completeEachPair"));
       return;
     }
 
@@ -308,7 +309,7 @@ function SwapPage() {
           currentImageUrl: generated.imageUrl,
           prompt: "",
           selectedCharacterIds: Array.from(new Set(validPairs.flatMap((pair) => [pair.originalId, pair.replacementId]).filter(Boolean))),
-          references: [{ id: "swap-source", name: "Planche source", imageDataUrl: pageImage, role: "Target" as const }],
+          references: [{ id: "swap-source", name: t("ai.sourcePage"), imageDataUrl: pageImage, role: "Target" as const }],
           aspectRatio,
           source: "Swap",
         },
@@ -316,7 +317,7 @@ function SwapPage() {
       notifyCreditsChanged();
     } catch (generationError) {
       setError(
-        generationError instanceof Error ? generationError.message : "Character swap failed.",
+        generationError instanceof Error ? generationError.message : t("ai.characterSwapFailed"),
       );
     } finally {
       setIsGenerating(false);
@@ -335,7 +336,7 @@ function SwapPage() {
     <div className="manga-canvas-page w-full min-w-0 text-text-primary">
       <PageHeader
         title="Swap"
-        description="Echange les personnages d'une planche sans modifier sa mise en scene ni son style."
+        description={t("ai.swapDesc")}
       />
 
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
@@ -343,9 +344,9 @@ function SwapPage() {
           <div className="flex items-center gap-1 border-b border-border p-3">
             {(
               [
-                { id: "page", label: "Planche", icon: FileImage },
-                { id: "characters", label: "Personnages", icon: Users },
-                { id: "prompt", label: "Prompt", icon: FileText },
+                { id: "page", label: t("ai.pageTab"), icon: FileImage },
+                { id: "characters", label: t("ai.charactersTab"), icon: Users },
+                { id: "prompt", label: t("ai.promptTab"), icon: FileText },
               ] as const
             ).map((entry) => (
               <button
@@ -377,9 +378,9 @@ function SwapPage() {
             {tab === "characters" && (
               <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-[minmax(0,1fr)_42px_minmax(0,1fr)] items-center gap-2 px-1 text-center text-[11px] font-extrabold uppercase text-text-muted">
-                  <span>Original</span>
+                  <span>{t("ai.originalLabel")}</span>
                   <span />
-                  <span>Remplacant</span>
+                  <span>{t("ai.replacementLabel")}</span>
                 </div>
                 {pairs.map((pair) => (
                   <SwapPairRow
@@ -406,14 +407,14 @@ function SwapPage() {
                   className="flex h-11 items-center justify-center gap-2 rounded-[12px] border border-dashed border-border-strong bg-surface-3 text-[13px] font-bold text-text-secondary hover:border-accent hover:text-accent"
                 >
                   <Plus className="h-4 w-4" />
-                  Ajouter un echange
+                  {t("ai.addSwap")}
                 </button>
                 {!characters.length && (
                   <Link
                     to="/ai/characters"
                     className="rounded-[12px] border border-border bg-surface-3 p-4 text-center text-[13px] font-bold text-accent"
                   >
-                    Creer des personnages dans la bibliotheque
+                    {t("ai.createCharactersInLibrary")}
                   </Link>
                 )}
               </div>
@@ -421,12 +422,12 @@ function SwapPage() {
 
             {tab === "prompt" && (
               <div className="flex flex-col gap-3">
-                <p className="text-[13px] font-bold">Instructions optionnelles</p>
+                <p className="text-[13px] font-bold">{t("ai.optionalInstructions")}</p>
                 <textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   rows={14}
-                  placeholder="Ex: conserver la tenue du personnage original dans la case 3..."
+                  placeholder={t("ai.swapPromptPlaceholder")}
                   className="w-full resize-none rounded-[14px] border border-border bg-input px-4 py-3 text-[14px] leading-relaxed text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                 />
               </div>
@@ -442,7 +443,7 @@ function SwapPage() {
               className="flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-extrabold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowLeftRight className="h-4 w-4" />
-              {isGenerating ? "Generation..." : "Generer le swap"}
+              {isGenerating ? t("ai.generatingEllipsis") : t("ai.generateSwap")}
             </button>
           </div>
         </section>
@@ -451,13 +452,13 @@ function SwapPage() {
           <header className="flex h-[65px] items-center justify-between border-b border-border px-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <h2 className="font-display text-base font-bold">Image generee</h2>
+              <h2 className="font-display text-base font-bold">{t("ai.generatedImageFallback")}</h2>
             </div>
             <button
               type="button"
               onClick={download}
               disabled={!result}
-              aria-label="Telecharger"
+              aria-label={t("ai.download")}
               className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-surface-3 text-text-secondary hover:text-text-primary disabled:opacity-40"
             >
               <Download className="h-4 w-4" />
@@ -473,25 +474,25 @@ function SwapPage() {
               {isGenerating ? (
                 <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center text-text-secondary">
                   <Sparkles className="h-8 w-8 animate-pulse text-accent" />
-                  <p className="text-[13px] font-semibold">Remplacement des personnages...</p>
+                  <p className="text-[13px] font-semibold">{t("ai.replacingCharacters")}</p>
                 </div>
               ) : result ? (
                 <button
                   type="button"
                   onClick={() => setLightbox(true)}
                   className="h-full w-full cursor-zoom-in"
-                  title="Voir en grand"
+                  title={t("ai.viewFullSize")}
                 >
                   <img
                     src={result.imageUrl}
-                    alt="Planche avec personnages echanges"
+                    alt={t("ai.swappedPageAlt")}
                     className="h-full w-full object-cover"
                   />
                 </button>
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-8 text-center text-text-muted">
                   <ImageIcon className="h-9 w-9" />
-                  <p className="text-[13px] font-semibold">La planche modifiee apparaitra ici.</p>
+                  <p className="text-[13px] font-semibold">{t("ai.modifiedPageWillAppear")}</p>
                 </div>
               )}
             </div>
@@ -511,14 +512,14 @@ function SwapPage() {
             <button
               type="button"
               onClick={() => setLightbox(false)}
-              aria-label="Fermer"
+              aria-label={t("ai.close")}
               className="absolute -right-3 -top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2"
             >
               <X className="h-4 w-4" />
             </button>
             <img
               src={result.imageUrl}
-              alt="Planche avec personnages echanges"
+              alt={t("ai.swappedPageAlt")}
               className="max-h-[88vh] max-w-full rounded-[14px] object-contain"
             />
           </div>
@@ -539,6 +540,7 @@ function PageUploader({
   onImport: (files: FileList | null) => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <div
@@ -568,7 +570,7 @@ function PageUploader({
             style={{ aspectRatio: aspect }}
           >
             {/* Planche recadrée au cadre de base (object-cover). */}
-            <img src={image} alt="Planche source" className="h-full w-full object-cover" />
+            <img src={image} alt={t("ai.sourcePage")} className="h-full w-full object-cover" />
           </button>
           <div className="flex gap-2">
             <button
@@ -576,12 +578,12 @@ function PageUploader({
               onClick={() => inputRef.current?.click()}
               className="flex h-10 flex-1 items-center justify-center gap-2 rounded-[10px] border border-border bg-surface-2 text-[12px] font-bold"
             >
-              <Upload className="h-4 w-4" /> Remplacer
+              <Upload className="h-4 w-4" /> {t("ai.replace")}
             </button>
             <button
               type="button"
               onClick={onRemove}
-              aria-label="Supprimer"
+              aria-label={t("ai.remove")}
               className="grid h-10 w-10 place-items-center rounded-[10px] border border-border bg-surface-2 text-text-muted hover:text-danger"
             >
               <Trash2 className="h-4 w-4" />
@@ -596,7 +598,7 @@ function PageUploader({
           style={{ aspectRatio: aspect }}
         >
           <Upload className="h-9 w-9 text-text-muted" />
-          <span className="text-[14px] font-bold">Importer la planche</span>
+          <span className="text-[14px] font-bold">{t("ai.importThePage")}</span>
         </button>
       )}
     </div>
@@ -616,6 +618,7 @@ function SwapPairRow({
   onImportOriginal: (files: FileList | null) => void;
   onRemove?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="relative grid grid-cols-[minmax(0,1fr)_42px_minmax(0,1fr)] items-center gap-2 rounded-[14px] border border-border bg-surface-3 p-3">
       <OriginalPicker
@@ -639,7 +642,7 @@ function SwapPairRow({
         <button
           type="button"
           onClick={onRemove}
-          aria-label="Supprimer cet echange"
+          aria-label={t("ai.removeThisSwap")}
           className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-border bg-surface-2 text-text-muted hover:text-danger"
         >
           <X className="h-3.5 w-3.5" />
@@ -660,6 +663,7 @@ function OriginalPicker({
   onChange: (patch: Partial<SwapPair>) => void;
   onImport: (files: FileList | null) => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const profile = characters.find((character) => character.id === pair.originalId);
   const preview = pair.originalImage ?? profilePreview(profile);
@@ -667,7 +671,7 @@ function OriginalPicker({
     <div className="flex min-w-0 flex-col gap-2">
       <div className="relative flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded-[10px] border border-border bg-stage">
         {preview ? (
-          <img src={preview} alt={profile?.name ?? "Personnage original"} className="h-full w-full object-cover" />
+          <img src={preview} alt={profile?.name ?? t("ai.originalCharacterFallback")} className="h-full w-full object-cover" />
         ) : (
           <Users className="h-7 w-7 text-text-muted" />
         )}
@@ -675,7 +679,7 @@ function OriginalPicker({
           <button
             type="button"
             onClick={() => onChange({ originalImage: null })}
-            aria-label="Retirer l'image importee"
+            aria-label={t("ai.removeImportedImage")}
             className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full border border-border bg-surface-2 text-text-muted hover:text-danger"
           >
             <X className="h-3.5 w-3.5" />
@@ -694,7 +698,7 @@ function OriginalPicker({
       />
       {pair.originalImage ? (
         <div className="flex h-10 items-center justify-center rounded-[10px] border border-accent/40 bg-accent-soft px-2 text-[12px] font-bold text-accent">
-          Image importee
+          {t("ai.importedImageBadge")}
         </div>
       ) : (
         <>
@@ -703,7 +707,7 @@ function OriginalPicker({
             onChange={(event) => onChange({ originalId: event.target.value })}
             className="h-10 min-w-0 w-full rounded-[10px] border border-border bg-input px-2 text-[12px] font-bold text-text-primary outline-none focus:border-accent"
           >
-            <option value="">Selectionner</option>
+            <option value="">{t("ai.selectWord")}</option>
             {characters.map((character) => (
               <option key={character.id} value={character.id} disabled={character.id === pair.replacementId}>
                 {character.name}
@@ -715,7 +719,7 @@ function OriginalPicker({
             onClick={() => inputRef.current?.click()}
             className="flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border-strong bg-surface-2 text-[11px] font-bold text-text-secondary hover:border-accent hover:text-accent"
           >
-            <Upload className="h-3.5 w-3.5" /> Importer une image
+            <Upload className="h-3.5 w-3.5" /> {t("ai.importAnImage")}
           </button>
         </>
       )}
@@ -734,6 +738,7 @@ function CharacterSelector({
   excludedId: string;
   onChange: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const profile = characters.find((character) => character.id === value);
   const preview = profilePreview(profile);
   return (
@@ -742,7 +747,7 @@ function CharacterSelector({
         {preview ? (
           <img
             src={preview}
-            alt={profile?.name ?? "Personnage"}
+            alt={profile?.name ?? t("ai.characterFallback")}
             className="h-full w-full object-cover"
           />
         ) : (
@@ -754,7 +759,7 @@ function CharacterSelector({
         onChange={(event) => onChange(event.target.value)}
         className="h-10 min-w-0 w-full rounded-[10px] border border-border bg-input px-2 text-[12px] font-bold text-text-primary outline-none focus:border-accent"
       >
-        <option value="">Selectionner</option>
+        <option value="">{t("ai.selectWord")}</option>
         {characters.map((character) => (
           <option key={character.id} value={character.id} disabled={character.id === excludedId}>
             {character.name}
