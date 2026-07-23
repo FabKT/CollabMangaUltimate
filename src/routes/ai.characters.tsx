@@ -9,7 +9,7 @@ import {
   type MangaCharacterImage,
   type MangaCharacterProfile,
 } from "@/lib/manga-workspace";
-import { Check, ImageIcon, Plus, Save, Trash2, Upload, UserSquare2 } from "lucide-react";
+import { Check, Download, ImageIcon, Plus, Save, Trash2, Upload, UserSquare2 } from "lucide-react";
 import { recordGeneratedImage } from "@/lib/manga-history";
 import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import type { CharacterImageResult } from "@/server-functions/character-image";
@@ -229,6 +229,27 @@ function CharacterStudio() {
     setSaveState("saving");
     const saved = await saveCharacterProfiles(characters);
     setSaveState(saved ? "saved" : "error");
+  };
+
+  const downloadCard = async () => {
+    if (!activeCharacter?.cardImageDataUrl) return;
+    const safeName =
+      activeCharacter.name.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") ||
+      "personnage";
+    const link = document.createElement("a");
+    try {
+      const response = await fetch(activeCharacter.cardImageDataUrl);
+      if (!response.ok) throw new Error("Download failed");
+      const objectUrl = URL.createObjectURL(await response.blob());
+      link.href = objectUrl;
+      link.download = `${safeName}-carte.png`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      link.href = activeCharacter.cardImageDataUrl;
+      link.download = `${safeName}-carte.png`;
+      link.click();
+    }
   };
 
   const generateCard = async () => {
@@ -600,19 +621,28 @@ function CharacterStudio() {
                               ? `Générée le ${new Date(activeCharacter.cardImageGeneratedAt).toLocaleString()}`
                               : "Carte disponible"}
                           </span>
-                          <button
-                            type="button"
-                            className="text-[12px] font-semibold text-danger"
-                            onClick={() =>
-                              updateActiveCharacter({
-                                cardImageDataUrl: undefined,
-                                cardImageGeneratedAt: undefined,
-                                cardEnabled: true,
-                              })
-                            }
-                          >
-                            Supprimer la carte
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent"
+                              onClick={() => void downloadCard()}
+                            >
+                              <Download className="h-4 w-4" /> Télécharger
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[12px] font-semibold text-danger"
+                              onClick={() =>
+                                updateActiveCharacter({
+                                  cardImageDataUrl: undefined,
+                                  cardImageGeneratedAt: undefined,
+                                  cardEnabled: true,
+                                })
+                              }
+                            >
+                              Supprimer la carte
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}

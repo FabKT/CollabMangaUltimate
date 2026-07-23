@@ -250,7 +250,6 @@ function IllustrationsPage() {
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [openArt, setOpenArt] = useState<Art | null>(null);
   const [invite, setInvite] = useState<Art | null>(null);
-  const [upload, setUpload] = useState(false);
   const [realArts, setRealArts] = useState<Art[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -328,12 +327,11 @@ function IllustrationsPage() {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       if (invite) return setInvite(null);
-      if (upload) return setUpload(false);
       if (openArt) return setOpenArt(null);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openArt, invite, upload]);
+  }, [openArt, invite]);
 
   return (
     <div style={{ background: C.bg, color: C.text, minHeight: "100vh", ...manrope }}>
@@ -346,7 +344,6 @@ function IllustrationsPage() {
               Discover manga artists, evaluate their visual style, and invite them to collaborate on original projects.
             </p>
           </div>
-          <Btn variant="primary" icon={<Upload size={16} />} onClick={() => setUpload(true)}>Ajouter une illustration</Btn>
         </header>
 
         {pageError && (
@@ -423,7 +420,6 @@ function IllustrationsPage() {
         />
       )}
       {invite && <RealInviteModal art={invite} onClose={() => setInvite(null)} />}
-      {upload && <UploadModal onClose={() => setUpload(false)} onPublished={refreshGallery} />}
 
       {/* Responsive */}
       <style>{`

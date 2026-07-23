@@ -26,12 +26,21 @@ export const Route = createFileRoute("/ai/free-studio")({
 
 type StudioTab = "references" | "prompt";
 type AspectRatio = "2:3" | "3:2";
+type StudioReferenceRole =
+  | "Character"
+  | "Background"
+  | "Object"
+  | "Storyboard"
+  | "Pose"
+  | "Style"
+  | "Inspiration";
 type StudioReference = {
   id: string;
   name: string;
   imageDataUrl: string;
   mimeType?: string;
   description: string;
+  role: StudioReferenceRole;
 };
 type StudioSnapshot = {
   tab?: StudioTab;
@@ -74,7 +83,12 @@ function FreeStudioPage() {
     void loadSession<StudioSnapshot>("free-studio").then((snapshot) => {
       if (snapshot) {
         setTab(snapshot.tab ?? "references");
-        setReferences(snapshot.references ?? []);
+        setReferences(
+          (snapshot.references ?? []).map((reference) => ({
+            ...reference,
+            role: reference.role ?? "Inspiration",
+          })),
+        );
         setPrompt(snapshot.prompt ?? "");
         setAspectRatio(snapshot.aspectRatio ?? "2:3");
         setResult(snapshot.result ?? null);
@@ -113,6 +127,7 @@ function FreeStudioPage() {
         imageDataUrl: await fileToDataUrl(file),
         mimeType: file.type || undefined,
         description: "",
+        role: "Inspiration" as const,
       })),
     );
     setReferences((current) => [...current, ...imported]);
@@ -150,7 +165,10 @@ function FreeStudioPage() {
           currentImageUrl: generated.imageUrl,
           prompt: "",
           selectedCharacterIds: [],
-          references: references.map((reference) => ({ ...reference, role: "Inspiration" as const })),
+          references: references.map((reference) => ({
+            ...reference,
+            role: reference.role === "Character" ? ("Inspiration" as const) : reference.role,
+          })),
           aspectRatio,
           source: "Studio libre",
         },
@@ -388,11 +406,29 @@ function ReferenceLibrary({
             />
           </div>
           <div className="min-w-0 space-y-2">
-            <input
-              value={reference.name}
-              onChange={(event) => onUpdate(reference.id, { name: event.target.value })}
-              className="h-9 w-full rounded-[9px] border border-border bg-input px-3 text-[12px] font-bold outline-none focus:border-accent"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={reference.name}
+                onChange={(event) => onUpdate(reference.id, { name: event.target.value })}
+                className="h-9 min-w-0 rounded-[9px] border border-border bg-input px-3 text-[12px] font-bold outline-none focus:border-accent"
+              />
+              <select
+                value={reference.role}
+                onChange={(event) =>
+                  onUpdate(reference.id, { role: event.target.value as StudioReferenceRole })
+                }
+                aria-label={`Rôle de ${reference.name}`}
+                className="h-9 min-w-0 rounded-[9px] border border-border bg-input px-2 text-[11px] font-bold outline-none focus:border-accent"
+              >
+                <option value="Inspiration">Inspiration</option>
+                <option value="Character">Personnage</option>
+                <option value="Pose">Pose</option>
+                <option value="Storyboard">Structure</option>
+                <option value="Background">Décor</option>
+                <option value="Object">Objet</option>
+                <option value="Style">Style</option>
+              </select>
+            </div>
             <textarea
               value={reference.description}
               onChange={(event) => onUpdate(reference.id, { description: event.target.value })}

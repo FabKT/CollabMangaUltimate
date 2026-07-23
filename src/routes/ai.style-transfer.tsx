@@ -13,7 +13,6 @@ import {
 } from "@/lib/durable-generation";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { recordGeneratedImage } from "@/lib/manga-history";
-import { isLocalAiClientMode } from "@/lib/local-ai-mode";
 import {
   Wand2,
   Upload,
@@ -46,7 +45,7 @@ type ModeConfig = {
   importCta: string;
   resultTitle: string;
   resultEmpty: string;
-  /** Ratio fixe du cadre : l'image importée/générée est recadrée dedans. */
+  /** Ratio fixe du cadre : l'image entière y est affichée sans déformation. */
   aspect: string;
 };
 
@@ -87,7 +86,32 @@ type StyleTransferSnapshot = {
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
+    reader.onload = () => {
+      const rawDataUrl = String(reader.result);
+      const image = new Image();
+      image.onload = () => {
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        if (scale >= 1 && file.size < 1_800_000) {
+          resolve(rawDataUrl);
+          return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          resolve(rawDataUrl);
+          return;
+        }
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.92));
+      };
+      image.onerror = () => resolve(rawDataUrl);
+      image.src = rawDataUrl;
+    };
     reader.onerror = () => reject(new Error("Image import failed."));
     reader.readAsDataURL(file);
   });
@@ -192,7 +216,7 @@ function StyleTransferPage() {
     setIsGenerating(true);
     try {
       const presetStyleReferences =
-        isLocalAiClientMode && activeStyle
+        activeStyle
           ? [await imageSourceToDataUrl(activeStyle.face)].filter((image): image is string =>
               Boolean(image),
             )
@@ -426,7 +450,7 @@ function StyleTransferPage() {
             </button>
           </header>
           <div className="p-4">
-            {/* Cadre de taille fixe : l'image est recadrée (object-cover). */}
+            {/* Cadre fixe, résultat entier affiché sans déformation. */}
             <div
               className="w-full overflow-hidden rounded-[12px] bg-stage"
               style={{ aspectRatio: cfg.aspect }}
@@ -533,8 +557,8 @@ function BeforeArea({
             event.currentTarget.value = "";
           }}
         />
-        {/* Image recadrée par rapport au cadre de base (object-cover). */}
-        <img src={baseImage} alt="Image de base" className="h-full w-full object-cover" />
+        {/* Cadre fixe, image entière conservée dans son ratio d'origine. */}
+        <img src={baseImage} alt="Image de base" className="h-full w-full object-contain" />
       </button>
     );
   }

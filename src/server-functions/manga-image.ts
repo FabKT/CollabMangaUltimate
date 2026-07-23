@@ -182,6 +182,11 @@ function imageSizeForAspectRatio(aspectRatio: MangaImageGenerationInput["aspectR
   return aspectRatio === "3:2" ? "1536x1024" : "1024x1536";
 }
 
+function withLocalMangaPlan(prompt: string, label: string) {
+  if (prompt.includes("LOCAL MANGA PAGE BACKEND PLAN:")) return prompt;
+  return `${LOCAL_MANGA_PAGE_PLAN}\n\n${label}:\n${prompt}`;
+}
+
 function responseErrorMessage(status: number, payload: PulseNoteMangaResponse) {
   const detail = payload.details?.message || payload.details?.code;
   const base = payload.error || `PulseNote manga generation failed with status ${status}.`;
@@ -328,9 +333,9 @@ export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput
   const requestData = isLocalAiServerMode()
     ? {
         ...data,
-        prompt: `${LOCAL_MANGA_PAGE_PLAN}\n\nUSER SCENE REQUEST - HIGHEST PRIORITY:\n${data.prompt}`,
+        prompt: withLocalMangaPlan(data.prompt, "USER SCENE REQUEST - HIGHEST PRIORITY"),
         editPrompt: data.editPrompt
-          ? `${LOCAL_MANGA_PAGE_PLAN}\n\nUSER EDIT REQUEST - HIGHEST PRIORITY:\n${data.editPrompt}`
+          ? withLocalMangaPlan(data.editPrompt, "USER EDIT REQUEST - HIGHEST PRIORITY")
           : data.editPrompt,
       }
     : data;

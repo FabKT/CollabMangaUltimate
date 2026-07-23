@@ -3,6 +3,17 @@ import {
   requestPulseNoteMangaImage,
   type MangaImageGenerationResult,
 } from "@/server-functions/manga-image";
+import { LOCAL_MANGA_PAGE_PLAN } from "@/lib/ai-style-plans";
+
+const freeReferenceRoleSchema = z.enum([
+  "Character",
+  "Background",
+  "Object",
+  "Storyboard",
+  "Pose",
+  "Style",
+  "Inspiration",
+]);
 
 const freeReferenceSchema = z.object({
   id: z.string(),
@@ -10,6 +21,7 @@ const freeReferenceSchema = z.object({
   imageDataUrl: z.string().min(1),
   mimeType: z.string().optional(),
   description: z.string().optional(),
+  role: freeReferenceRoleSchema.default("Inspiration"),
 });
 
 const freeImageInputSchema = z.object({
@@ -30,54 +42,25 @@ export function buildFreeImagePrompt(input: FreeImageInput) {
     ? input.references
         .map(
           (reference, index) =>
-            `REFERENCE_${index + 1} (${reference.name}): ${reference.description?.trim() || "Analyze its useful visual information and apply it only where relevant to the user's request."}`,
+            `REFERENCE_${index + 1} (${reference.name}) - DECLARED ROLE: ${reference.role}. ${reference.description?.trim() || "Inspect the image directly and extract every reliable visual fact relevant to its declared role."}`,
         )
         .join("\n")
     : "No reference image is provided.";
 
-  return `FREE CREATION PROMPT OPTIMIZATION PLAN
+  return `${LOCAL_MANGA_PAGE_PLAN}
 
-Create the image requested by the user. First convert the request into a precise, production-ready visual plan, then generate the image from that plan. Preserve the user's intent and never add a major narrative element that was not requested.
+FREE STUDIO ADAPTATION:
+- Create one complete image in ${input.aspectRatio} format from the user's request.
+- There is no dedicated mandatory structure image in this workspace. Never assume that the first reference controls layout.
+- A reference declared as Storyboard controls panel/page structure only. If none is declared, derive structure from the user request and use a clear default only when needed.
+- Analyze every supplied image directly and convert its reliable visual information into explicit, self-sufficient generation instructions before rendering.
+- Respect each declared role strictly: Character controls identity; Pose controls body action; Storyboard controls layout; Background and Object control their named content; Style controls rendering mechanisms only; Inspiration supplies only relevant non-conflicting cues.
+- For each useful reference, identify concrete facts such as identity markers, posture, gaze, expression, framing, foreground, middle ground, background, lighting, geometry, materials, linework and value treatment. Do not merely mention that a reference exists.
 
-1. REQUEST ANALYSIS
-- Identify the image type: single illustration, manga panel, manga page, character scene, environment, object, or another requested format.
-- Identify every mandatory subject, action, relationship, setting, visual style, text element, and restriction.
-- Resolve only harmless ambiguities through visually coherent choices. Do not contradict explicit instructions.
-
-2. COMPOSITION AND CAMERA
-- Define the framing, shot scale, camera angle, perspective, focal point, depth, foreground, middle ground, and background.
-- Make spatial relationships and visual hierarchy unambiguous.
-- Keep all important subjects readable and correctly placed.
-
-3. CHARACTERS
-- For every character, define identity, placement, body orientation, pose, gesture, gaze, facial expression, emotional intensity, outfit, and interaction.
-- Maintain anatomy, hands, proportions, and identity consistency.
-- If references define a character, preserve that identity while adapting pose and expression to the request.
-
-4. MANGA PAGE OR MULTI-PANEL STRUCTURE
-- Apply this section only when the user requests a page or multiple panels.
-- State the exact page division and panel geometry, including vertical, horizontal, diagonal, or irregular separators.
-- Preserve reading order and narrative rhythm.
-- Describe every panel separately: composition, camera, characters, action, expression, environment, effects, bubbles, and text.
-- Keep recurring characters and locations consistent from panel to panel.
-
-5. STYLE AND FINISH
-- Translate the requested style into concrete lineart, shapes, color or monochrome logic, shading, texture, contrast, lighting, and detail level.
-- Keep the finish coherent across the entire image.
-- Do not let a reference's incidental composition replace the user's requested composition unless explicitly requested.
-
-6. REFERENCE IMAGE ROLES
+REFERENCE ASSIGNMENTS:
 ${referencePlan}
-- Inspect every supplied image directly.
-- Extract the useful identity, pose, composition, environment, object, lighting, or style information indicated by its description and by the user request.
-- References support the final prompt but do not override explicit user instructions.
 
-7. FINAL LOCK
-- Generate one complete image in ${input.aspectRatio} format.
-- Follow the optimized visual plan faithfully.
-- Do not output planning text, labels, annotations, or explanations inside the image unless the user explicitly requests them.
-
-USER REQUEST:
+USER REQUEST - HIGHEST PRIORITY:
 ${input.prompt.trim()}`;
 }
 
@@ -93,7 +76,7 @@ export async function requestPulseNoteFreeImage(input: FreeImageInput): Promise<
     selectedAssets: input.references.map((reference) => ({
       id: reference.id,
       name: reference.name,
-      role: "Inspiration" as const,
+      role: reference.role,
       imageDataUrl: reference.imageDataUrl,
       mimeType: reference.mimeType,
       description: reference.description,

@@ -269,7 +269,7 @@ function ImageEditPage() {
       />
       <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
         <Panel padding={0} className="min-w-0 overflow-hidden">
-          <div className="scroll-dark flex overflow-x-auto border-b border-border bg-surface-3 p-2">
+          <div className="scroll-dark m-2 flex overflow-x-auto rounded-[14px] border border-border bg-surface-3 p-1">
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -277,7 +277,7 @@ function ImageEditPage() {
                 onClick={() => setTab(id)}
                 className={`flex h-10 shrink-0 items-center gap-2 rounded-[10px] px-3 text-[12px] font-bold transition ${
                   tab === id
-                    ? "bg-accent-soft text-accent"
+                    ? "bg-accent-soft text-accent shadow-sm"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
