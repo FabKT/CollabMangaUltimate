@@ -8,7 +8,7 @@ import {
   type SortOption,
 } from "@/lib/haven-data";
 import { loadPublicStudioProjects, subscribeStudioProjects } from "@/lib/studio-projects";
-import { getMangaRating } from "@/lib/manga-ratings";
+import { getMangaRatings } from "@/lib/manga-ratings";
 import { SITE_LANGUAGES, languageLabel } from "@/lib/languages";
 import { MangaCard } from "@/components/haven/MangaCard";
 import { localizeLabel, useI18n } from "@/lib/i18n";
@@ -102,11 +102,10 @@ export function CatalogPage({
   useEffect(() => {
     let active = true;
     const refresh = () => void loadPublicStudioProjects<StudioCatalogProject>()
-      .then(async (rows) =>
-        Promise.all(
-            rows
-              .filter((p) => p.catalogVisible)
-              .map(async (p) => ({
+      .then(async (rows) => {
+        const visible = rows.filter((project) => project.catalogVisible);
+        const ratings = await getMangaRatings(visible.map((project) => project.id));
+        return visible.map((p) => ({
               id: p.id,
               title: p.title,
               creator: p.creator || "Créateur CollabManga",
@@ -115,14 +114,14 @@ export function CatalogPage({
                 ? p.genres[0]
                 : "Shonen") as CatalogManga["demographic"],
               genres: [...(p.genres ?? []), ...(p.subgenres ?? [])],
-              rating: await getMangaRating(p.id),
+              rating: ratings[p.id] ?? 0,
               chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,
               language: p.language ?? "FR",
-              })),
-          ).then((entries) => { if (active) setStudioEntries(entries); }),
-      )
+              }));
+      })
+      .then((entries) => { if (active) setStudioEntries(entries); })
       .catch(() => setStudioEntries([]));
     refresh();
     const unsubscribe = subscribeStudioProjects(refresh);

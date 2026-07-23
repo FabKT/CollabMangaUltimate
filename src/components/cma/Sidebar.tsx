@@ -118,8 +118,8 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
       )
     : groups;
 
-  // Quota réel de l'abonnement (crédits restants), rafraîchi à la navigation,
-  // au retour de focus et après chaque génération.
+  // Quota réel de l'abonnement, rafraîchi au montage, au retour de focus
+  // et après chaque génération.
   const [quota, setQuota] = useState<{ plan: string; remaining: number; total: number } | null>(
     null,
   );
@@ -156,7 +156,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
       window.removeEventListener("focus", onFocus);
       off();
     };
-  }, [pathname]);
+  }, []);
 
   return (
     <aside

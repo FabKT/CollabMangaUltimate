@@ -1,6 +1,45 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+
+type SessionSnapshot = {
+  session: Session | null;
+  loading: boolean;
+};
+
+const listeners = new Set<() => void>();
+const serverSnapshot: SessionSnapshot = { session: null, loading: true };
+let snapshot: SessionSnapshot = serverSnapshot;
+let sessionStarted = false;
+
+function publish(next: SessionSnapshot) {
+  if (snapshot.session === next.session && snapshot.loading === next.loading) return;
+  snapshot = next;
+  listeners.forEach((listener) => listener());
+}
+
+function startSessionObserver() {
+  if (sessionStarted || typeof window === "undefined") return;
+  sessionStarted = true;
+
+  if (!supabase) {
+    publish({ session: null, loading: false });
+    return;
+  }
+
+  void supabase.auth.getSession().then(({ data }) => {
+    publish({ session: data.session, loading: false });
+  });
+  supabase.auth.onAuthStateChange((_event, next) => {
+    publish({ session: next, loading: false });
+  });
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  startSessionObserver();
+  return () => listeners.delete(listener);
+}
 
 /**
  * Session Supabase côté client.
@@ -11,25 +50,7 @@ import { supabase } from "./supabase";
  *   à partir de `user_metadata.username` / `display_name`.
  */
 export function useSession() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  return { session, loading };
+  return useSyncExternalStore(subscribe, () => snapshot, () => serverSnapshot);
 }
 
 export async function signOut() {

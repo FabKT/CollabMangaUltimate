@@ -12,7 +12,7 @@ import {
 import { HERO_FALLBACK_IMAGE, type CatalogManga, type HeroSlide, type NewDrop } from "@/lib/haven-data";
 import { MangaCard } from "@/components/haven/MangaCard";
 import { loadPublicStudioProjects } from "@/lib/studio-projects";
-import { getMangaRating } from "@/lib/manga-ratings";
+import { getMangaRatings } from "@/lib/manga-ratings";
 import { useI18n } from "@/lib/i18n";
 
 type StudioCatalogChapter = { id: string; number: number; title: string; status: string; updated: string };
@@ -33,27 +33,25 @@ function useVisibleStudioEntries(): CatalogManga[] {
   const [entries, setEntries] = useState<CatalogManga[]>([]);
   useEffect(() => {
     void loadPublicStudioProjects<StudioCatalogProject>()
-      .then(async (rows) =>
+      .then(async (rows) => {
+        const visible = rows.filter((project) => project.catalogVisible);
+        const ratings = await getMangaRatings(visible.map((project) => project.id));
         setEntries(
-          await Promise.all(
-            rows
-              .filter((p) => p.catalogVisible)
-              .map(async (p) => ({
+          visible.map((p) => ({
               id: p.id,
               title: p.title,
               creator: p.creator || "Créateur CollabManga",
               cover: p.coverDataUrl || "",
               demographic: (["Shonen", "Seinen", "Shojo", "Josei"].includes(p.genres[0]) ? p.genres[0] : "Shonen") as CatalogManga["demographic"],
               genres: p.genres,
-              rating: await getMangaRating(p.id),
+              rating: ratings[p.id] ?? 0,
               chapters: p.chapters.filter((c) => c.status === "Published").length,
               status: p.status,
               synopsis: p.synopsis,
               language: "FR",
               })),
-          ),
-        ),
-      )
+        );
+      })
       .catch(() => setEntries([]));
   }, []);
   return entries;

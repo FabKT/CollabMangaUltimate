@@ -30,6 +30,7 @@ export function MangaCard({
           src={manga.cover}
           alt={`${manga.title} cover`}
           loading="lazy"
+          decoding="async"
           width={800}
           height={1200}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"

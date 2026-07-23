@@ -1,11 +1,11 @@
-import faceCurrent from "@/assets/char-styles/face-current.png";
-import cardCurrent from "@/assets/char-styles/card-current.png";
-import face90 from "@/assets/char-styles/face-90.png";
-import card90 from "@/assets/char-styles/card-90.png";
-import faceClassic from "@/assets/char-styles/face-classic.png";
-import cardClassic from "@/assets/char-styles/card-classic.png";
-import faceRealistic from "@/assets/char-styles/face-realistic.png";
-import cardRealistic from "@/assets/char-styles/card-realistic.png";
+import faceCurrent from "@/assets/char-styles/face-current.webp";
+import cardCurrent from "@/assets/char-styles/card-current.webp";
+import face90 from "@/assets/char-styles/face-90.webp";
+import card90 from "@/assets/char-styles/card-90.webp";
+import faceClassic from "@/assets/char-styles/face-classic.webp";
+import cardClassic from "@/assets/char-styles/card-classic.webp";
+import faceRealistic from "@/assets/char-styles/face-realistic.webp";
+import cardRealistic from "@/assets/char-styles/card-realistic.webp";
 
 export type MangaStyle = {
   id: string;

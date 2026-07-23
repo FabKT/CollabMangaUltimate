@@ -135,12 +135,14 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
 
 /* ---------------- illustrations ---------------- */
 
-export async function listIllustrations(): Promise<DbIllustration[]> {
+export async function listIllustrations(authorId?: string): Promise<DbIllustration[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from("illustrations")
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .order("created_at", { ascending: false });
+  if (authorId) query = query.eq("author_id", authorId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as DbIllustration[];
 }
@@ -184,12 +186,14 @@ export function subscribeIllustrations(onChange: () => void): () => void {
 
 /* ---------------- annonces ---------------- */
 
-export async function listAnnouncements(): Promise<DbAnnouncement[]> {
+export async function listAnnouncements(authorId?: string): Promise<DbAnnouncement[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from("announcements")
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .order("created_at", { ascending: false });
+  if (authorId) query = query.eq("author_id", authorId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as DbAnnouncement[];
 }
@@ -290,12 +294,14 @@ export async function sendAnnouncementApplicationDb(input: {
 
 /* ---------------- idées / propositions ---------------- */
 
-export async function listIdeas(): Promise<DbIdea[]> {
+export async function listIdeas(authorId?: string): Promise<DbIdea[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from("ideas")
     .select(`*, author:profiles(${PROFILE_COLS})`)
     .order("created_at", { ascending: false });
+  if (authorId) query = query.eq("author_id", authorId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   const ideas = (data ?? []) as DbIdea[];
   if (ideas.length === 0) return [];
@@ -1163,6 +1169,25 @@ export async function listDiscoverProfiles(limit = 60): Promise<DbDiscoverProfil
     (data ?? []).map((row) => [row.user_id, row.preferences as DbDiscoverProfile["preferences"]]),
   );
   return profiles.map((profile) => ({ ...profile, preferences: preferences.get(profile.id) ?? null }));
+}
+
+/** Préférences publiques d'un ensemble précis de profils, sans charger l'annuaire entier. */
+export async function listProfilePreferences(
+  userIds: string[],
+): Promise<Record<string, DbDiscoverProfile["preferences"]>> {
+  if (!supabase || userIds.length === 0) return {};
+  const ids = [...new Set(userIds)];
+  const { data, error } = await supabase
+    .from("profile_preferences")
+    .select("user_id, preferences")
+    .in("user_id", ids);
+  if (error) throw new Error(error.message);
+  return Object.fromEntries(
+    (data ?? []).map((row) => [
+      row.user_id,
+      (row.preferences as DbDiscoverProfile["preferences"]) ?? null,
+    ]),
+  );
 }
 
 /** Recherche de profils par pseudo (pour démarrer une conversation). */

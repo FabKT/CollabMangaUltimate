@@ -14,6 +14,7 @@ export function MangaCard({ manga }: { manga: Manga }) {
           src={manga.cover}
           alt={`${manga.title} cover`}
           loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />
         <div className="absolute left-3 top-3">

@@ -33,15 +33,32 @@ export async function getChapterRating(mangaId: string, chapterId: string): Prom
 }
 
 export async function getMangaRating(mangaId: string): Promise<number> {
+  const ratings = await getMangaRatings([mangaId]);
+  return ratings[mangaId] ?? 0;
+}
+
+/** Charge les moyennes de plusieurs mangas en une seule requête. */
+export async function getMangaRatings(mangaIds: string[]): Promise<Record<string, number>> {
+  if (mangaIds.length === 0) return {};
   const sb = getSupabase();
   const { data, error } = await sb
     .from("manga_chapter_ratings")
-    .select("stars")
-    .eq("manga_id", mangaId);
+    .select("manga_id, stars")
+    .in("manga_id", [...new Set(mangaIds)]);
   if (error) throw new Error(error.message);
-  if (!data?.length) return 0;
-  const average = data.reduce((total, row) => total + row.stars, 0) / data.length;
-  return Math.round(average * 10) / 10;
+  const totals = new Map<string, { sum: number; count: number }>();
+  for (const row of data ?? []) {
+    const current = totals.get(row.manga_id) ?? { sum: 0, count: 0 };
+    current.sum += row.stars;
+    current.count += 1;
+    totals.set(row.manga_id, current);
+  }
+  return Object.fromEntries(
+    mangaIds.map((id) => {
+      const current = totals.get(id);
+      return [id, current ? Math.round((current.sum / current.count) * 10) / 10 : 0];
+    }),
+  );
 }
 
 export async function getMangaRatingCount(mangaId: string): Promise<number> {

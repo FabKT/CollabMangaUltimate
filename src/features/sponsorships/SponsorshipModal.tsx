@@ -55,6 +55,27 @@ export function SponsorshipModal({
       .then(([projects, profiles, options]) => {
         setMyProjects(projects);
         setProjectId((current) => current || projects[0]?.id || "");
+        const servicesByOwner = new Map<string, Service[]>();
+        for (const option of options) {
+          if (option.mode !== "creator" || !option.ownerId) continue;
+          const services = servicesByOwner.get(option.ownerId) ?? [];
+          services.push({
+            id: option.id,
+            name: option.format,
+            format: option.videoType || option.format,
+            duration: option.duration,
+            platforms: option.platforms.filter((platform): platform is Platform =>
+              ["TikTok", "YouTube", "Instagram", "Twitter/X", "Other"].includes(platform),
+            ),
+            quantity: option.quantity,
+            price: Math.max(0, Number(option.price) || 0),
+            paymentType: option.paymentMode.toLocaleLowerCase().includes("abonnement")
+              ? ("subscription" as PaymentType)
+              : ("one_time" as PaymentType),
+            notes: option.description,
+          });
+          servicesByOwner.set(option.ownerId, services);
+        }
         const creators = profiles
           .filter((profile) => {
             const role = (profile.role ?? "").toLocaleLowerCase();
@@ -62,23 +83,7 @@ export function SponsorshipModal({
           })
           .map((profile) => {
             const name = profile.display_name || profile.username;
-            const creatorServices = options
-              .filter((option) => option.mode === "creator" && option.ownerId === profile.id)
-              .map((option): Service => ({
-                id: option.id,
-                name: option.format,
-                format: option.videoType || option.format,
-                duration: option.duration,
-                platforms: option.platforms.filter((platform): platform is Platform =>
-                  ["TikTok", "YouTube", "Instagram", "Twitter/X", "Other"].includes(platform),
-                ),
-                quantity: option.quantity,
-                price: Math.max(0, Number(option.price) || 0),
-                paymentType: option.paymentMode.toLocaleLowerCase().includes("abonnement")
-                  ? ("subscription" as PaymentType)
-                  : ("one_time" as PaymentType),
-                notes: option.description,
-              }));
+            const creatorServices = servicesByOwner.get(profile.id) ?? [];
             return {
               id: profile.id,
               name,

@@ -204,7 +204,7 @@ function DecorLibraryCard({
     <div className="group flex flex-col gap-2 rounded-[14px] border border-border bg-surface-2 p-2">
       <div className="relative aspect-[3/2] w-full overflow-hidden rounded-[10px] border border-border bg-surface-3">
         {decor.imageUrl ? (
-          <img src={decor.imageUrl} alt={decor.name} className="h-full w-full object-cover" />
+          <img src={decor.imageUrl} alt={decor.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full" />
         )}

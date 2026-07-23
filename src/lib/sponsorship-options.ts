@@ -44,12 +44,18 @@ async function currentUserId() {
   return (await sb.auth.getSession()).data.session?.user.id ?? null;
 }
 
-export async function listSponsorOptions(ownerId?: string | null): Promise<SponsorOption[]> {
+export async function listSponsorOptions(
+  ownerId?: string | string[] | null,
+): Promise<SponsorOption[]> {
+  if (Array.isArray(ownerId) && ownerId.length === 0) return [];
   const sb = getSupabase();
-  const primary = await sb
+  let primaryQuery = sb
     .from("sponsor_options")
     .select("owner_id, data, owner:profiles!sponsor_options_owner_id_fkey(display_name, username, avatar_url, banner_url)")
     .order("created_at", { ascending: false });
+  if (Array.isArray(ownerId) && ownerId.length > 0) primaryQuery = primaryQuery.in("owner_id", ownerId);
+  else if (typeof ownerId === "string") primaryQuery = primaryQuery.eq("owner_id", ownerId);
+  const primary = await primaryQuery;
   let data: Array<{
     owner_id: string;
     data: unknown;
@@ -57,10 +63,13 @@ export async function listSponsorOptions(ownerId?: string | null): Promise<Spons
   }> | null = primary.data as unknown as Array<{ owner_id: string; data: unknown; owner: unknown }> | null;
   let error = primary.error;
   if (error) {
-    const fallback = await sb
+    let fallbackQuery = sb
       .from("sponsor_options")
       .select("owner_id, data, owner:profiles!sponsor_options_owner_id_fkey(display_name, username, avatar_url)")
       .order("created_at", { ascending: false });
+    if (Array.isArray(ownerId) && ownerId.length > 0) fallbackQuery = fallbackQuery.in("owner_id", ownerId);
+    else if (typeof ownerId === "string") fallbackQuery = fallbackQuery.eq("owner_id", ownerId);
+    const fallback = await fallbackQuery;
     data = fallback.data as unknown as typeof data;
     error = fallback.error;
   }
@@ -80,7 +89,6 @@ export async function listSponsorOptions(ownerId?: string | null): Promise<Spons
     return listSponsorOptions(ownerId);
   }
   return (data ?? [])
-    .filter((row) => !ownerId || row.owner_id === ownerId)
     .map((row) => {
       const owner = row.owner as {
         display_name?: string | null;

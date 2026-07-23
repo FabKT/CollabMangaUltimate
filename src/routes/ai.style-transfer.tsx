@@ -332,7 +332,7 @@ function StyleTransferPage() {
                 }`}
               >
                 <div className="relative aspect-square w-full overflow-hidden rounded-[10px] border border-border bg-surface-2">
-                  <img src={style.face} alt={style.name} className="h-full w-full object-cover" />
+                  <img src={style.face} alt={style.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   {selected && (
                     <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-foreground">
                       <Check className="h-3 w-3" />

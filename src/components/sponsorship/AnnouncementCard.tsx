@@ -133,7 +133,7 @@ function CreatorHero({ announcement }: { announcement: Announcement }) {
   return (
     <div className="relative aspect-video overflow-hidden bg-cm-details">
       {announcement.ownerBannerUrl ? (
-        <img src={announcement.ownerBannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={announcement.ownerBannerUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
         <div
           className="absolute inset-0"
@@ -146,7 +146,7 @@ function CreatorHero({ announcement }: { announcement: Announcement }) {
       <div className="absolute inset-0 grid place-items-center">
         <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full border-2 border-cm-neon bg-cm-panel shadow-[0_14px_36px_rgba(0,0,0,0.38)]">
           {announcement.ownerAvatarUrl ? (
-            <img src={announcement.ownerAvatarUrl} alt={announcement.ownerName} className="h-full w-full object-cover" />
+            <img src={announcement.ownerAvatarUrl} alt={announcement.ownerName} loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : (
             <span className="font-sora text-[22px] font-extrabold text-cm-neon">{initials}</span>
           )}

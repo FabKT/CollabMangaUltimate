@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { addIllustration, listDiscoverProfiles, listIllustrations, sendProjectInvitationDb, startConversationWith, subscribeIllustrations } from "@/lib/db";
+import { addIllustration, listIllustrations, listProfilePreferences, sendProjectInvitationDb, startConversationWith, subscribeIllustrations } from "@/lib/db";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import { listFavorites, setFavorite } from "@/lib/favorites";
 import { loadStudioProjects } from "@/lib/studio-projects";
@@ -264,12 +264,12 @@ function IllustrationsPage() {
 
   // Illustrations réelles (Supabase) — seule source de la galerie
   const refreshGallery = () => {
-    Promise.all([listIllustrations(), listDiscoverProfiles(200)])
-      .then(([rows, profiles]) => {
-        const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+    listIllustrations()
+      .then(async (rows) => {
+        const preferences = await listProfilePreferences(rows.map((row) => row.author_id));
         setRealArts(
           rows.map((r, i) => {
-            const profile = profileById.get(r.author_id);
+            const profilePreferences = preferences[r.author_id];
             return {
             id: r.id,
             title: r.title,
@@ -278,7 +278,7 @@ function IllustrationsPage() {
             style: "—",
             type: "Illustration",
             skills: [],
-            availability: (profile?.preferences?.available === false ? "Not available" : "Available now") as Art["availability"],
+            availability: (profilePreferences?.available === false ? "Not available" : "Available now") as Art["availability"],
             ratio: "portrait" as Ratio,
             seed: i + 100,
             views: 0,
@@ -478,7 +478,7 @@ function ArtCard({
       {/* Fixed-size image frame in cards; the original ratio is shown in the detail view. */}
       {art.imageUrl ? (
         <div style={{ aspectRatio: ratioMap.portrait, width: "100%", borderRadius: 14, overflow: "hidden", background: C.stage }}>
-          <img src={art.imageUrl} alt={art.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={art.imageUrl} alt={art.title} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
       ) : (
         <ArtworkPlaceholder seed={art.seed} ratio="portrait" />
@@ -489,7 +489,7 @@ function ArtCard({
           {/* profile: photo + name */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {art.avatarUrl ? (
-              <img src={art.avatarUrl} alt={art.artist} style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: `1px solid ${C.border}`, flexShrink: 0 }} />
+              <img src={art.avatarUrl} alt={art.artist} loading="lazy" decoding="async" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: `1px solid ${C.border}`, flexShrink: 0 }} />
             ) : <div style={{
               width: 28, height: 28, borderRadius: "50%",
               background: `linear-gradient(135deg, hsl(${(art.seed * 47) % 360} 60% 40%), hsl(${(art.seed * 73) % 360} 60% 25%))`,
@@ -597,7 +597,7 @@ function DetailModal({
             <div style={{ display: "flex", gap: 8, overflowX: "auto", justifyContent: "center" }}>
               {images.map((src, index) => (
                 <button key={src} type="button" onClick={() => setActiveImage(index)} style={{ width: 56, height: 56, flex: "0 0 auto", overflow: "hidden", borderRadius: 10, border: `1px solid ${index === activeImage ? C.neon : C.border}`, background: C.input }}>
-                  <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={src} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </button>
               ))}
             </div>
@@ -683,7 +683,7 @@ function DetailModal({
                 {works.slice(0, 8).map((w) => (
                   <button key={w.id} type="button" onClick={() => onOpenArt?.(w)} style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}>
                     {w.imageUrl ? (
-                      <img src={w.imageUrl} alt={w.title} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10, border: `1px solid ${C.border}` }} />
+                      <img src={w.imageUrl} alt={w.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10, border: `1px solid ${C.border}` }} />
                     ) : (
                       <ArtworkPlaceholder seed={w.seed} ratio="square" />
                     )}

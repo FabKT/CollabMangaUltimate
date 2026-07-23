@@ -461,7 +461,7 @@ function PropCard({ p, saved, onSave, onOpen }: {
 
       {p.imageUrl ? (
         <div className="aspect-[16/10] overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--input-bg)]">
-          <img src={p.imageUrl} alt={p.title} className="h-full w-full object-cover" />
+          <img src={p.imageUrl} alt={p.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         </div>
       ) : p.hasImage ? <Thumb hue={p.hue} category={p.category}/> : <NoImagePlaceholder/>}
 
@@ -474,7 +474,7 @@ function PropCard({ p, saved, onSave, onOpen }: {
         {/* Ligne 1 : auteur */}
         <div className="min-w-0 flex items-center gap-3">
           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[var(--input-bg)] border border-[var(--border)] grid place-items-center font-display text-[12px] font-bold text-[var(--neon)]">
-            {p.authorAvatarUrl ? <img src={p.authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : p.author.slice(0, 2).toUpperCase()}
+            {p.authorAvatarUrl ? <img src={p.authorAvatarUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" /> : p.author.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
             <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)]">{t("ideas.profile")}</div>
@@ -657,7 +657,7 @@ function PropModal({ p, saved, onSave, onClose }: {
                   className="h-16 w-16 shrink-0 overflow-hidden rounded-[10px] border"
                   style={{ borderColor: index === activeImage ? "var(--neon)" : "var(--border)" }}
                 >
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>

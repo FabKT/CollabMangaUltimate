@@ -86,7 +86,7 @@ export function CustomStyleModal({
             <div className="scroll-dark mt-3 flex min-h-[72px] gap-2 overflow-x-auto pb-1">
               {images.map((image, index) => (
                 <div key={`${image.slice(-24)}-${index}`} className={`group relative h-[68px] w-[68px] shrink-0 overflow-hidden rounded-[10px] border ${activeIndex === index ? "border-accent" : "border-border"}`}>
-                  <button type="button" onClick={() => setActiveIndex(index)} className="h-full w-full"><img src={image} alt={`Référence ${index + 1}`} className="h-full w-full object-cover" /></button>
+                  <button type="button" onClick={() => setActiveIndex(index)} className="h-full w-full"><img src={image} alt={`Référence ${index + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" /></button>
                   <button type="button" onClick={() => removeImage(index)} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-[7px] bg-black/70 text-white opacity-0 transition group-hover:opacity-100" aria-label="Retirer l'image"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               ))}

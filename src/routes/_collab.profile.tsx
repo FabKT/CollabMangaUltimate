@@ -4,7 +4,6 @@ import {
   addAnnouncement,
   addIdea,
   addIllustration,
-  currentUserId,
   listAnnouncements,
   listFriendsDb,
   listIdeas,
@@ -328,11 +327,19 @@ function ProfilePage({
 
   const refreshOwnContent = () => {
     void (async () => {
-      const uid = publicLocked ? shownUserId : await currentUserId().catch(() => null);
+      const uid = shownUserId;
       if (uid) {
-        void listIllustrations().then((rows) => setMyIllustrations(rows.filter((r) => r.author_id === uid))).catch(() => {});
-        void listAnnouncements().then((rows) => setMyAnnouncements(rows.filter((r) => r.author_id === uid))).catch(() => {});
-        void listIdeas().then((rows) => setMyIdeas(rows.filter((r) => r.author_id === uid))).catch(() => {});
+        void Promise.all([
+          listIllustrations(uid),
+          listAnnouncements(uid),
+          listIdeas(uid),
+        ])
+          .then(([illustrations, announcements, ideas]) => {
+            setMyIllustrations(illustrations);
+            setMyAnnouncements(announcements);
+            setMyIdeas(ideas);
+          })
+          .catch(() => {});
       } else {
         setMyIllustrations([]);
         setMyAnnouncements([]);
@@ -1460,7 +1467,7 @@ function ProjectCard({
             border: "1px solid rgba(133,154,206,0.18)",
           }}
         >
-          {project.coverUrl ? <img src={project.coverUrl} alt={project.title} className="h-full w-full object-cover" /> : <ImageIcon size={22} color="#5E6A90" />}
+          {project.coverUrl ? <img src={project.coverUrl} alt={project.title} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <ImageIcon size={22} color="#5E6A90" />}
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -1726,7 +1733,7 @@ function IllustrationCard({
         }}
       >
         {imageUrl ? (
-          <img src={imageUrl} alt={title} className="h-full w-full object-cover" />
+          <img src={imageUrl} alt={title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
           <Palette size={28} color="#5E6A90" />
         )}
@@ -1845,7 +1852,7 @@ function ProfileFriendsTab({ t }: { t: (key: TranslationKey) => string }) {
                 <Card key={r.id}>
                   <div className="flex items-center gap-3">
                     <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#101B3F", border: "1px solid rgba(133,154,206,0.22)" }}>
-                      {p?.avatar_url ? <img src={p.avatar_url} alt={name} className="h-full w-full object-cover" /> : <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name.slice(0, 2).toUpperCase()}</span>}
+                      {p?.avatar_url ? <img src={p.avatar_url} alt={name} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name.slice(0, 2).toUpperCase()}</span>}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name}</p>
@@ -1877,7 +1884,7 @@ function ProfileFriendsTab({ t }: { t: (key: TranslationKey) => string }) {
                   onClick={() => void navigate({ to: "/profile/$profileId", params: { profileId: p.username } })}
                 >
                   <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#101B3F", border: "1px solid rgba(133,154,206,0.22)" }}>
-                    {p.avatar_url ? <img src={p.avatar_url} alt={name} className="h-full w-full object-cover" /> : <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name.slice(0, 2).toUpperCase()}</span>}
+                    {p.avatar_url ? <img src={p.avatar_url} alt={name} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <span className="text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name.slice(0, 2).toUpperCase()}</span>}
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-bold" style={{ color: "#F7FAFF" }}>{name}</p>
@@ -3395,7 +3402,7 @@ function DetailsModal({
             }}
           >
             {illustration?.image_url || idea?.image_url || project?.coverDataUrl || project?.coverUrl ? (
-              <img src={illustration?.image_url || idea?.image_url || project?.coverDataUrl || project?.coverUrl || ""} alt={title} className="h-full w-full object-cover" />
+              <img src={illustration?.image_url || idea?.image_url || project?.coverDataUrl || project?.coverUrl || ""} alt={title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
             ) : (
               <ImageIcon size={30} color="#5E6A90" />
             )}

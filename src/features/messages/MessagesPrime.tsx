@@ -145,7 +145,7 @@ function Avatar({
           border: "1px solid var(--cm-border)",
         }}
       >
-        {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
+        {imageUrl ? <img src={imageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" /> : initials}
       </div>
       {online !== undefined && (
         <span

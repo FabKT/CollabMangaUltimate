@@ -438,13 +438,21 @@ function UsersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([listDiscoverProfiles(), listSponsorOptions()])
-      .then(([rows, options]) => {
+    void listDiscoverProfiles()
+      .then(async (rows) => {
+        const options = await listSponsorOptions(rows.map((row) => row.id));
         if (cancelled) return;
+        const optionsByOwner = new Map<string, typeof options>();
+        for (const option of options) {
+          if (!option.ownerId) continue;
+          const ownerOptions = optionsByOwner.get(option.ownerId) ?? [];
+          ownerOptions.push(option);
+          optionsByOwner.set(option.ownerId, ownerOptions);
+        }
         setProfiles(
           rows.map((row) => {
             const profile = profileFromDb(row);
-            const ownOptions = options.filter((option) => option.ownerId === row.id);
+            const ownOptions = optionsByOwner.get(row.id) ?? [];
             return {
               ...profile,
               platforms: [...new Set(ownOptions.flatMap((option) => option.platforms))],
@@ -950,7 +958,7 @@ function Avatar({
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {avatarUrl ? (
-        <img src={avatarUrl} alt="" className="h-full w-full rounded-[inherit] object-cover" />
+        <img src={avatarUrl} alt="" loading="lazy" decoding="async" className="h-full w-full rounded-[inherit] object-cover" />
       ) : (
         initials
       )}
