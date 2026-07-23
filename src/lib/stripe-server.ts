@@ -57,6 +57,13 @@ export function isStripeConfigured(): boolean {
 }
 
 export function stripeMode(): "test" | "live" {
+  // The secret key is the authoritative Stripe environment. This also keeps
+  // manually packaged Netlify functions safe when a deploy context variable
+  // is unavailable at runtime.
+  const key = env("STRIPE_SECRET_KEY");
+  if (key?.startsWith("sk_live_")) return "live";
+  if (key?.startsWith("sk_test_")) return "test";
+
   const explicit = env("STRIPE_MODE");
   if (explicit === "test" || explicit === "live") return explicit;
   return env("NODE_ENV") === "production" ? "live" : "test";
