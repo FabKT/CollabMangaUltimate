@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
-import { BrandMark } from "@/components/BrandMark";
+import { BrandMark, BrandName } from "@/components/BrandMark";
 import { Card } from "@/components/cma/Layout";
 import { PLANS, PLAN_ORDER, type PlanId } from "@/lib/billing-plans";
 import { supabase } from "@/lib/supabase";
@@ -126,12 +126,7 @@ function AiSubscribe() {
           <div className="mb-4 flex justify-center">
             <BrandMark size={54} />
           </div>
-          <p
-            className="mb-2 text-[12px] font-bold uppercase tracking-[0.18em]"
-            style={{ color: "var(--neon)" }}
-          >
-            CollabManga AI
-          </p>
+          <BrandName suffix="AI" className="mb-2 block text-[12px] uppercase" />
           <h1 className="font-display text-[34px] font-black leading-tight md:text-[48px]">
             {t("ai.subscribeTitle")}
           </h1>

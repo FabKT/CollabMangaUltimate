@@ -24,7 +24,7 @@ import { onCreditsChanged } from "@/lib/credits-events";
 import { PLANS } from "@/lib/billing-plans";
 import { LanguageSelect, useI18n, type TranslationKey } from "@/lib/i18n";
 import { isLocalAiClientMode } from "@/lib/local-ai-mode";
-import { BrandMark } from "@/components/BrandMark";
+import { BrandMark, BrandName } from "@/components/BrandMark";
 
 type Item = { label: string; to: string; icon: LucideIcon; badge?: string };
 type Group = { title?: string; items: Item[] };
@@ -170,12 +170,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
       {/* Brand */}
       <div className="flex items-center gap-2 px-2 mb-3">
         <BrandMark />
-        <span
-          className="font-bold text-[15px] leading-none"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          CollabManga AI
-        </span>
+        <BrandName suffix="AI" className="text-[15px]" />
       </div>
 
       {/* Switch to CollabManga (social network) */}
@@ -201,9 +196,7 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
           >
             <Users size={13} color="#04111e" strokeWidth={2.6} />
           </span>
-          <span className="min-w-0 flex-1 text-left text-[12px] font-bold truncate">
-            CollabManga (réseau)
-          </span>
+          <BrandName className="min-w-0 flex-1 truncate text-left text-[12px]" />
           <ArrowLeft size={13} style={{ color: "var(--text-muted)" }} />
         </Link>
       )}

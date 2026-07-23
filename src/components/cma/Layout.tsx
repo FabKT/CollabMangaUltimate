@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { Sidebar } from "./Sidebar";
 import { Menu, X } from "lucide-react";
-import { BrandMark } from "@/components/BrandMark";
+import { BrandMark, BrandName } from "@/components/BrandMark";
 
 export function CmaLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -45,9 +45,7 @@ export function CmaLayout({ children }: { children: ReactNode }) {
             <Menu size={16} />
           </button>
           <BrandMark size={24} />
-          <div className="font-bold" style={{ fontFamily: "var(--font-display)" }}>
-            CollabManga AI
-          </div>
+          <BrandName suffix="AI" />
         </div>
 
         <div className="p-4 md:p-6 lg:p-8">{children}</div>

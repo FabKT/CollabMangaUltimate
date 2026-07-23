@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useSession, signOut } from "@/lib/auth";
 import { C, sora, manrope } from "./intro-theme";
 import { LanguageSelect, useI18n } from "@/lib/i18n";
-import { BrandMark } from "@/components/BrandMark";
+import { BrandMark, BrandName } from "@/components/BrandMark";
 
 /** Boutons d'authentification du header public (connexion / compte). */
 function HeaderAuth() {
@@ -91,9 +91,7 @@ export function IntroHeader() {
           }}
         >
           <BrandMark size={34} />
-          <span>
-            Collab<span style={{ color: C.neon }}>Manga</span>
-          </span>
+          <BrandName className="text-[22px]" />
         </Link>
         <nav className="intro-nav" style={{ display: "flex", alignItems: "center", gap: 32 }}>
           <a href="/#home" className="intro-nav-link">
@@ -103,7 +101,7 @@ export function IntroHeader() {
             {t("intro.about")}
           </a>
           <a href="/#ai" className="intro-nav-link">
-            CollabManga AI
+            <BrandName suffix="AI" className="text-[inherit]" />
           </a>
           <a href="/#catalog" className="intro-nav-link">
             {t("intro.catalog")}
