@@ -523,7 +523,11 @@ function AnnouncementsPage() {
   useEffect(() => {
     void listFavorites()
       .then((favorites) =>
-        setSavedTitles(new Set(favorites.filter((item) => item.kind === "Announcement").map((item) => item.title))),
+        setSavedTitles(
+          new Set(
+            favorites.filter((item) => item.kind === "Announcement").map((item) => item.title),
+          ),
+        ),
       )
       .catch(() => setSavedTitles(new Set()));
   }, []);
@@ -1404,7 +1408,9 @@ function UserCard({
         {item.roleOffered && item.roleOffered !== "—" && (
           <RoleSpotlight
             label={item.secondaryRole ? "Rôles" : "Rôle"}
-            role={item.secondaryRole ? `${item.roleOffered} · ${item.secondaryRole}` : item.roleOffered}
+            role={
+              item.secondaryRole ? `${item.roleOffered} · ${item.secondaryRole}` : item.roleOffered
+            }
           />
         )}
         <CardHeader
@@ -1559,11 +1565,14 @@ function ModalShell({
   onClose,
   maxWidth = 960,
   label,
+  fullHeight = false,
 }: {
   children: ReactNode;
   onClose: () => void;
   maxWidth?: number;
   label: string;
+  /** Occupe presque toute la hauteur de la page (popups de détails). */
+  fullHeight?: boolean;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1603,6 +1612,7 @@ function ModalShell({
           width: "100%",
           maxWidth,
           maxHeight: "calc(100dvh - 32px)",
+          ...(fullHeight ? { height: "calc(100dvh - 32px)" } : null),
           background: C.panel,
           border: `1px solid ${C.borderStrong}`,
           borderRadius: 24,
@@ -1700,7 +1710,11 @@ export function DetailsModal({
   useEffect(() => {
     void listFavorites()
       .then((favorites) =>
-        setSaved(favorites.some((favorite) => favorite.kind === "Announcement" && favorite.title === item.title)),
+        setSaved(
+          favorites.some(
+            (favorite) => favorite.kind === "Announcement" && favorite.title === item.title,
+          ),
+        ),
       )
       .catch(() => setSaved(false));
   }, [item.title]);
@@ -1715,9 +1729,10 @@ export function DetailsModal({
   }, [isProject, item.id]);
 
   return (
-    <ModalShell onClose={onClose} maxWidth={1280} label="Announcement details">
+    <ModalShell onClose={onClose} maxWidth={1280} label="Announcement details" fullHeight>
       <ModalHeader title={item.title} subtitle={entityTitle} onClose={onClose} />
       <div
+        className="cm-detail-body"
         style={{
           overflow: "auto",
           background: C.details,
@@ -1731,7 +1746,10 @@ export function DetailsModal({
             minWidth: 980,
           }}
         >
-          <aside className="cm-detail-section-start" style={{ padding: 24, borderRight: `1px solid ${C.border}` }}>
+          <aside
+            className="cm-detail-section-start"
+            style={{ padding: 24, borderRight: `1px solid ${C.border}` }}
+          >
             {isProject ? (
               <div
                 style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}` }}
@@ -1855,12 +1873,21 @@ export function DetailsModal({
             </div>
           </section>
 
-          <aside className="cm-detail-section-end" style={{ padding: 18, borderLeft: `1px solid ${C.border}` }}>
+          <aside
+            className="cm-detail-section-end"
+            style={{
+              padding: 18,
+              borderLeft: `1px solid ${C.border}`,
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+            }}
+          >
             <div
               className="cm-popup-tabs"
               role="tablist"
               aria-label="Activite de l'annonce"
-              style={{ width: "100%", padding: 4, borderRadius: 14 }}
+              style={{ width: "100%", padding: 4, borderRadius: 14, flex: "0 0 auto" }}
             >
               <button
                 type="button"
@@ -1886,52 +1913,73 @@ export function DetailsModal({
               </button>
             </div>
 
-            <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-              {tab === "comments" ? (
-                <CommentsPanel entityType="announcement" entityId={item.id} />
-              ) : interested.length === 0 ? (
-                <p
-                  style={{ ...manrope, color: C.muted, fontSize: 13, fontWeight: 500, padding: 8 }}
-                >
-                  Aucun intéressé pour l'instant.
-                </p>
-              ) : (
-                interested.map((name) => (
-                  <div
-                    key={name}
+            {tab === "comments" ? (
+              <div style={{ flex: "1 1 auto", minHeight: 0, marginTop: 12 }}>
+                <CommentsPanel entityType="announcement" entityId={item.id} fillHeight />
+              </div>
+            ) : (
+              <div
+                className="scroll-dark"
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  marginTop: 12,
+                  flex: "1 1 auto",
+                  minHeight: 0,
+                  overflowY: "auto",
+                  alignContent: "start",
+                }}
+              >
+                {interested.length === 0 ? (
+                  <p
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: 10,
-                      borderRadius: 12,
-                      background: C.card,
-                      border: `1px solid ${C.border}`,
+                      ...manrope,
+                      color: C.muted,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      padding: 8,
                     }}
                   >
+                    Aucun intéressé pour l'instant.
+                  </p>
+                ) : (
+                  interested.map((name) => (
                     <div
+                      key={name}
                       style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        display: "grid",
-                        placeItems: "center",
-                        background: C.input,
-                        color: C.neon,
-                        ...sora,
-                        fontSize: 12,
-                        fontWeight: 800,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: 10,
+                        borderRadius: 12,
+                        background: C.card,
+                        border: `1px solid ${C.border}`,
                       }}
                     >
-                      {name.slice(0, 2).toUpperCase()}
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          display: "grid",
+                          placeItems: "center",
+                          background: C.input,
+                          color: C.neon,
+                          ...sora,
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <span style={{ ...manrope, color: C.text, fontSize: 13, fontWeight: 800 }}>
+                        {name}
+                      </span>
                     </div>
-                    <span style={{ ...manrope, color: C.text, fontSize: 13, fontWeight: 800 }}>
-                      {name}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+                  ))
+                )}
+              </div>
+            )}
           </aside>
         </div>
       </div>
@@ -2109,7 +2157,9 @@ export function AnnouncementWorkflowModal({
             >
               <option value="">Choisir un projet</option>
               {projects.map((project) => (
-                <option key={project.id} value={project.title}>{project.title}</option>
+                <option key={project.id} value={project.title}>
+                  {project.title}
+                </option>
               ))}
             </select>
             <FieldLabel>Rôle proposé</FieldLabel>

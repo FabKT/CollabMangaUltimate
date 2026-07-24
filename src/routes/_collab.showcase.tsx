@@ -1,13 +1,33 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { addIllustration, listIllustrations, listProfilePreferences, sendProjectInvitationDb, startConversationWith, subscribeIllustrations } from "@/lib/db";
+import {
+  addIllustration,
+  listIllustrations,
+  listProfilePreferences,
+  sendProjectInvitationDb,
+  startConversationWith,
+  subscribeIllustrations,
+} from "@/lib/db";
 import { CommentsPanel } from "@/components/collab/CommentsPanel";
 import { listFavorites, setFavorite } from "@/lib/favorites";
 import { loadStudioProjects } from "@/lib/studio-projects";
 import {
-  X, Upload, Bookmark, BookmarkCheck, MessageSquare, Send, ChevronRight, ChevronLeft,
-  LayoutGrid, Rows3, Columns3, Heart,
-  UserPlus, ZoomIn, ZoomOut, Palette,
+  X,
+  Upload,
+  Bookmark,
+  BookmarkCheck,
+  MessageSquare,
+  Send,
+  ChevronRight,
+  ChevronLeft,
+  LayoutGrid,
+  Rows3,
+  Columns3,
+  Heart,
+  UserPlus,
+  ZoomIn,
+  ZoomOut,
+  Palette,
 } from "lucide-react";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 
@@ -16,20 +36,36 @@ export const Route = createFileRoute("/_collab/showcase")({
   head: () => ({
     meta: [
       { title: "Illustrations · CollabManga" },
-      { name: "description", content: "Discover manga artists, evaluate their visual style, and invite them to collaborate on original projects." },
+      {
+        name: "description",
+        content:
+          "Discover manga artists, evaluate their visual style, and invite them to collaborate on original projects.",
+      },
     ],
   }),
 });
 
 /* ---------------- Tokens ---------------- */
 const C = {
-  bg: "#050B1D", panel: "#0B1430", card: "#101B3F", input: "#0E193A",
-  details: "#08112B", stage: "#060D24",
-  text: "#F7FAFF", text2: "#B8C4E5", muted: "#7F8CB3", disabled: "#5E6A90",
-  neon: "#39FF88", neonHover: "#25E575",
-  neonSoftFill: "rgba(57, 255, 136, 0.12)", neonSoftBorder: "rgba(57, 255, 136, 0.45)",
-  border: "rgba(133, 154, 206, 0.18)", borderStrong: "rgba(133, 154, 206, 0.28)",
-  danger: "#FF5F7E", warning: "#FFB84D", info: "#75A7FF",
+  bg: "#050B1D",
+  panel: "#0B1430",
+  card: "#101B3F",
+  input: "#0E193A",
+  details: "#08112B",
+  stage: "#060D24",
+  text: "#F7FAFF",
+  text2: "#B8C4E5",
+  muted: "#7F8CB3",
+  disabled: "#5E6A90",
+  neon: "#39FF88",
+  neonHover: "#25E575",
+  neonSoftFill: "rgba(57, 255, 136, 0.12)",
+  neonSoftBorder: "rgba(57, 255, 136, 0.45)",
+  border: "rgba(133, 154, 206, 0.18)",
+  borderStrong: "rgba(133, 154, 206, 0.28)",
+  danger: "#FF5F7E",
+  warning: "#FFB84D",
+  info: "#75A7FF",
 };
 
 const sora: CSSProperties = { fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif" };
@@ -37,29 +73,68 @@ const manrope: CSSProperties = { fontFamily: "'Manrope', ui-sans-serif, system-u
 
 /* ---------------- Primitives ---------------- */
 function Chip({
-  children, tone = "neutral", selected, onRemove, onClick, icon,
+  children,
+  tone = "neutral",
+  selected,
+  onRemove,
+  onClick,
+  icon,
 }: {
   children: ReactNode;
   tone?: "neutral" | "neon" | "warning" | "info" | "danger";
-  selected?: boolean; onRemove?: () => void; onClick?: () => void; icon?: ReactNode;
+  selected?: boolean;
+  onRemove?: () => void;
+  onClick?: () => void;
+  icon?: ReactNode;
 }) {
   const styles: Record<string, CSSProperties> = {
     neutral: { background: C.input, color: C.text2, border: `1px solid ${C.border}` },
     neon: { background: C.neonSoftFill, color: C.neon, border: `1px solid ${C.neonSoftBorder}` },
-    warning: { background: "rgba(255,184,77,0.12)", color: C.warning, border: "1px solid rgba(255,184,77,0.35)" },
-    info: { background: "rgba(117,167,255,0.12)", color: C.info, border: "1px solid rgba(117,167,255,0.35)" },
-    danger: { background: "rgba(255,95,126,0.12)", color: C.danger, border: "1px solid rgba(255,95,126,0.35)" },
+    warning: {
+      background: "rgba(255,184,77,0.12)",
+      color: C.warning,
+      border: "1px solid rgba(255,184,77,0.35)",
+    },
+    info: {
+      background: "rgba(117,167,255,0.12)",
+      color: C.info,
+      border: "1px solid rgba(117,167,255,0.35)",
+    },
+    danger: {
+      background: "rgba(255,95,126,0.12)",
+      color: C.danger,
+      border: "1px solid rgba(255,95,126,0.35)",
+    },
   };
   const t = selected ? styles.neon : styles[tone];
   return (
     <button
       onClick={onClick}
-      style={{ ...t, ...manrope, fontWeight: 600, fontSize: 12, lineHeight: "18px", borderRadius: 999, padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: 6, cursor: onClick || onRemove ? "pointer" : "default", whiteSpace: "nowrap" }}
+      style={{
+        ...t,
+        ...manrope,
+        fontWeight: 600,
+        fontSize: 12,
+        lineHeight: "18px",
+        borderRadius: 999,
+        padding: "6px 12px",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        cursor: onClick || onRemove ? "pointer" : "default",
+        whiteSpace: "nowrap",
+      }}
     >
       {icon}
       {children}
       {onRemove && (
-        <span onClick={(e) => { e.stopPropagation(); onRemove(); }} style={{ display: "inline-flex", opacity: 0.8 }}>
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          style={{ display: "inline-flex", opacity: 0.8 }}
+        >
           <X size={12} strokeWidth={2.5} />
         </span>
       )}
@@ -67,58 +142,106 @@ function Chip({
   );
 }
 function Btn({
-  children, variant = "primary", size = "md", onClick, icon, style, full, type = "button",
+  children,
+  variant = "primary",
+  size = "md",
+  onClick,
+  icon,
+  style,
+  full,
+  type = "button",
 }: {
   children?: ReactNode;
   variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "md" | "sm";
-  onClick?: () => void; icon?: ReactNode; style?: CSSProperties; full?: boolean;
+  onClick?: () => void;
+  icon?: ReactNode;
+  style?: CSSProperties;
+  full?: boolean;
   type?: "button" | "submit";
 }) {
   const h = size === "sm" ? 36 : 44;
   const base: CSSProperties = {
-    ...manrope, fontWeight: 700, fontSize: 14, lineHeight: "20px",
-    height: h, padding: size === "sm" ? "0 14px" : "0 18px", borderRadius: 14,
-    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-    cursor: "pointer", transition: "all 160ms ease", width: full ? "100%" : undefined,
+    ...manrope,
+    fontWeight: 700,
+    fontSize: 14,
+    lineHeight: "20px",
+    height: h,
+    padding: size === "sm" ? "0 14px" : "0 18px",
+    borderRadius: 14,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    cursor: "pointer",
+    transition: "all 160ms ease",
+    width: full ? "100%" : undefined,
   };
   const v: Record<string, CSSProperties> = {
     primary: { background: C.neon, color: "#04111E", border: "1px solid transparent" },
     secondary: { background: "transparent", color: C.text, border: `1px solid ${C.borderStrong}` },
     ghost: { background: "transparent", color: C.text2, border: "1px solid transparent" },
-    danger: { background: "rgba(255,95,126,0.10)", color: C.danger, border: "1px solid rgba(255,95,126,0.35)" },
+    danger: {
+      background: "rgba(255,95,126,0.10)",
+      color: C.danger,
+      border: "1px solid rgba(255,95,126,0.35)",
+    },
   };
   return (
     <button
-      type={type} onClick={onClick} style={{ ...base, ...v[variant], ...style }}
+      type={type}
+      onClick={onClick}
+      style={{ ...base, ...v[variant], ...style }}
       onMouseEnter={(e) => {
-        if (variant === "primary") (e.currentTarget.style.background = C.neonHover);
-        if (variant === "secondary") (e.currentTarget.style.background = "rgba(255,255,255,0.04)");
-        if (variant === "ghost") (e.currentTarget.style.color = C.text);
+        if (variant === "primary") e.currentTarget.style.background = C.neonHover;
+        if (variant === "secondary") e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+        if (variant === "ghost") e.currentTarget.style.color = C.text;
       }}
       onMouseLeave={(e) => {
-        if (variant === "primary") (e.currentTarget.style.background = C.neon);
-        if (variant === "secondary") (e.currentTarget.style.background = "transparent");
-        if (variant === "ghost") (e.currentTarget.style.color = C.text2);
+        if (variant === "primary") e.currentTarget.style.background = C.neon;
+        if (variant === "secondary") e.currentTarget.style.background = "transparent";
+        if (variant === "ghost") e.currentTarget.style.color = C.text2;
       }}
     >
-      {icon}{children}
+      {icon}
+      {children}
     </button>
   );
 }
 
-function IconBtn({ children, onClick, active, title }: { children: ReactNode; onClick?: () => void; active?: boolean; title?: string }) {
+function IconBtn({
+  children,
+  onClick,
+  active,
+  title,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  active?: boolean;
+  title?: string;
+}) {
   return (
     <button
-      title={title} aria-label={title} onClick={onClick}
+      title={title}
+      aria-label={title}
+      onClick={onClick}
       style={{
-        width: 36, height: 36, borderRadius: 12, background: C.card,
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        background: C.card,
         border: `1px solid ${active ? C.neonSoftBorder : C.border}`,
-        color: active ? C.neon : C.text2, display: "inline-flex", alignItems: "center",
-        justifyContent: "center", cursor: "pointer", transition: "all 160ms ease",
+        color: active ? C.neon : C.text2,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        transition: "all 160ms ease",
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.neonSoftBorder)}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = active ? C.neonSoftBorder : C.border)}
+      onMouseLeave={(e) =>
+        (e.currentTarget.style.borderColor = active ? C.neonSoftBorder : C.border)
+      }
     >
       {children}
     </button>
@@ -134,20 +257,43 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+function Select({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
   return (
     <select
-      value={value} onChange={(e) => onChange(e.target.value)}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
       style={{
-        ...manrope, background: C.input, color: C.text, border: `1px solid ${C.border}`,
-        borderRadius: 14, padding: "0 16px", height: 44, fontSize: 14, fontWeight: 500,
-        appearance: "none", backgroundImage:
+        ...manrope,
+        background: C.input,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: "0 16px",
+        height: 44,
+        fontSize: 14,
+        fontWeight: 500,
+        appearance: "none",
+        backgroundImage:
           "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B8C4E5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\")",
-        backgroundRepeat: "no-repeat", backgroundPosition: "right 14px center", paddingRight: 40,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 14px center",
+        paddingRight: 40,
         cursor: "pointer",
       }}
     >
-      {options.map((o) => <option key={o} value={o} style={{ background: C.input, color: C.text }}>{o}</option>)}
+      {options.map((o) => (
+        <option key={o} value={o} style={{ background: C.input, color: C.text }}>
+          {o}
+        </option>
+      ))}
     </select>
   );
 }
@@ -157,12 +303,27 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       style={{
-        ...manrope, background: C.input, color: C.text, border: `1px solid ${C.border}`,
-        borderRadius: 14, padding: "0 16px", height: 44, fontSize: 14, fontWeight: 500,
-        width: "100%", outline: "none", ...props.style,
+        ...manrope,
+        background: C.input,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: "0 16px",
+        height: 44,
+        fontSize: 14,
+        fontWeight: 500,
+        width: "100%",
+        outline: "none",
+        ...props.style,
       }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = C.neon; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)"; }}
-      onBlur={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = "none"; }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = C.neon;
+        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)";
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = C.border;
+        e.currentTarget.style.boxShadow = "none";
+      }}
     />
   );
 }
@@ -172,12 +333,28 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
     <textarea
       {...props}
       style={{
-        ...manrope, background: C.input, color: C.text, border: `1px solid ${C.border}`,
-        borderRadius: 14, padding: "14px 16px", fontSize: 14, fontWeight: 500,
-        minHeight: 130, width: "100%", outline: "none", resize: "vertical", ...props.style,
+        ...manrope,
+        background: C.input,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: "14px 16px",
+        fontSize: 14,
+        fontWeight: 500,
+        minHeight: 130,
+        width: "100%",
+        outline: "none",
+        resize: "vertical",
+        ...props.style,
       }}
-      onFocus={(e) => { e.currentTarget.style.borderColor = C.neon; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)"; }}
-      onBlur={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = "none"; }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = C.neon;
+        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(57,255,136,0.10)";
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = C.border;
+        e.currentTarget.style.boxShadow = "none";
+      }}
     />
   );
 }
@@ -185,7 +362,11 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 /* ---------------- Placeholder artwork ---------------- */
 type Ratio = "square" | "portrait" | "landscape" | "page" | "cover";
 const ratioMap: Record<Ratio, string> = {
-  square: "1 / 1", portrait: "3 / 4", landscape: "4 / 3", page: "2 / 3", cover: "3 / 5",
+  square: "1 / 1",
+  portrait: "3 / 4",
+  landscape: "4 / 3",
+  page: "2 / 3",
+  cover: "3 / 5",
 };
 
 function ArtworkPlaceholder({ seed, ratio = "portrait" }: { seed: number; ratio?: Ratio }) {
@@ -205,29 +386,52 @@ function ArtworkPlaceholder({ seed, ratio = "portrait" }: { seed: number; ratio?
   return (
     <div
       style={{
-        aspectRatio: ratioMap[ratio], width: "100%", borderRadius: 14, overflow: "hidden",
+        aspectRatio: ratioMap[ratio],
+        width: "100%",
+        borderRadius: 14,
+        overflow: "hidden",
         background: `linear-gradient(${angle}deg, ${p[0]} 0%, ${p[1]} 55%, ${p[2]} 100%)`,
-        position: "relative", boxShadow: "inset 0 0 60px rgba(0,0,0,0.35)",
+        position: "relative",
+        boxShadow: "inset 0 0 60px rgba(0,0,0,0.35)",
       }}
-      role="img" aria-label="Artist illustration placeholder"
+      role="img"
+      aria-label="Artist illustration placeholder"
     >
       {/* silhouette shapes */}
-      <div style={{
-        position: "absolute", inset: 0,
-        backgroundImage: `radial-gradient(circle at ${20 + (seed * 13) % 60}% ${15 + (seed * 7) % 40}%, rgba(255,255,255,0.12), transparent 40%),
-        radial-gradient(circle at ${40 + (seed * 11) % 40}% ${70 + (seed * 5) % 20}%, rgba(0,0,0,0.35), transparent 45%)`,
-      }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: `radial-gradient(circle at ${20 + ((seed * 13) % 60)}% ${15 + ((seed * 7) % 40)}%, rgba(255,255,255,0.12), transparent 40%),
+        radial-gradient(circle at ${40 + ((seed * 11) % 40)}% ${70 + ((seed * 5) % 20)}%, rgba(0,0,0,0.35), transparent 45%)`,
+        }}
+      />
       {/* diagonal speed lines */}
-      <div style={{
-        position: "absolute", inset: 0, opacity: 0.15,
-        backgroundImage: `repeating-linear-gradient(${(angle + 30) % 180}deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 8px)`,
-      }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.15,
+          backgroundImage: `repeating-linear-gradient(${(angle + 30) % 180}deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 8px)`,
+        }}
+      />
       {/* corner mark */}
-      <div style={{
-        position: "absolute", left: 12, bottom: 12, width: 26, height: 26, borderRadius: 8,
-        background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.12)",
-        display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.6)",
-      }}>
+      <div
+        style={{
+          position: "absolute",
+          left: 12,
+          bottom: 12,
+          width: 26,
+          height: 26,
+          borderRadius: 8,
+          background: "rgba(0,0,0,0.35)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "rgba(255,255,255,0.6)",
+        }}
+      >
         <Palette size={13} />
       </div>
     </div>
@@ -235,13 +439,26 @@ function ArtworkPlaceholder({ seed, ratio = "portrait" }: { seed: number; ratio?
 }
 
 /* ---------------- Data ---------------- */
-const ROLES = ["Dessinateur","Scénariste","Créateur de contenu","Lecteur"];
+const ROLES = ["Dessinateur", "Scénariste", "Créateur de contenu", "Lecteur"];
 
 type Art = {
-  id: string; title: string; artist: string; role: string; style: string; type: string;
-  skills: string[]; availability: "Available now" | "Open to projects" | "Limited" | "Not available";
-  ratio: Ratio; seed: number; views: number; saves: number;
-  imageUrl?: string; imageUrls?: string[]; description?: string; authorId?: string; avatarUrl?: string;
+  id: string;
+  title: string;
+  artist: string;
+  role: string;
+  style: string;
+  type: string;
+  skills: string[];
+  availability: "Available now" | "Open to projects" | "Limited" | "Not available";
+  ratio: Ratio;
+  seed: number;
+  views: number;
+  saves: number;
+  imageUrl?: string;
+  imageUrls?: string[];
+  description?: string;
+  authorId?: string;
+  avatarUrl?: string;
 };
 
 const AVAILABILITY_KEY: Record<Art["availability"], TranslationKey> = {
@@ -271,24 +488,26 @@ function IllustrationsPage() {
           rows.map((r, i) => {
             const profilePreferences = preferences[r.author_id];
             return {
-            id: r.id,
-            title: r.title,
-            artist: r.author?.display_name || r.author?.username || "Artiste",
-            role: r.author?.role || "Dessinateur",
-            style: "—",
-            type: "Illustration",
-            skills: [],
-            availability: (profilePreferences?.available === false ? "Not available" : "Available now") as Art["availability"],
-            ratio: "portrait" as Ratio,
-            seed: i + 100,
-            views: 0,
-            saves: 0,
-            imageUrl: r.image_url,
-            imageUrls: r.image_urls?.length ? r.image_urls : [r.image_url],
-            description: r.description,
-            authorId: r.author_id,
-            avatarUrl: r.author?.avatar_url || undefined,
-          };
+              id: r.id,
+              title: r.title,
+              artist: r.author?.display_name || r.author?.username || "Artiste",
+              role: r.author?.role || "Dessinateur",
+              style: "—",
+              type: "Illustration",
+              skills: [],
+              availability: (profilePreferences?.available === false
+                ? "Not available"
+                : "Available now") as Art["availability"],
+              ratio: "portrait" as Ratio,
+              seed: i + 100,
+              views: 0,
+              saves: 0,
+              imageUrl: r.image_url,
+              imageUrls: r.image_urls?.length ? r.image_urls : [r.image_url],
+              description: r.description,
+              authorId: r.author_id,
+              avatarUrl: r.author?.avatar_url || undefined,
+            };
           }),
         );
       })
@@ -304,7 +523,11 @@ function IllustrationsPage() {
 
   useEffect(() => {
     void listFavorites()
-      .then((rows) => setSaved(new Set(rows.filter((row) => row.kind === "Illustration").map((row) => row.title))))
+      .then((rows) =>
+        setSaved(
+          new Set(rows.filter((row) => row.kind === "Illustration").map((row) => row.title)),
+        ),
+      )
       .catch(() => undefined);
   }, []);
 
@@ -346,17 +569,58 @@ function IllustrationsPage() {
     <div style={{ background: C.bg, color: C.text, minHeight: "100vh", ...manrope }}>
       <div className="cm-page" style={{ maxWidth: 1600, margin: "0 auto", padding: 32 }}>
         {/* Header */}
-        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 24 }}>
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 20,
+            flexWrap: "wrap",
+            marginBottom: 24,
+          }}
+        >
           <div>
-            <h1 style={{ ...sora, fontSize: 28, fontWeight: 700, lineHeight: "36px", margin: 0, color: C.text }}>{t("showcase.title")}</h1>
-            <p style={{ ...manrope, fontSize: 14, fontWeight: 500, lineHeight: "22px", color: C.text2, margin: "8px 0 0", maxWidth: 640 }}>
+            <h1
+              style={{
+                ...sora,
+                fontSize: 28,
+                fontWeight: 700,
+                lineHeight: "36px",
+                margin: 0,
+                color: C.text,
+              }}
+            >
+              {t("showcase.title")}
+            </h1>
+            <p
+              style={{
+                ...manrope,
+                fontSize: 14,
+                fontWeight: 500,
+                lineHeight: "22px",
+                color: C.text2,
+                margin: "8px 0 0",
+                maxWidth: 640,
+              }}
+            >
               {t("showcase.subtitle")}
             </p>
           </div>
         </header>
 
         {pageError && (
-          <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,95,126,0.4)", background: "rgba(255,95,126,0.10)", color: C.danger, fontSize: 13, fontWeight: 700 }}>
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,95,126,0.4)",
+              background: "rgba(255,95,126,0.10)",
+              color: C.danger,
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
             {pageError}
           </div>
         )}
@@ -364,12 +628,49 @@ function IllustrationsPage() {
         {/* Gallery */}
         <section>
           {/* Gallery header — view switch only */}
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
+              marginBottom: 20,
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ ...manrope, fontSize: 12, color: C.muted, fontWeight: 600, marginRight: 4 }}>{t("showcase.view")}</span>
-              <IconBtn active={view === "masonry"} onClick={() => setView("masonry")} title={t("showcase.masonry")}><Rows3 size={16} /></IconBtn>
-              <IconBtn active={view === "grid"} onClick={() => setView("grid")} title={t("showcase.grid")}><LayoutGrid size={16} /></IconBtn>
-              <IconBtn active={view === "compact"} onClick={() => setView("compact")} title={t("showcase.compact")}><Columns3 size={16} /></IconBtn>
+              <span
+                style={{
+                  ...manrope,
+                  fontSize: 12,
+                  color: C.muted,
+                  fontWeight: 600,
+                  marginRight: 4,
+                }}
+              >
+                {t("showcase.view")}
+              </span>
+              <IconBtn
+                active={view === "masonry"}
+                onClick={() => setView("masonry")}
+                title={t("showcase.masonry")}
+              >
+                <Rows3 size={16} />
+              </IconBtn>
+              <IconBtn
+                active={view === "grid"}
+                onClick={() => setView("grid")}
+                title={t("showcase.grid")}
+              >
+                <LayoutGrid size={16} />
+              </IconBtn>
+              <IconBtn
+                active={view === "compact"}
+                onClick={() => setView("compact")}
+                title={t("showcase.compact")}
+              >
+                <Columns3 size={16} />
+              </IconBtn>
             </div>
           </div>
 
@@ -377,11 +678,16 @@ function IllustrationsPage() {
           {gallery.length === 0 ? (
             <div
               style={{
-                border: `1px dashed ${C.border}`, borderRadius: 22, padding: "56px 24px",
-                textAlign: "center", background: C.panel,
+                border: `1px dashed ${C.border}`,
+                borderRadius: 22,
+                padding: "56px 24px",
+                textAlign: "center",
+                background: C.panel,
               }}
             >
-              <div style={{ ...sora, fontSize: 20, fontWeight: 700 }}>{t("showcase.noArtworkYet")}</div>
+              <div style={{ ...sora, fontSize: 20, fontWeight: 700 }}>
+                {t("showcase.noArtworkYet")}
+              </div>
               <p style={{ ...manrope, fontSize: 14, color: C.text2, marginTop: 8 }}>
                 {t("showcase.noArtworkYetText")}
               </p>
@@ -392,15 +698,27 @@ function IllustrationsPage() {
                 view === "masonry"
                   ? { columnCount: 4, columnGap: 20 }
                   : view === "grid"
-                  ? { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }
-                  : { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }
+                    ? {
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                        gap: 20,
+                      }
+                    : {
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                        gap: 16,
+                      }
               }
               className="cm-gallery"
             >
               {gallery.map((a) => (
                 <ArtCard
-                  key={a.id} art={a} masonry={view === "masonry"} compact={view === "compact"}
-                  liked={saved.has(a.title)} onLike={() => toggleSave(a)}
+                  key={a.id}
+                  art={a}
+                  masonry={view === "masonry"}
+                  compact={view === "compact"}
+                  liked={saved.has(a.title)}
+                  onLike={() => toggleSave(a)}
                   onOpen={() => setOpenArt(a)}
                   t={t}
                 />
@@ -421,7 +739,11 @@ function IllustrationsPage() {
             if (openArt.authorId) {
               void startConversationWith(openArt.authorId)
                 .then((conversation) => navigate({ to: "/messages", search: { conversation } }))
-                .catch((error: unknown) => setPageError(error instanceof Error ? error.message : t("showcase.conversationFailed")));
+                .catch((error: unknown) =>
+                  setPageError(
+                    error instanceof Error ? error.message : t("showcase.conversationFailed"),
+                  ),
+                );
             } else setPageError(t("showcase.noProfileLinked"));
           }}
           saved={saved.has(openArt.title)}
@@ -452,10 +774,21 @@ function IllustrationsPage() {
 
 /* ---------------- Card ---------------- */
 function ArtCard({
-  art, masonry, compact, liked, onLike, onOpen, t,
+  art,
+  masonry,
+  compact,
+  liked,
+  onLike,
+  onOpen,
+  t,
 }: {
-  art: Art; masonry?: boolean; compact?: boolean; liked: boolean;
-  onLike: () => void; onOpen: () => void; t: (key: TranslationKey) => string;
+  art: Art;
+  masonry?: boolean;
+  compact?: boolean;
+  liked: boolean;
+  onLike: () => void;
+  onOpen: () => void;
+  t: (key: TranslationKey) => string;
 }) {
   return (
     <div
@@ -468,17 +801,39 @@ function ArtCard({
         transition: "all 200ms ease",
         breakInside: masonry ? "avoid" : undefined,
         marginBottom: masonry ? 20 : undefined,
-        display: "flex", flexDirection: "column", gap: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
         cursor: "pointer",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.borderStrong; e.currentTarget.style.transform = "translateY(-2px)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "translateY(0)"; }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = C.borderStrong;
+        e.currentTarget.style.transform = "translateY(-2px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = C.border;
+        e.currentTarget.style.transform = "translateY(0)";
+      }}
       onClick={onOpen}
     >
       {/* Fixed-size image frame in cards; the original ratio is shown in the detail view. */}
       {art.imageUrl ? (
-        <div style={{ aspectRatio: ratioMap.portrait, width: "100%", borderRadius: 14, overflow: "hidden", background: C.stage }}>
-          <img src={art.imageUrl} alt={art.title} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <div
+          style={{
+            aspectRatio: ratioMap.portrait,
+            width: "100%",
+            borderRadius: 14,
+            overflow: "hidden",
+            background: C.stage,
+          }}
+        >
+          <img
+            src={art.imageUrl}
+            alt={art.title}
+            loading="lazy"
+            decoding="async"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         </div>
       ) : (
         <ArtworkPlaceholder seed={art.seed} ratio="portrait" />
@@ -489,28 +844,64 @@ function ArtCard({
           {/* profile: photo + name */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {art.avatarUrl ? (
-              <img src={art.avatarUrl} alt={art.artist} loading="lazy" decoding="async" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: `1px solid ${C.border}`, flexShrink: 0 }} />
-            ) : <div style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: `linear-gradient(135deg, hsl(${(art.seed * 47) % 360} 60% 40%), hsl(${(art.seed * 73) % 360} 60% 25%))`,
-              border: `1px solid ${C.border}`, display: "inline-flex", alignItems: "center", justifyContent: "center",
-              ...manrope, fontSize: 12, fontWeight: 800, color: C.text, flexShrink: 0,
-            }}>
-              A
-            </div>}
-            <span style={{ ...manrope, fontSize: 14, fontWeight: 800, color: C.text }}>{art.artist}</span>
+              <img
+                src={art.avatarUrl}
+                alt={art.artist}
+                loading="lazy"
+                decoding="async"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  border: `1px solid ${C.border}`,
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  background: `linear-gradient(135deg, hsl(${(art.seed * 47) % 360} 60% 40%), hsl(${(art.seed * 73) % 360} 60% 25%))`,
+                  border: `1px solid ${C.border}`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  ...manrope,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: C.text,
+                  flexShrink: 0,
+                }}
+              >
+                A
+              </div>
+            )}
+            <span style={{ ...manrope, fontSize: 14, fontWeight: 800, color: C.text }}>
+              {art.artist}
+            </span>
           </div>
 
           {/* view details + like + comment */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1 }}>
-              <Btn variant="secondary" size="sm" full onClick={onOpen}>{t("showcase.viewDetails")}</Btn>
+              <Btn variant="secondary" size="sm" full onClick={onOpen}>
+                {t("showcase.viewDetails")}
+              </Btn>
             </div>
             <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", gap: 8 }}>
-              <IconBtn title={liked ? t("showcase.unlike") : t("showcase.like")} active={liked} onClick={onLike}>
+              <IconBtn
+                title={liked ? t("showcase.unlike") : t("showcase.like")}
+                active={liked}
+                onClick={onLike}
+              >
                 <Heart size={15} fill={liked ? C.neon : "none"} />
               </IconBtn>
-              <IconBtn title={t("showcase.comment")} onClick={onOpen}><MessageSquare size={15} /></IconBtn>
+              <IconBtn title={t("showcase.comment")} onClick={onOpen}>
+                <MessageSquare size={15} />
+              </IconBtn>
             </span>
           </div>
         </div>
@@ -519,26 +910,52 @@ function ArtCard({
   );
 }
 
-
 /* ---------------- Modal shell ---------------- */
-function ModalShell({ children, onClose, width = 1100 }: { children: ReactNode; onClose: () => void; width?: number }) {
+function ModalShell({
+  children,
+  onClose,
+  width = 1100,
+  fullHeight = false,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+  width?: number;
+  fullHeight?: boolean;
+}) {
   return (
     <div
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, background: "rgba(2,6,17,0.72)", backdropFilter: "blur(4px)",
-        zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center",
-        padding: 24, overflowY: "auto",
+        position: "fixed",
+        inset: 0,
+        background: "rgba(2,6,17,0.72)",
+        backdropFilter: "blur(4px)",
+        zIndex: 100,
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: 24,
+        overflowY: "auto",
       }}
-      role="dialog" aria-modal="true"
+      role="dialog"
+      aria-modal="true"
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: C.panel, border: `1px solid ${C.borderStrong}`, borderRadius: 24,
-          boxShadow: "0 30px 80px rgba(0,0,0,0.55)", width: "100%", maxWidth: width,
-          maxHeight: "calc(100dvh - 16px)", display: "flex", flexDirection: "column",
-          overflowY: "auto", overflowX: "hidden", marginTop: 8,
+          background: C.panel,
+          border: `1px solid ${C.borderStrong}`,
+          borderRadius: 24,
+          boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
+          width: "100%",
+          maxWidth: width,
+          maxHeight: "calc(100dvh - 16px)",
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto",
+          overflowX: "hidden",
+          marginTop: 8,
+          ...(fullHeight ? { height: "calc(100dvh - 56px)", overflowY: "hidden" as const } : null),
         }}
       >
         {children}
@@ -547,24 +964,60 @@ function ModalShell({ children, onClose, width = 1100 }: { children: ReactNode; 
   );
 }
 
-function ModalHeader({ title, onClose, subtitle }: { title: string; subtitle?: string; onClose: () => void }) {
+function ModalHeader({
+  title,
+  onClose,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+}) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "20px 24px", borderBottom: `1px solid ${C.border}` }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        padding: "20px 24px",
+        borderBottom: `1px solid ${C.border}`,
+      }}
+    >
       <div>
-        <div style={{ ...sora, fontSize: 20, fontWeight: 700, lineHeight: "28px", color: C.text }}>{title}</div>
-        {subtitle && <div style={{ ...manrope, fontSize: 13, color: C.text2, marginTop: 4 }}>{subtitle}</div>}
+        <div style={{ ...sora, fontSize: 20, fontWeight: 700, lineHeight: "28px", color: C.text }}>
+          {title}
+        </div>
+        {subtitle && (
+          <div style={{ ...manrope, fontSize: 13, color: C.text2, marginTop: 4 }}>{subtitle}</div>
+        )}
       </div>
-      <IconBtn title="Close" onClick={onClose}><X size={16} /></IconBtn>
+      <IconBtn title="Close" onClick={onClose}>
+        <X size={16} />
+      </IconBtn>
     </div>
   );
 }
 
 /* ---------------- Detail Modal ---------------- */
 function DetailModal({
-  art, works = [], onClose, onInvite, onContact, saved, onSave, onOpenArt, t,
+  art,
+  works = [],
+  onClose,
+  onInvite,
+  onContact,
+  saved,
+  onSave,
+  onOpenArt,
+  t,
 }: {
-  art: Art; works?: Art[]; onClose: () => void; onInvite: () => void; onContact: () => void;
-  saved: boolean; onSave: () => void; onOpenArt?: (a: Art) => void;
+  art: Art;
+  works?: Art[];
+  onClose: () => void;
+  onInvite: () => void;
+  onContact: () => void;
+  saved: boolean;
+  onSave: () => void;
+  onOpenArt?: (a: Art) => void;
   t: (key: TranslationKey) => string;
 }) {
   const [tab, setTab] = useState<"profile" | "comments">("profile");
@@ -572,22 +1025,77 @@ function DetailModal({
   const images = art.imageUrls?.length ? art.imageUrls : art.imageUrl ? [art.imageUrl] : [];
 
   return (
-    <ModalShell onClose={onClose} width={1180}>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 5fr) minmax(280px, 2fr)", gap: 0, flex: 1, minHeight: 0 }}>
+    <ModalShell onClose={onClose} width={1180} fullHeight>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 5fr) minmax(280px, 2fr)",
+          gap: 0,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {/* Left: viewer */}
-        <div style={{ background: C.stage, padding: 24, display: "flex", flexDirection: "column", gap: 16, position: "relative", minHeight: 520 }}>
-          <div style={{ position: "absolute", top: 16, left: 16, display: "flex", gap: 8, zIndex: 2 }}>
-            <IconBtn title={t("showcase.previous")} onClick={() => setActiveImage((index) => (index - 1 + images.length) % Math.max(images.length, 1))}><ChevronLeft size={16} /></IconBtn>
-            <IconBtn title={t("showcase.next")} onClick={() => setActiveImage((index) => (index + 1) % Math.max(images.length, 1))}><ChevronRight size={16} /></IconBtn>
+        <div
+          style={{
+            background: C.stage,
+            padding: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+            position: "relative",
+            minHeight: 520,
+          }}
+        >
+          <div
+            style={{ position: "absolute", top: 16, left: 16, display: "flex", gap: 8, zIndex: 2 }}
+          >
+            <IconBtn
+              title={t("showcase.previous")}
+              onClick={() =>
+                setActiveImage((index) => (index - 1 + images.length) % Math.max(images.length, 1))
+              }
+            >
+              <ChevronLeft size={16} />
+            </IconBtn>
+            <IconBtn
+              title={t("showcase.next")}
+              onClick={() => setActiveImage((index) => (index + 1) % Math.max(images.length, 1))}
+            >
+              <ChevronRight size={16} />
+            </IconBtn>
           </div>
-          <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 8, zIndex: 2 }}>
-            <IconBtn title={t("showcase.zoomOut")}><ZoomOut size={16} /></IconBtn>
-            <IconBtn title={t("showcase.zoomIn")}><ZoomIn size={16} /></IconBtn>
+          <div
+            style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 8, zIndex: 2 }}
+          >
+            <IconBtn title={t("showcase.zoomOut")}>
+              <ZoomOut size={16} />
+            </IconBtn>
+            <IconBtn title={t("showcase.zoomIn")}>
+              <ZoomIn size={16} />
+            </IconBtn>
           </div>
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 32,
+            }}
+          >
             <div style={{ width: "100%", maxWidth: 560 }}>
               {images[activeImage] ? (
-                <img src={images[activeImage]} alt={art.title} style={{ width: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: 14 }} />
+                <img
+                  src={images[activeImage]}
+                  alt={art.title}
+                  style={{
+                    width: "100%",
+                    maxHeight: "70vh",
+                    objectFit: "contain",
+                    borderRadius: 14,
+                  }}
+                />
               ) : (
                 <ArtworkPlaceholder seed={art.seed} ratio={art.ratio} />
               )}
@@ -596,8 +1104,27 @@ function DetailModal({
           {images.length > 1 && (
             <div style={{ display: "flex", gap: 8, overflowX: "auto", justifyContent: "center" }}>
               {images.map((src, index) => (
-                <button key={src} type="button" onClick={() => setActiveImage(index)} style={{ width: 56, height: 56, flex: "0 0 auto", overflow: "hidden", borderRadius: 10, border: `1px solid ${index === activeImage ? C.neon : C.border}`, background: C.input }}>
-                  <img src={src} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <button
+                  key={src}
+                  type="button"
+                  onClick={() => setActiveImage(index)}
+                  style={{
+                    width: 56,
+                    height: 56,
+                    flex: "0 0 auto",
+                    overflow: "hidden",
+                    borderRadius: 10,
+                    border: `1px solid ${index === activeImage ? C.neon : C.border}`,
+                    background: C.input,
+                  }}
+                >
+                  <img
+                    src={src}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
                 </button>
               ))}
             </div>
@@ -605,16 +1132,43 @@ function DetailModal({
         </div>
 
         {/* Right: info scroll */}
-        <div style={{ background: C.details, padding: 24, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div
+          style={{
+            background: C.details,
+            padding: 24,
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 20,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
             <div>
-              <h2 style={{ ...sora, fontSize: 18, fontWeight: 800, lineHeight: "26px", margin: 0 }}>{art.title}</h2>
-              <div style={{ ...manrope, fontSize: 12, color: C.muted, marginTop: 3 }}>{art.type}</div>
+              <h2 style={{ ...sora, fontSize: 18, fontWeight: 800, lineHeight: "26px", margin: 0 }}>
+                {art.title}
+              </h2>
+              <div style={{ ...manrope, fontSize: 12, color: C.muted, marginTop: 3 }}>
+                {art.type}
+              </div>
             </div>
-            <IconBtn title={t("showcase.close")} onClick={onClose}><X size={16} /></IconBtn>
+            <IconBtn title={t("showcase.close")} onClick={onClose}>
+              <X size={16} />
+            </IconBtn>
           </div>
 
-          <div className="cm-popup-tabs" role="tablist" aria-label={t("showcase.detailsAria")} style={{ width: "100%" }}>
+          <div
+            className="cm-popup-tabs"
+            role="tablist"
+            aria-label={t("showcase.detailsAria")}
+            style={{ width: "100%" }}
+          >
             <button
               type="button"
               role="tab"
@@ -641,62 +1195,182 @@ function DetailModal({
 
           {tab === "profile" ? (
             <>
-          {/* Artist top */}
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              {art.avatarUrl ? (
-                <img src={art.avatarUrl} alt={art.artist} style={{ width: 48, height: 48, minWidth: 48, borderRadius: "50%", objectFit: "cover", border: `1px solid ${C.border}` }} />
-              ) : <div style={{
-                width: 48, height: 48, minWidth: 48, flexShrink: 0, borderRadius: "50%",
-                background: `linear-gradient(135deg, hsl(${(art.seed * 47) % 360} 60% 40%), hsl(${(art.seed * 73) % 360} 60% 25%))`,
-                border: `1px solid ${C.border}`, display: "inline-flex", alignItems: "center",
-                justifyContent: "center", ...manrope, fontSize: 16, fontWeight: 800,
-              }}>{art.artist.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}</div>}
-              <div>
-                <div style={{ ...manrope, fontSize: 14, fontWeight: 800, color: C.text }}>{art.artist}</div>
-                <div style={{ ...manrope, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginTop: 2 }}>{t("showcase.artist")}</div>
+              {/* Artist top */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  {art.avatarUrl ? (
+                    <img
+                      src={art.avatarUrl}
+                      alt={art.artist}
+                      style={{
+                        width: 48,
+                        height: 48,
+                        minWidth: 48,
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        border: `1px solid ${C.border}`,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        minWidth: 48,
+                        flexShrink: 0,
+                        borderRadius: "50%",
+                        background: `linear-gradient(135deg, hsl(${(art.seed * 47) % 360} 60% 40%), hsl(${(art.seed * 73) % 360} 60% 25%))`,
+                        border: `1px solid ${C.border}`,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        ...manrope,
+                        fontSize: 16,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {art.artist
+                        .split(/\s+/)
+                        .map((w) => w[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ ...manrope, fontSize: 14, fontWeight: 800, color: C.text }}>
+                      {art.artist}
+                    </div>
+                    <div
+                      style={{
+                        ...manrope,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: C.muted,
+                        marginTop: 2,
+                      }}
+                    >
+                      {t("showcase.artist")}
+                    </div>
+                  </div>
+                </div>
+                <Chip tone={art.availability === "Available now" ? "neon" : "info"}>
+                  {t(AVAILABILITY_KEY[art.availability])}
+                </Chip>
               </div>
-            </div>
-            <Chip tone={art.availability === "Available now" ? "neon" : "info"}>{t(AVAILABILITY_KEY[art.availability])}</Chip>
-          </div>
 
-          {/* Actions */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <Btn variant="primary" icon={<UserPlus size={16} />} onClick={onInvite}>{t("showcase.inviteToProject")}</Btn>
-            <Btn variant="secondary" icon={<MessageSquare size={16} />} onClick={onContact}>{t("showcase.contactArtist")}</Btn>
-            <Btn variant="ghost" icon={saved ? <BookmarkCheck size={16} color={C.neon} /> : <Bookmark size={16} />} onClick={onSave}>
-              {saved ? t("showcase.saved") : t("showcase.saveArtwork")}
-            </Btn>
-          </div>
-
-          <Section title={t("showcase.artworkDescription")}>
-            <p style={{ ...manrope, fontSize: 14, color: C.text2, lineHeight: "22px", margin: 0 }}>
-              {art.description || t("showcase.noDescription")}
-            </p>
-          </Section>
-
-          <Section title={t("showcase.moreFromArtist")}>
-            {works.length === 0 ? (
-              <p style={{ ...manrope, fontSize: 13, color: C.muted, margin: 0 }}>{t("showcase.noMoreFromArtist")}</p>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                {works.slice(0, 8).map((w) => (
-                  <button key={w.id} type="button" onClick={() => onOpenArt?.(w)} style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}>
-                    {w.imageUrl ? (
-                      <img src={w.imageUrl} alt={w.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10, border: `1px solid ${C.border}` }} />
-                    ) : (
-                      <ArtworkPlaceholder seed={w.seed} ratio="square" />
-                    )}
-                  </button>
-                ))}
+              {/* Actions */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <Btn variant="primary" icon={<UserPlus size={16} />} onClick={onInvite}>
+                  {t("showcase.inviteToProject")}
+                </Btn>
+                <Btn variant="secondary" icon={<MessageSquare size={16} />} onClick={onContact}>
+                  {t("showcase.contactArtist")}
+                </Btn>
+                <Btn
+                  variant="ghost"
+                  icon={saved ? <BookmarkCheck size={16} color={C.neon} /> : <Bookmark size={16} />}
+                  onClick={onSave}
+                >
+                  {saved ? t("showcase.saved") : t("showcase.saveArtwork")}
+                </Btn>
               </div>
-            )}
-          </Section>
+
+              <Section title={t("showcase.artworkDescription")}>
+                <p
+                  style={{
+                    ...manrope,
+                    fontSize: 14,
+                    color: C.text2,
+                    lineHeight: "22px",
+                    margin: 0,
+                  }}
+                >
+                  {art.description || t("showcase.noDescription")}
+                </p>
+              </Section>
+
+              <Section title={t("showcase.moreFromArtist")}>
+                {works.length === 0 ? (
+                  <p style={{ ...manrope, fontSize: 13, color: C.muted, margin: 0 }}>
+                    {t("showcase.noMoreFromArtist")}
+                  </p>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                    {works.slice(0, 8).map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => onOpenArt?.(w)}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {w.imageUrl ? (
+                          <img
+                            src={w.imageUrl}
+                            alt={w.title}
+                            loading="lazy"
+                            decoding="async"
+                            style={{
+                              width: "100%",
+                              aspectRatio: "1",
+                              objectFit: "cover",
+                              borderRadius: 10,
+                              border: `1px solid ${C.border}`,
+                            }}
+                          />
+                        ) : (
+                          <ArtworkPlaceholder seed={w.seed} ratio="square" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Section>
             </>
           ) : (
-            <Section title={t("showcase.comments")}>
-              <CommentsPanel entityType="illustration" entityId={art.id} />
-            </Section>
+            <div
+              style={{
+                background: C.panel,
+                border: `1px solid ${C.border}`,
+                borderRadius: 16,
+                padding: 16,
+                flex: "1 1 auto",
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <h4
+                style={{
+                  ...sora,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  margin: "0 0 12px",
+                  color: C.text,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                {t("showcase.comments")}
+              </h4>
+              <div style={{ flex: "1 1 auto", minHeight: 0 }}>
+                <CommentsPanel entityType="illustration" entityId={art.id} fillHeight />
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -706,15 +1380,41 @@ function DetailModal({
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16 }}>
-      <h4 style={{ ...sora, fontSize: 14, fontWeight: 700, margin: "0 0 12px", color: C.text, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</h4>
+    <div
+      style={{
+        background: C.panel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 16,
+        padding: 16,
+      }}
+    >
+      <h4
+        style={{
+          ...sora,
+          fontSize: 14,
+          fontWeight: 700,
+          margin: "0 0 12px",
+          color: C.text,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+        }}
+      >
+        {title}
+      </h4>
       {children}
     </div>
   );
 }
 
-
-function RealInviteModal({ art, onClose, t }: { art: Art; onClose: () => void; t: (key: TranslationKey) => string }) {
+function RealInviteModal({
+  art,
+  onClose,
+  t,
+}: {
+  art: Art;
+  onClose: () => void;
+  t: (key: TranslationKey) => string;
+}) {
   const [projects, setProjects] = useState<Array<{ id: string; title: string }>>([]);
   const [projectId, setProjectId] = useState("");
   const [role, setRole] = useState(ROLES[0]);
@@ -739,7 +1439,12 @@ function RealInviteModal({ art, onClose, t }: { art: Art; onClose: () => void; t
     setSending(true);
     setError(null);
     try {
-      await sendProjectInvitationDb({ projectId, recipient: art.authorId, role, message: message.trim() || undefined });
+      await sendProjectInvitationDb({
+        projectId,
+        recipient: art.authorId,
+        role,
+        message: message.trim() || undefined,
+      });
       onClose();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : t("showcase.invitationFailed"));
@@ -750,26 +1455,69 @@ function RealInviteModal({ art, onClose, t }: { art: Art; onClose: () => void; t
 
   return (
     <ModalShell onClose={onClose} width={640}>
-      <ModalHeader title={t("showcase.inviteToProject")} subtitle={`${t("showcase.inviteSubtitle")} ${art.artist}`} onClose={onClose} />
+      <ModalHeader
+        title={t("showcase.inviteToProject")}
+        subtitle={`${t("showcase.inviteSubtitle")} ${art.artist}`}
+        onClose={onClose}
+      />
       <div style={{ padding: 24, display: "grid", gap: 18, overflowY: "auto" }}>
         <Field label={t("showcase.projectLabel")}>
           <select
             value={projectId}
             onChange={(event) => setProjectId(event.target.value)}
-            style={{ width: "100%", minHeight: 44, borderRadius: 12, border: `1px solid ${C.borderStrong}`, background: C.input, color: C.text, padding: "0 12px", fontSize: 14 }}
+            style={{
+              width: "100%",
+              minHeight: 44,
+              borderRadius: 12,
+              border: `1px solid ${C.borderStrong}`,
+              background: C.input,
+              color: C.text,
+              padding: "0 12px",
+              fontSize: 14,
+            }}
           >
             <option value="">{t("showcase.selectProject")}</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.title}
+              </option>
+            ))}
           </select>
         </Field>
-        <Field label={t("showcase.roleLabel")}><Select value={role} onChange={setRole} options={ROLES} /></Field>
-        <Field label={t("showcase.messageLabel")}><Textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t("showcase.invitePlaceholder")} /></Field>
-        {projects.length === 0 && !error && <p style={{ margin: 0, color: C.warning, fontSize: 13 }}>{t("showcase.createProjectFirst")}</p>}
-        {error && <p style={{ margin: 0, color: C.danger, fontSize: 13, fontWeight: 700 }}>{error}</p>}
+        <Field label={t("showcase.roleLabel")}>
+          <Select value={role} onChange={setRole} options={ROLES} />
+        </Field>
+        <Field label={t("showcase.messageLabel")}>
+          <Textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder={t("showcase.invitePlaceholder")}
+          />
+        </Field>
+        {projects.length === 0 && !error && (
+          <p style={{ margin: 0, color: C.warning, fontSize: 13 }}>
+            {t("showcase.createProjectFirst")}
+          </p>
+        )}
+        {error && (
+          <p style={{ margin: 0, color: C.danger, fontSize: 13, fontWeight: 700 }}>{error}</p>
+        )}
       </div>
-      <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Btn variant="secondary" onClick={onClose}>{t("showcase.cancel")}</Btn>
-        <Btn variant="primary" icon={<Send size={16} />} onClick={() => void submit()}>{sending ? t("showcase.sending") : t("showcase.sendInvitation")}</Btn>
+      <div
+        style={{
+          padding: 20,
+          borderTop: `1px solid ${C.border}`,
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 8,
+        }}
+      >
+        <Btn variant="secondary" onClick={onClose}>
+          {t("showcase.cancel")}
+        </Btn>
+        <Btn variant="primary" icon={<Send size={16} />} onClick={() => void submit()}>
+          {sending ? t("showcase.sending") : t("showcase.sendInvitation")}
+        </Btn>
       </div>
     </ModalShell>
   );
@@ -821,7 +1569,11 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
     setError(null);
     setPublishing(true);
     try {
-      await addIllustration({ title: title.trim(), description: description.trim(), files: images.map((image) => image.file) });
+      await addIllustration({
+        title: title.trim(),
+        description: description.trim(),
+        files: images.map((image) => image.file),
+      });
       onPublished?.();
       onClose();
     } catch (err) {
@@ -833,45 +1585,132 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
 
   return (
     <ModalShell onClose={onClose} width={980}>
-      <ModalHeader title="Upload Illustration" subtitle="Share an artwork to attract scénaristes and manga projects" onClose={onClose} />
-      <div style={{ padding: 24, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 24, overflowY: "auto" }}>
+      <ModalHeader
+        title="Upload Illustration"
+        subtitle="Share an artwork to attract scénaristes and manga projects"
+        onClose={onClose}
+      />
+      <div
+        style={{
+          padding: 24,
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+          gap: 24,
+          overflowY: "auto",
+        }}
+      >
         {/* Drag area */}
-        <label htmlFor={inputId} style={{
-          background: C.stage, border: `2px dashed ${C.borderStrong}`, borderRadius: 16,
-          padding: 32, textAlign: "center", display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center", gap: 10, minHeight: 320, cursor: "pointer",
-        }}>
+        <label
+          htmlFor={inputId}
+          style={{
+            background: C.stage,
+            border: `2px dashed ${C.borderStrong}`,
+            borderRadius: 16,
+            padding: 32,
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            minHeight: 320,
+            cursor: "pointer",
+          }}
+        >
           {activeImage && (
-            <img src={activeImage} alt="" style={{ width: "100%", height: "100%", minHeight: 320, objectFit: "cover", borderRadius: 14 }} />
+            <img
+              src={activeImage}
+              alt=""
+              style={{
+                width: "100%",
+                height: "100%",
+                minHeight: 320,
+                objectFit: "cover",
+                borderRadius: 14,
+              }}
+            />
           )}
-          <div style={{
-            width: 48, height: 48, borderRadius: 14, background: C.neonSoftFill,
-            border: `1px solid ${C.neonSoftBorder}`, color: C.neon,
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-          }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              background: C.neonSoftFill,
+              border: `1px solid ${C.neonSoftBorder}`,
+              color: C.neon,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Upload size={20} />
           </div>
-          <div style={{ ...manrope, fontSize: 14, fontWeight: 700, color: C.text }}>Upload artwork image</div>
-          <div style={{ ...manrope, fontSize: 12, color: C.muted }}>Accepted formats placeholder · JPG, PNG, WEBP · up to placeholder size</div>
-          <Btn variant="secondary" size="sm" style={{ marginTop: 6 }}>Choose file</Btn>
+          <div style={{ ...manrope, fontSize: 14, fontWeight: 700, color: C.text }}>
+            Upload artwork image
+          </div>
+          <div style={{ ...manrope, fontSize: 12, color: C.muted }}>
+            Accepted formats placeholder · JPG, PNG, WEBP · up to placeholder size
+          </div>
+          <Btn variant="secondary" size="sm" style={{ marginTop: 6 }}>
+            Choose file
+          </Btn>
         </label>
-        <input ref={pickerRef} id={inputId} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(event) => { addFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, gridColumn: "1" }}>
+        <input
+          ref={pickerRef}
+          id={inputId}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={(event) => {
+            addFiles(event.currentTarget.files);
+            event.currentTarget.value = "";
+          }}
+        />
+        <div
+          style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, gridColumn: "1" }}
+        >
           {images.map((item, index) => (
             <div key={`${item.url}-${index}`} style={{ position: "relative", flex: "0 0 auto" }}>
               <button
                 type="button"
                 title="Cliquer pour remplacer cette image"
                 onClick={() => openPicker(index)}
-                style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}`, background: C.input }}
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  border: `1px solid ${C.border}`,
+                  background: C.input,
+                }}
               >
-                <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img
+                  src={item.url}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
               </button>
               <button
                 type="button"
                 aria-label="Supprimer cette image"
                 onClick={() => setImages((current) => current.filter((_, i) => i !== index))}
-                style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#FF5F7E", color: "#04111E", border: "2px solid #0B1430", fontSize: 11, fontWeight: 900, display: "grid", placeItems: "center", cursor: "pointer" }}
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -6,
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: "#FF5F7E",
+                  color: "#04111E",
+                  border: "2px solid #0B1430",
+                  fontSize: 11,
+                  fontWeight: 900,
+                  display: "grid",
+                  placeItems: "center",
+                  cursor: "pointer",
+                }}
               >
                 ✕
               </button>
@@ -881,7 +1720,18 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
             type="button"
             aria-label="Ajouter une image"
             onClick={() => openPicker(null)}
-            style={{ width: 64, height: 64, flex: "0 0 auto", borderRadius: 12, border: "1px dashed rgba(57,255,136,0.45)", background: "rgba(57,255,136,0.06)", color: "#39FF88", fontSize: 22, fontWeight: 900, cursor: "pointer" }}
+            style={{
+              width: 64,
+              height: 64,
+              flex: "0 0 auto",
+              borderRadius: 12,
+              border: "1px dashed rgba(57,255,136,0.45)",
+              background: "rgba(57,255,136,0.06)",
+              color: "#39FF88",
+              fontSize: 22,
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
           >
             +
           </button>
@@ -889,7 +1739,11 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
 
         <div style={{ gridColumn: "2", gridRow: "1", display: "grid", gap: 12 }}>
           <Field label="Artwork title *">
-            <Input placeholder="Give your artwork a clear title" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input
+              placeholder="Give your artwork a clear title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </Field>
         </div>
 
@@ -902,12 +1756,34 @@ function UploadModal({ onClose, onPublished }: { onClose: () => void; onPublishe
         </Field>
       </div>
       {error && (
-        <div style={{ margin: "0 24px", padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,95,126,0.4)", background: "rgba(255,95,126,0.10)", color: "#ff5f7e", ...manrope, fontSize: 13, fontWeight: 600 }}>
+        <div
+          style={{
+            margin: "0 24px",
+            padding: "10px 14px",
+            borderRadius: 12,
+            border: "1px solid rgba(255,95,126,0.4)",
+            background: "rgba(255,95,126,0.10)",
+            color: "#ff5f7e",
+            ...manrope,
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
           {error}
         </div>
       )}
-      <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+      <div
+        style={{
+          padding: 20,
+          borderTop: `1px solid ${C.border}`,
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 8,
+        }}
+      >
+        <Btn variant="ghost" onClick={onClose}>
+          Cancel
+        </Btn>
         <Btn variant="primary" icon={<Upload size={16} />} onClick={() => void publish()}>
           {publishing ? "Publication…" : "Upload illustration"}
         </Btn>

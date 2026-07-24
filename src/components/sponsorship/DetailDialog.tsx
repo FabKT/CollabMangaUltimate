@@ -3,14 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Star } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { Announcement } from "@/lib/sponsorship-data";
-import {
-  btnPrimary,
-  btnSecondary,
-  Chip,
-  PlatformChip,
-  AvailabilityChip,
-  Thumb,
-} from "./ui";
+import { btnPrimary, btnSecondary, Chip, PlatformChip, AvailabilityChip, Thumb } from "./ui";
 import { listSponsorshipReviews, type SponsorshipReview } from "@/lib/sponsorship-reviews";
 
 function SectionCard({
@@ -23,7 +16,9 @@ function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={`rounded-[18px] border border-[rgba(133,154,206,0.18)] bg-cm-details p-5 ${className}`}>
+    <section
+      className={`rounded-[18px] border border-[rgba(133,154,206,0.18)] bg-cm-details p-5 ${className}`}
+    >
       <h3 className="font-sora text-[16px] font-bold leading-[24px] text-cm-text">{title}</h3>
       <div className="mt-4">{children}</div>
     </section>
@@ -69,14 +64,16 @@ export function DetailDialog({
       setReviews([]);
       return;
     }
-    void listSponsorshipReviews(a.ownerId).then(setReviews).catch(() => setReviews([]));
+    void listSponsorshipReviews(a.ownerId)
+      .then(setReviews)
+      .catch(() => setReviews([]));
   }, [a?.ownerId, a?.mode]);
 
   return (
     <Dialog open={!!a} onOpenChange={onOpenChange}>
-      <DialogContent className="grid-cols-none gap-0 border-[rgba(133,154,206,0.28)] bg-cm-panel p-0 shadow-[0_30px_80px_rgba(0,0,0,0.55)] w-[95vw] max-w-[1320px] max-h-[calc(100dvh-16px)] sm:max-h-[85vh] rounded-[24px] overflow-hidden text-cm-text">
+      <DialogContent className="grid-cols-none gap-0 border-[rgba(133,154,206,0.28)] bg-cm-panel p-0 shadow-[0_30px_80px_rgba(0,0,0,0.55)] w-[95vw] max-w-[1320px] max-h-[calc(100dvh-16px)] sm:h-[calc(100dvh-48px)] sm:max-h-[calc(100dvh-48px)] rounded-[24px] overflow-hidden text-cm-text">
         {a && (
-          <ScrollArea className="max-h-[calc(100dvh-16px)] sm:max-h-[85vh]">
+          <ScrollArea className="max-h-[calc(100dvh-16px)] sm:h-full sm:max-h-none">
             <div
               className={`grid gap-5 p-6 ${
                 a.mode === "creator"
@@ -85,7 +82,9 @@ export function DetailDialog({
               }`}
             >
               <aside>
-                <SectionCard title={a.mode === "project" ? "Informations du projet" : "Createur de contenu"}>
+                <SectionCard
+                  title={a.mode === "project" ? "Informations du projet" : "Createur de contenu"}
+                >
                   {a.mode === "creator" ? (
                     <CreatorIdentityHero announcement={a} />
                   ) : (
@@ -100,7 +99,9 @@ export function DetailDialog({
                   <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.06em] text-cm-muted">
                     {a.mode === "project" ? "Projet a promouvoir" : "Profil createur"}
                   </p>
-                  <h3 className="mt-1 font-sora text-[20px] font-bold leading-[28px] text-cm-text">{a.ownerName}</h3>
+                  <h3 className="mt-1 font-sora text-[20px] font-bold leading-[28px] text-cm-text">
+                    {a.ownerName}
+                  </h3>
                   <p className="mt-3 font-manrope text-[14px] font-medium leading-[22px] text-cm-text2">
                     {a.mode === "project"
                       ? "Projet manga cherchant a structurer une collaboration de parrainage."
@@ -108,7 +109,9 @@ export function DetailDialog({
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {a.category && <Chip>{a.category}</Chip>}
-                    {a.platforms.slice(0, 3).map((p) => <PlatformChip key={p} platform={p} />)}
+                    {a.platforms.slice(0, 3).map((p) => (
+                      <PlatformChip key={p} platform={p} />
+                    ))}
                   </div>
                 </SectionCard>
               </aside>
@@ -141,12 +144,19 @@ export function DetailDialog({
                 <SectionCard title="Avis des partenariats">
                   <div className="space-y-3">
                     {reviews.length === 0 && (
-                      <p className="font-manrope text-[13px] text-cm-muted">Aucun avis pour le moment.</p>
+                      <p className="font-manrope text-[13px] text-cm-muted">
+                        Aucun avis pour le moment.
+                      </p>
                     )}
                     {reviews.map((review) => (
-                      <div key={review.id} className="rounded-[14px] border border-[rgba(133,154,206,0.18)] bg-cm-panel p-4">
+                      <div
+                        key={review.id}
+                        className="rounded-[14px] border border-[rgba(133,154,206,0.18)] bg-cm-panel p-4"
+                      >
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-manrope text-[12px] font-bold text-cm-text">{review.reviewerName}</p>
+                          <p className="font-manrope text-[12px] font-bold text-cm-text">
+                            {review.reviewerName}
+                          </p>
                           <RatingStars value={review.rating} />
                         </div>
                         <p className="mt-2 font-manrope text-[13px] font-medium leading-[20px] text-cm-text2">
@@ -166,18 +176,23 @@ export function DetailDialog({
 }
 
 function CreatorIdentityHero({ announcement }: { announcement: Announcement }) {
-  const initials = announcement.ownerName
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "CM";
+  const initials =
+    announcement.ownerName
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "CM";
 
   return (
     <div className="relative h-40 overflow-hidden rounded-[18px] bg-cm-details">
       {announcement.ownerBannerUrl ? (
-        <img src={announcement.ownerBannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={announcement.ownerBannerUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
       ) : (
         <div
           className="absolute inset-0"
@@ -190,7 +205,11 @@ function CreatorIdentityHero({ announcement }: { announcement: Announcement }) {
       <div className="absolute inset-0 grid place-items-center">
         <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full border-2 border-cm-neon bg-cm-panel shadow-[0_14px_36px_rgba(0,0,0,0.38)]">
           {announcement.ownerAvatarUrl ? (
-            <img src={announcement.ownerAvatarUrl} alt={announcement.ownerName} className="h-full w-full object-cover" />
+            <img
+              src={announcement.ownerAvatarUrl}
+              alt={announcement.ownerName}
+              className="h-full w-full object-cover"
+            />
           ) : (
             <span className="font-sora text-[22px] font-extrabold text-cm-neon">{initials}</span>
           )}

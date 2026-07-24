@@ -516,8 +516,18 @@
   --star: #ffb84d;
   --primary-hover: var(--neon-hover);
   --primary-soft: rgba(57, 255, 136, 0.12);
-  --gradient-hero: linear-gradient(180deg, rgba(5, 11, 29, 0) 0%, rgba(5, 11, 29, 0.55) 55%, rgba(5, 11, 29, 0.95) 100%);
-  --gradient-hero-side: linear-gradient(90deg, rgba(5, 11, 29, 0.95) 0%, rgba(5, 11, 29, 0.6) 45%, rgba(5, 11, 29, 0.1) 100%);
+  --gradient-hero: linear-gradient(
+    180deg,
+    rgba(5, 11, 29, 0) 0%,
+    rgba(5, 11, 29, 0.55) 55%,
+    rgba(5, 11, 29, 0.95) 100%
+  );
+  --gradient-hero-side: linear-gradient(
+    90deg,
+    rgba(5, 11, 29, 0.95) 0%,
+    rgba(5, 11, 29, 0.6) 45%,
+    rgba(5, 11, 29, 0.1) 100%
+  );
   --gradient-card: linear-gradient(180deg, rgba(16, 27, 63, 0.6) 0%, rgba(8, 17, 43, 0.85) 100%);
   --shadow-glow: 0 20px 60px -20px rgba(57, 255, 136, 0.4);
   --shadow-card: 0 20px 40px -20px rgba(0, 0, 0, 0.6);
@@ -555,7 +565,10 @@
   font-size: 0.875rem;
   background: var(--color-primary);
   color: var(--color-primary-foreground);
-  transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
   box-shadow: var(--shadow-glow);
   min-height: 44px;
   &:hover {
@@ -577,7 +590,9 @@
   background: rgba(133, 154, 206, 0.06);
   color: var(--color-foreground);
   border: 1px solid var(--color-border);
-  transition: background 160ms ease, border-color 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
   min-height: 44px;
   &:hover {
     background: rgba(133, 154, 206, 0.12);
@@ -590,7 +605,10 @@
   border: 1px solid var(--color-border);
   border-radius: 1rem;
   overflow: hidden;
-  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
   &:hover {
     transform: translateY(-4px);
     border-color: color-mix(in oklab, var(--primary) 45%, transparent);
@@ -659,11 +677,21 @@
 @utility btn-neon {
   background: var(--neon);
   color: var(--primary-foreground);
-  transition: background 150ms ease, transform 150ms ease, box-shadow 200ms ease;
+  transition:
+    background 150ms ease,
+    transform 150ms ease,
+    box-shadow 200ms ease;
   box-shadow: 0 6px 20px -8px rgba(57, 255, 136, 0.55);
-  &:hover { background: var(--neon-hover); }
-  &:active { transform: translateY(1px); }
-  &:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
+  &:hover {
+    background: var(--neon-hover);
+  }
+  &:active {
+    transform: translateY(1px);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--neon);
+    outline-offset: 2px;
+  }
 }
 
 /* ---- Tokens messagerie (page Messages « prime ») ---- */
@@ -683,10 +711,21 @@
   --cm-warning: #ffb84d;
   --cm-info: #75a7ff;
 }
-.cm-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-.cm-scroll::-webkit-scrollbar-thumb { background: rgba(133, 154, 206, 0.18); border-radius: 8px; }
-.cm-scroll::-webkit-scrollbar-track { background: transparent; }
-.cm-scroll { scrollbar-width: thin; scrollbar-color: rgba(133, 154, 206, 0.18) transparent; }
+.cm-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.cm-scroll::-webkit-scrollbar-thumb {
+  background: rgba(133, 154, 206, 0.18);
+  border-radius: 8px;
+}
+.cm-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cm-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(133, 154, 206, 0.18) transparent;
+}
 :root {
   --font-manrope: var(--font-sans);
   --font-sora: var(--font-display);
@@ -695,27 +734,131 @@
 /* ---------- Espace public (page d'introduction + pages /discover) ----------
    Extrait de la page d'intro pour être partagé par le header public et les
    pages publiques. */
-.intro-hero-panel { height: calc(100vh - 80px); height: calc(100dvh - 80px); min-height: 520px; }
-.intro-hero-panel:hover .intro-hero-border { border-color: rgba(57,255,136,0.45); }
-.intro-hero-panel .intro-hero-img { transition: transform .35s ease; }
-.intro-hero-panel:hover .intro-hero-img { transform: scale(1.03); }
-.intro-nav-link { color: #B8C4E5; font-weight: 600; font-size: 15px; text-decoration: none; transition: color .15s; }
-.intro-nav-link:hover, .intro-nav-link.active { color: #39FF88; }
-.intro-btn-ghost { background: transparent; border: 1px solid rgba(133,154,206,0.35); color: #F7FAFF; font-weight: 600; font-size: 14px; padding: 10px 20px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all .15s; }
-.intro-btn-ghost:hover { border-color: #39FF88; color: #39FF88; }
-.intro-btn-neon { background: #39FF88; border: none; color: #050B1D; font-weight: 700; font-size: 14px; padding: 11px 22px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background .15s; }
-.intro-btn-neon:hover { background: #25E575; }
-.intro-btn-outline { width: fit-content; margin-top: 8px; border: 1px solid rgba(133,154,206,0.35); color: #F7FAFF; font-weight: 600; font-size: 15px; padding: 12px 24px; border-radius: 8px; text-decoration: none; transition: all .15s; display: inline-flex; align-items: center; gap: 8px; }
-.intro-btn-outline:hover { border-color: #39FF88; color: #39FF88; }
-.intro-card { transition: border-color .18s, transform .18s; }
-.intro-card:hover { border-color: rgba(57,255,136,0.4); transform: translateY(-2px); }
-.intro-section { padding: 100px 48px; }
-.intro-section[id] { scroll-margin-top: 80px; }
+.intro-hero-panel {
+  height: calc(100vh - 80px);
+  height: calc(100dvh - 80px);
+  min-height: 520px;
+}
+.intro-hero-panel:hover .intro-hero-border {
+  border-color: rgba(57, 255, 136, 0.45);
+}
+.intro-hero-panel .intro-hero-img {
+  transition: transform 0.35s ease;
+}
+.intro-hero-panel:hover .intro-hero-img {
+  transform: scale(1.03);
+}
+.intro-nav-link {
+  color: #b8c4e5;
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.intro-nav-link:hover,
+.intro-nav-link.active {
+  color: #39ff88;
+}
+.intro-btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(133, 154, 206, 0.35);
+  color: #f7faff;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.intro-btn-ghost:hover {
+  border-color: #39ff88;
+  color: #39ff88;
+}
+.intro-btn-neon {
+  background: #39ff88;
+  border: none;
+  color: #050b1d;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 11px 22px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.intro-btn-neon:hover {
+  background: #25e575;
+}
+.intro-btn-outline {
+  width: fit-content;
+  margin-top: 8px;
+  border: 1px solid rgba(133, 154, 206, 0.35);
+  color: #f7faff;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.intro-btn-outline:hover {
+  border-color: #39ff88;
+  color: #39ff88;
+}
+.intro-card {
+  transition:
+    border-color 0.18s,
+    transform 0.18s;
+}
+.intro-card:hover {
+  border-color: rgba(57, 255, 136, 0.4);
+  transform: translateY(-2px);
+}
+.intro-section {
+  padding: 100px 48px;
+}
+.intro-section[id] {
+  scroll-margin-top: 80px;
+}
 @media (max-width: 900px) {
-  .intro-hero { grid-template-columns: 1fr !important; }
-  .intro-hero-panel { height: calc(50vh - 41px); height: calc(50dvh - 41px); min-height: 380px; }
-  .intro-nav { display: none !important; }
-  .intro-section { padding: 72px 24px; }
+  .intro-hero {
+    grid-template-columns: 1fr !important;
+  }
+  .intro-hero-panel {
+    height: calc(50vh - 41px);
+    height: calc(50dvh - 41px);
+    min-height: 380px;
+  }
+  .intro-nav {
+    display: none !important;
+  }
+  .intro-section {
+    padding: 72px 24px;
+  }
+}
+
+/* Popups de détails (desktop) : le corps garde une hauteur fixe et chaque
+   colonne défile de son côté, pour qu'une longue liste de commentaires
+   n'allonge plus le popup. */
+@media (min-width: 768px) {
+  .cm-detail-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+  .cm-detail-layout {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+  .cm-detail-layout > * {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
 }
 
 /* Detail popups stack their former horizontal sections on phones. */

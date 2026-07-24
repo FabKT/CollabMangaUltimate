@@ -1,7 +1,25 @@
 import { useEffect, useState } from "react";
-import { addComment, listComments, subscribeComments, type CommentEntityType, type DbComment } from "@/lib/db";
+import {
+  addComment,
+  listComments,
+  subscribeComments,
+  type CommentEntityType,
+  type DbComment,
+} from "@/lib/db";
 
-export function CommentsPanel({ entityType, entityId }: { entityType: CommentEntityType; entityId: string }) {
+export function CommentsPanel({
+  entityType,
+  entityId,
+  fillHeight = false,
+}: {
+  entityType: CommentEntityType;
+  entityId: string;
+  /**
+   * Occupe toute la hauteur du parent : le formulaire reste fixe en haut et la
+   * liste de commentaires défile dans l'espace restant (popups de détails).
+   */
+  fillHeight?: boolean;
+}) {
   const [comments, setComments] = useState<DbComment[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -9,11 +27,12 @@ export function CommentsPanel({ entityType, entityId }: { entityType: CommentEnt
 
   useEffect(() => {
     let cancelled = false;
-    const refresh = () => void listComments(entityType, entityId)
-      .then((rows) => {
-        if (!cancelled) setComments(rows);
-      })
-      .catch(() => setComments([]));
+    const refresh = () =>
+      void listComments(entityType, entityId)
+        .then((rows) => {
+          if (!cancelled) setComments(rows);
+        })
+        .catch(() => setComments([]));
     refresh();
     const unsubscribe = subscribeComments(entityType, entityId, refresh);
     return () => {
@@ -28,7 +47,9 @@ export function CommentsPanel({ entityType, entityId }: { entityType: CommentEnt
     setError(null);
     try {
       const created = await addComment(entityType, entityId, draft);
-      setComments((current) => current.some((comment) => comment.id === created.id) ? current : [...current, created]);
+      setComments((current) =>
+        current.some((comment) => comment.id === created.id) ? current : [...current, created],
+      );
       setDraft("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Envoi impossible.");
@@ -37,16 +58,22 @@ export function CommentsPanel({ entityType, entityId }: { entityType: CommentEnt
     }
   };
 
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
+  const composer = (
+    <>
       <CommentComposer
         draft={draft}
         sending={sending}
         onChange={setDraft}
         onSend={() => void send()}
       />
-      {error && <p style={{ fontSize: 12, fontWeight: 700, color: "#FF5F7E", margin: 0 }}>{error}</p>}
+      {error && (
+        <p style={{ fontSize: 12, fontWeight: 700, color: "#FF5F7E", margin: 0 }}>{error}</p>
+      )}
+    </>
+  );
 
+  const list = (
+    <>
       {comments.length === 0 && (
         <p style={{ fontSize: 13, color: "#7F8CB3", margin: 0 }}>
           Aucun commentaire - sois le premier a en laisser un.
@@ -56,6 +83,36 @@ export function CommentsPanel({ entityType, entityId }: { entityType: CommentEnt
       {comments.map((comment) => (
         <CommentItem key={comment.id} comment={comment} />
       ))}
+    </>
+  );
+
+  if (fillHeight) {
+    return (
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}
+      >
+        <div style={{ flex: "0 0 auto", display: "grid", gap: 12 }}>{composer}</div>
+        <div
+          className="scroll-dark"
+          style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+            display: "grid",
+            gap: 12,
+            alignContent: "start",
+          }}
+        >
+          {list}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {composer}
+      {list}
     </div>
   );
 }
