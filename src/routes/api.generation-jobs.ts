@@ -36,15 +36,13 @@ async function invokeWorker(request: Request, jobId: string, authorization: stri
   }
 
   const workerUrl = new URL("/.netlify/functions/generation-worker-background", request.url);
-  const response = await fetch(workerUrl, {
+  void fetch(workerUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: authorization },
     body: JSON.stringify({ jobId, authorization }),
-    signal: AbortSignal.timeout(15_000),
+  }).catch((error) => {
+    console.error("[generation-jobs] Unable to invoke background worker", jobId, error);
   });
-  if (!response.ok) {
-    throw new Error(`Unable to start generation worker (${response.status}).`);
-  }
 }
 
 export const Route = createFileRoute("/api/generation-jobs")({
@@ -92,20 +90,7 @@ export const Route = createFileRoute("/api/generation-jobs")({
             );
           }
           const authorization = request.headers.get("authorization") ?? "";
-          try {
-            await invokeWorker(request, inserted.data.id, authorization);
-          } catch (error) {
-            await supabase
-              .from("ai_generation_jobs")
-              .update({
-                status: "failed",
-                error_message:
-                  error instanceof Error ? error.message : "Unable to start generation worker.",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", inserted.data.id);
-            throw error;
-          }
+          await invokeWorker(request, inserted.data.id, authorization);
           return Response.json({ id: inserted.data.id, status: "queued" }, { status: 202 });
         } catch (error) {
           return Response.json(
