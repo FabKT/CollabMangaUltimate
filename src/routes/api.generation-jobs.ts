@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase } from "@/lib/stripe-server";
+import { failAndReleaseGenerationJob } from "@/lib/generation-job-recovery";
 import { processGenerationJob } from "@/server-functions/generation-job-worker";
 
 const ALLOWED_ENDPOINTS = new Set([
@@ -137,19 +138,11 @@ export const Route = createFileRoute("/api/generation-jobs")({
                   ? queried.data.created_at
                   : queried.data.updated_at,
               ).getTime() >
-              16 * 60 * 1000;
+              9 * 60 * 1000;
           if (stale) {
-            const error = "La génération précédente a expiré. Tu peux la relancer.";
-            await getServiceSupabase()
-              .from("ai_generation_jobs")
-              .update({
-                status: "failed",
-                error_message: error,
-                completed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", id)
-              .eq("user_id", userId);
+            const error =
+              "La génération a dépassé le délai maximal et a été arrêtée. Le crédit a été restitué.";
+            await failAndReleaseGenerationJob(id, error);
             return Response.json({ id, status: "failed", error });
           }
           if (

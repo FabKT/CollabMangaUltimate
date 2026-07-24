@@ -13,7 +13,7 @@ import { fetchGenerationWithRetry } from "@/lib/server-fetch-retry";
  */
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
-const GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
+const GENERATION_TIMEOUT_MS = 7 * 60 * 1000;
 const DECOR_IMAGE_SIZE = "1536x1024"; // 3:2 landscape
 
 const referenceSchema = z.object({

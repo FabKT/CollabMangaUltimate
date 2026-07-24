@@ -28,6 +28,7 @@ export type GenerationMeta = {
   quality?: string;
   dimensions?: string;
   referenceImages?: number;
+  durableJobId?: string;
 };
 
 type Outcome<T> = { ok: true; result: T } | { ok: false; status: number; error: string };
@@ -124,6 +125,17 @@ export async function withCredits<
   const generationId = reserved.data as string;
 
   try {
+    if (meta.durableJobId) {
+      const linked = await sb
+        .from("generations")
+        .update({ usage_data: { durable_job_id: meta.durableJobId } })
+        .eq("id", generationId)
+        .eq("credit_status", "reserved");
+      if (linked.error) {
+        throw new Error(`Impossible de rattacher le crédit au job: ${linked.error.message}`);
+      }
+    }
+
     const result = await run();
     const produced = result?.imageUrl || result?.imageDataUrl ? 1 : 0;
     const settled = await sb.rpc("settle_credits", {

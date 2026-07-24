@@ -45,6 +45,7 @@ async function executeEndpoint(
   endpoint: string,
   payload: unknown,
   request: Request,
+  jobId: string,
 ): Promise<GenerationResult> {
   let meta: GenerationMeta;
   let run: () => Promise<GenerationResult>;
@@ -60,49 +61,50 @@ async function executeEndpoint(
             : input.operation === "regenerate"
               ? "regenerate"
               : "generate",
+        durableJobId: jobId,
       };
       run = () => requestPulseNoteMangaImage(input);
       break;
     }
     case "/api/character/generate": {
       const input = parseCharacterImageInput(payload);
-      meta = { workspace: "character-create", operationType: "generate" };
+      meta = { workspace: "character-create", operationType: "generate", durableJobId: jobId };
       run = () => requestPulseNoteCharacterImage(input);
       break;
     }
     case "/api/sketch-final/generate": {
       const input = parseSketchFinalInput(payload);
-      meta = { workspace: "raw-final", operationType: "generate" };
+      meta = { workspace: "raw-final", operationType: "generate", durableJobId: jobId };
       run = () => requestPulseNoteSketchFinal(input);
       break;
     }
     case "/api/style-transfer/generate": {
       const input = parseStyleTransferInput(payload);
-      meta = { workspace: "style-transfer", operationType: "generate" };
+      meta = { workspace: "style-transfer", operationType: "generate", durableJobId: jobId };
       run = () => requestPulseNoteStyleTransfer(input);
       break;
     }
     case "/api/planche-transfer/generate": {
       const input = parsePlancheTransferInput(payload);
-      meta = { workspace: "planche-transfer", operationType: "generate" };
+      meta = { workspace: "planche-transfer", operationType: "generate", durableJobId: jobId };
       run = () => requestPulseNotePlancheTransfer(input);
       break;
     }
     case "/api/swap/generate": {
       const input = parseSwapImageInput(payload);
-      meta = { workspace: "swap", operationType: "edit" };
+      meta = { workspace: "swap", operationType: "edit", durableJobId: jobId };
       run = () => requestPulseNoteSwap(input);
       break;
     }
     case "/api/decor/generate": {
       const input = parseDecorImageInput(payload);
-      meta = { workspace: "decor-create", operationType: "generate" };
+      meta = { workspace: "decor-create", operationType: "generate", durableJobId: jobId };
       run = () => requestPulseNoteDecorImage(input);
       break;
     }
     case "/api/free-studio/generate": {
       const input = parseFreeImageInput(payload);
-      meta = { workspace: "free-studio", operationType: "generate" };
+      meta = { workspace: "free-studio", operationType: "generate", durableJobId: jobId };
       run = () => requestPulseNoteFreeImage(input);
       break;
     }
@@ -150,7 +152,7 @@ export async function processGenerationJob(jobId: string, authorization: string)
         method: "POST",
         headers: { Authorization: authorization, "Content-Type": "application/json" },
       });
-      const result = await executeEndpoint(job.endpoint, job.request_payload, request);
+      const result = await executeEndpoint(job.endpoint, job.request_payload, request, job.id);
       const completedAt = new Date().toISOString();
       const updated = await supabase
         .from("ai_generation_jobs")

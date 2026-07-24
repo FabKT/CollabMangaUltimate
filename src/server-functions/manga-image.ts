@@ -9,8 +9,8 @@ import { fitPromptToApiLimit } from "@/lib/prompt-limit";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
-const PULSENOTE_GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
-const PULSENOTE_GENERATION_ATTEMPTS = 2;
+const PULSENOTE_GENERATION_TIMEOUT_MS = 7 * 60 * 1000;
+const PULSENOTE_GENERATION_ATTEMPTS = 1;
 const PULSENOTE_RETRYABLE_STATUSES = new Set([
   408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524,
 ]);

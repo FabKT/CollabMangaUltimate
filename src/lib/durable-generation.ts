@@ -1,4 +1,4 @@
-import { authJsonHeaders } from "@/lib/auth-header";
+import { authJsonHeaders, refreshBearerHeader } from "@/lib/auth-header";
 
 type JobState<T> = {
   id: string;
@@ -9,7 +9,7 @@ type JobState<T> = {
 
 const JOB_PREFIX = "collabmanga.ai-job.";
 const POLL_INTERVAL_MS = 2_000;
-const POLL_TIMEOUT_MS = 20 * 60 * 1000;
+const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 const NETWORK_ATTEMPTS = 4;
 
 function pendingKey(workspace: string) {
@@ -59,6 +59,7 @@ async function directGeneration<T>(endpoint: string, payload: unknown): Promise<
 async function pollJob<T>(workspace: string, id: string): Promise<T> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   let missingAttempts = 0;
+  let authRetries = 0;
   while (Date.now() < deadline) {
     let response: Response;
     try {
@@ -70,6 +71,12 @@ async function pollJob<T>(workspace: string, id: string): Promise<T> {
       continue;
     }
     const job = (await response.json().catch(() => ({}))) as JobState<T>;
+    if (response.status === 401 && authRetries < 3) {
+      authRetries += 1;
+      await refreshBearerHeader();
+      await delay(POLL_INTERVAL_MS);
+      continue;
+    }
     if (response.status === 404 && missingAttempts < 8) {
       missingAttempts += 1;
       await delay(POLL_INTERVAL_MS);

@@ -1,4 +1,6 @@
-const DEFAULT_ATTEMPTS = 3;
+// A generation request may already have reached OpenAI when its connection
+// closes. Retrying it automatically can create duplicate paid generations.
+const DEFAULT_ATTEMPTS = 1;
 const RETRYABLE_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524]);
 
 function wait(ms: number) {
