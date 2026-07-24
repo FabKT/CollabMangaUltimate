@@ -35,7 +35,7 @@ async function invokeWorker(request: Request, jobId: string, authorization: stri
     return;
   }
 
-  const workerUrl = new URL("/.netlify/functions/generation-worker-background", request.url);
+  const workerUrl = new URL("/.netlify/functions/generation-worker", request.url);
   const response = await fetch(workerUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: authorization },
@@ -122,15 +122,22 @@ export const Route = createFileRoute("/api/generation-jobs")({
           if (!id) return Response.json({ error: "Missing job id." }, { status: 400 });
           const queried = await getServiceSupabase()
             .from("ai_generation_jobs")
-            .select("id,status,result_payload,error_message,updated_at")
+            .select("id,status,result_payload,error_message,created_at,updated_at")
             .eq("id", id)
             .eq("user_id", userId)
             .maybeSingle();
           if (queried.error || !queried.data)
             return Response.json({ error: "Generation job not found." }, { status: 404 });
+          const now = Date.now();
           const stale =
             (queried.data.status === "queued" || queried.data.status === "running") &&
-            Date.now() - new Date(queried.data.updated_at).getTime() > 16 * 60 * 1000;
+            now -
+              new Date(
+                queried.data.status === "queued"
+                  ? queried.data.created_at
+                  : queried.data.updated_at,
+              ).getTime() >
+              16 * 60 * 1000;
           if (stale) {
             const error = "La génération précédente a expiré. Tu peux la relancer.";
             await getServiceSupabase()
@@ -144,6 +151,19 @@ export const Route = createFileRoute("/api/generation-jobs")({
               .eq("id", id)
               .eq("user_id", userId);
             return Response.json({ id, status: "failed", error });
+          }
+          if (
+            queried.data.status === "queued" &&
+            now - new Date(queried.data.updated_at).getTime() > 15_000
+          ) {
+            const authorization = request.headers.get("authorization") ?? "";
+            await invokeWorker(request, id, authorization);
+            await getServiceSupabase()
+              .from("ai_generation_jobs")
+              .update({ updated_at: new Date().toISOString() })
+              .eq("id", id)
+              .eq("user_id", userId)
+              .eq("status", "queued");
           }
           return Response.json({
             id: queried.data.id,

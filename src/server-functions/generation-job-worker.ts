@@ -117,51 +117,64 @@ async function executeEndpoint(
 
 export async function processGenerationJob(jobId: string, authorization: string) {
   const supabase = getServiceSupabase();
-  const token = authorization.replace(/^Bearer\s+/i, "");
-  const authenticated = await supabase.auth.getUser(token);
-  const userId = authenticated.data.user?.id;
-  if (!userId) throw new Error("Authentication required.");
-
-  const queried = await supabase
-    .from("ai_generation_jobs")
-    .select("id,user_id,endpoint,request_payload,status")
-    .eq("id", jobId)
-    .maybeSingle();
-  if (queried.error || !queried.data) throw new Error("Generation job not found.");
-
-  const job = queried.data as StoredJob;
-  if (job.user_id !== userId) throw new Error("Generation job does not belong to this user.");
-  if (job.status === "completed" || job.status === "failed") return;
-
-  const now = new Date().toISOString();
-  const claimed = await supabase
-    .from("ai_generation_jobs")
-    .update({ status: "running", started_at: now, updated_at: now })
-    .eq("id", job.id)
-    .eq("status", "queued")
-    .select("id")
-    .maybeSingle();
-  if (claimed.error) throw new Error(claimed.error.message);
-  if (!claimed.data) return;
-
   try {
-    const request = new Request("https://collabmanga.internal/api/generation", {
-      method: "POST",
-      headers: { Authorization: authorization, "Content-Type": "application/json" },
-    });
-    const result = await executeEndpoint(job.endpoint, job.request_payload, request);
-    const completedAt = new Date().toISOString();
-    const updated = await supabase
+    const token = authorization.replace(/^Bearer\s+/i, "");
+    const authenticated = await supabase.auth.getUser(token);
+    const userId = authenticated.data.user?.id;
+    if (!userId) throw new Error("Authentication required.");
+
+    const queried = await supabase
       .from("ai_generation_jobs")
-      .update({
-        status: "completed",
-        result_payload: result,
-        error_message: null,
-        completed_at: completedAt,
-        updated_at: completedAt,
-      })
-      .eq("id", job.id);
-    if (updated.error) throw new Error(updated.error.message);
+      .select("id,user_id,endpoint,request_payload,status")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (queried.error || !queried.data) throw new Error("Generation job not found.");
+
+    const job = queried.data as StoredJob;
+    if (job.user_id !== userId) throw new Error("Generation job does not belong to this user.");
+    if (job.status === "completed" || job.status === "failed") return;
+
+    const now = new Date().toISOString();
+    const claimed = await supabase
+      .from("ai_generation_jobs")
+      .update({ status: "running", started_at: now, updated_at: now })
+      .eq("id", job.id)
+      .eq("status", "queued")
+      .select("id")
+      .maybeSingle();
+    if (claimed.error) throw new Error(claimed.error.message);
+    if (!claimed.data) return;
+
+    try {
+      const request = new Request("https://collabmanga.internal/api/generation", {
+        method: "POST",
+        headers: { Authorization: authorization, "Content-Type": "application/json" },
+      });
+      const result = await executeEndpoint(job.endpoint, job.request_payload, request);
+      const completedAt = new Date().toISOString();
+      const updated = await supabase
+        .from("ai_generation_jobs")
+        .update({
+          status: "completed",
+          result_payload: result,
+          error_message: null,
+          completed_at: completedAt,
+          updated_at: completedAt,
+        })
+        .eq("id", job.id);
+      if (updated.error) throw new Error(updated.error.message);
+    } catch (error) {
+      const completedAt = new Date().toISOString();
+      await supabase
+        .from("ai_generation_jobs")
+        .update({
+          status: "failed",
+          error_message: error instanceof Error ? error.message : "Generation failed.",
+          completed_at: completedAt,
+          updated_at: completedAt,
+        })
+        .eq("id", job.id);
+    }
   } catch (error) {
     const completedAt = new Date().toISOString();
     await supabase
@@ -172,6 +185,8 @@ export async function processGenerationJob(jobId: string, authorization: string)
         completed_at: completedAt,
         updated_at: completedAt,
       })
-      .eq("id", job.id);
+      .eq("id", jobId)
+      .in("status", ["queued", "running"]);
+    throw error;
   }
 }
