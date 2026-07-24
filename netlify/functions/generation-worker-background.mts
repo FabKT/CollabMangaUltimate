@@ -23,7 +23,3 @@ export default async function generationWorker(request: Request) {
   await processGenerationJob(body.jobId, body.authorization);
   console.info("[generation-worker] Finished job", body.jobId);
 }
-
-export const config = {
-  background: true,
-};
