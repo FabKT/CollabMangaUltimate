@@ -1,6 +1,6 @@
 import { getServiceSupabase } from "@/lib/stripe-server";
 
-const STALE_JOB_MINUTES = 9;
+const STALE_JOB_MINUTES = 18;
 
 export async function releaseGenerationJobCredit(jobId: string) {
   const supabase = getServiceSupabase();

@@ -9,7 +9,7 @@ type JobState<T> = {
 
 const JOB_PREFIX = "collabmanga.ai-job.";
 const POLL_INTERVAL_MS = 2_000;
-const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+const POLL_TIMEOUT_MS = 18 * 60 * 1000;
 const NETWORK_ATTEMPTS = 4;
 
 function pendingKey(workspace: string) {

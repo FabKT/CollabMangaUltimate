@@ -138,7 +138,7 @@ export const Route = createFileRoute("/api/generation-jobs")({
                   ? queried.data.created_at
                   : queried.data.updated_at,
               ).getTime() >
-              9 * 60 * 1000;
+              18 * 60 * 1000;
           if (stale) {
             const error =
               "La génération a dépassé le délai maximal et a été arrêtée. Le crédit a été restitué.";
