@@ -15,7 +15,6 @@ const IMAGE_GENERATION_PATHS = new Set([
   "/api/sketch-final/generate",
   "/api/style-transfer/generate",
   "/api/planche-transfer/generate",
-  "/api/swap/generate",
   "/api/decor/generate",
   "/api/free-studio/generate",
 ]);

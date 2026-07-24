@@ -6,7 +6,6 @@ import {
   ImagePlus,
   Wand2,
   PenLine,
-  ArrowLeftRight,
   Sparkles,
   UserSquare2,
   Images,
@@ -34,7 +33,6 @@ const groups: Group[] = [
       { label: "Création de personnage", to: "/ai/character-create", icon: UserPlus },
       { label: "Transfert de style", to: "/ai/style-transfer", icon: Wand2 },
       { label: "Raw to Final", to: "/ai/sketch-final", icon: PenLine },
-      { label: "Swap", to: "/ai/swap", icon: ArrowLeftRight },
       { label: "Studio libre", to: "/ai/free-studio", icon: Sparkles },
       { label: "Modification d'image", to: "/ai/image-edit", icon: ImagePlus },
     ],
@@ -68,7 +66,6 @@ const aiItemKeys: Record<string, TranslationKey> = {
   "/ai/history": "nav.history",
   "/ai/plan": "nav.plan",
   "/ai/sketch-final": "nav.rawFinal",
-  "/ai/swap": "nav.swap",
 };
 
 export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {

@@ -26,7 +26,6 @@ function allPlanFeatures(t: (key: TranslationKey) => string): string[] {
     t("nav.characterCreate"),
     t("nav.styleTransfer"),
     t("nav.rawFinal"),
-    t("nav.swap"),
     t("nav.freeStudio"),
     t("nav.imageEdit"),
     t("nav.characterLibrary"),

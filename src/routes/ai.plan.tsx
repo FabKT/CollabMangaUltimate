@@ -26,7 +26,6 @@ function planFeatures(t: (key: TranslationKey) => string): Record<PlanId, string
     t("nav.characterCreate"),
     t("nav.styleTransfer"),
     t("nav.rawFinal"),
-    t("nav.swap"),
     t("nav.freeStudio"),
     t("nav.imageEdit"),
     t("nav.characterLibrary"),

@@ -9,7 +9,6 @@ const ALLOWED_ENDPOINTS = new Set([
   "/api/sketch-final/generate",
   "/api/style-transfer/generate",
   "/api/planche-transfer/generate",
-  "/api/swap/generate",
   "/api/decor/generate",
   "/api/free-studio/generate",
 ]);

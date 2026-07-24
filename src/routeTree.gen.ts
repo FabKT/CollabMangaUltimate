@@ -18,7 +18,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as CatalogIdRouteImport } from './routes/catalog.$id'
 import { Route as ApiGenerationJobsRouteImport } from './routes/api.generation-jobs'
-import { Route as AiSwapRouteImport } from './routes/ai.swap'
 import { Route as AiSubscribeRouteImport } from './routes/ai.subscribe'
 import { Route as AiStyleTransferRouteImport } from './routes/ai.style-transfer'
 import { Route as AiSketchFinalRouteImport } from './routes/ai.sketch-final'
@@ -51,7 +50,6 @@ import { Route as CollabChatRouteImport } from './routes/_collab.chat'
 import { Route as CollabAnnouncementsRouteImport } from './routes/_collab.announcements'
 import { Route as CatalogIdIndexRouteImport } from './routes/catalog.$id.index'
 import { Route as CollabMangaIndexRouteImport } from './routes/_collab.manga.index'
-import { Route as ApiSwapGenerateRouteImport } from './routes/api.swap.generate'
 import { Route as ApiStyleTransferGenerateRouteImport } from './routes/api.style-transfer.generate'
 import { Route as ApiSketchFinalGenerateRouteImport } from './routes/api.sketch-final.generate'
 import { Route as ApiPlancheTransferGenerateRouteImport } from './routes/api.planche-transfer.generate'
@@ -109,11 +107,6 @@ const ApiGenerationJobsRoute = ApiGenerationJobsRouteImport.update({
   id: '/api/generation-jobs',
   path: '/api/generation-jobs',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AiSwapRoute = AiSwapRouteImport.update({
-  id: '/swap',
-  path: '/swap',
-  getParentRoute: () => AiRoute,
 } as any)
 const AiSubscribeRoute = AiSubscribeRouteImport.update({
   id: '/subscribe',
@@ -275,11 +268,6 @@ const CollabMangaIndexRoute = CollabMangaIndexRouteImport.update({
   path: '/manga/',
   getParentRoute: () => CollabRoute,
 } as any)
-const ApiSwapGenerateRoute = ApiSwapGenerateRouteImport.update({
-  id: '/api/swap/generate',
-  path: '/api/swap/generate',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiStyleTransferGenerateRoute =
   ApiStyleTransferGenerateRouteImport.update({
     id: '/api/style-transfer/generate',
@@ -386,7 +374,6 @@ export interface FileRoutesByFullPath {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/subscribe': typeof AiSubscribeRoute
-  '/ai/swap': typeof AiSwapRoute
   '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/catalog/$id': typeof CatalogIdRouteWithChildren
   '/ai/': typeof AiIndexRoute
@@ -400,7 +387,6 @@ export interface FileRoutesByFullPath {
   '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
   '/api/sketch-final/generate': typeof ApiSketchFinalGenerateRoute
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
-  '/api/swap/generate': typeof ApiSwapGenerateRoute
   '/manga/': typeof CollabMangaIndexRoute
   '/catalog/$id/': typeof CatalogIdIndexRoute
   '/catalog/$id/chapter/$chapterId': typeof CatalogIdChapterChapterIdRoute
@@ -442,7 +428,6 @@ export interface FileRoutesByTo {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/subscribe': typeof AiSubscribeRoute
-  '/ai/swap': typeof AiSwapRoute
   '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/ai': typeof AiIndexRoute
   '/profile/$profileId': typeof CollabProfileProfileIdRoute
@@ -455,7 +440,6 @@ export interface FileRoutesByTo {
   '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
   '/api/sketch-final/generate': typeof ApiSketchFinalGenerateRoute
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
-  '/api/swap/generate': typeof ApiSwapGenerateRoute
   '/manga': typeof CollabMangaIndexRoute
   '/catalog/$id': typeof CatalogIdIndexRoute
   '/catalog/$id/chapter/$chapterId': typeof CatalogIdChapterChapterIdRoute
@@ -500,7 +484,6 @@ export interface FileRoutesById {
   '/ai/sketch-final': typeof AiSketchFinalRoute
   '/ai/style-transfer': typeof AiStyleTransferRoute
   '/ai/subscribe': typeof AiSubscribeRoute
-  '/ai/swap': typeof AiSwapRoute
   '/api/generation-jobs': typeof ApiGenerationJobsRoute
   '/catalog/$id': typeof CatalogIdRouteWithChildren
   '/ai/': typeof AiIndexRoute
@@ -514,7 +497,6 @@ export interface FileRoutesById {
   '/api/planche-transfer/generate': typeof ApiPlancheTransferGenerateRoute
   '/api/sketch-final/generate': typeof ApiSketchFinalGenerateRoute
   '/api/style-transfer/generate': typeof ApiStyleTransferGenerateRoute
-  '/api/swap/generate': typeof ApiSwapGenerateRoute
   '/_collab/manga/': typeof CollabMangaIndexRoute
   '/catalog/$id/': typeof CatalogIdIndexRoute
   '/catalog/$id/chapter/$chapterId': typeof CatalogIdChapterChapterIdRoute
@@ -559,7 +541,6 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/subscribe'
-    | '/ai/swap'
     | '/api/generation-jobs'
     | '/catalog/$id'
     | '/ai/'
@@ -573,7 +554,6 @@ export interface FileRouteTypes {
     | '/api/planche-transfer/generate'
     | '/api/sketch-final/generate'
     | '/api/style-transfer/generate'
-    | '/api/swap/generate'
     | '/manga/'
     | '/catalog/$id/'
     | '/catalog/$id/chapter/$chapterId'
@@ -615,7 +595,6 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/subscribe'
-    | '/ai/swap'
     | '/api/generation-jobs'
     | '/ai'
     | '/profile/$profileId'
@@ -628,7 +607,6 @@ export interface FileRouteTypes {
     | '/api/planche-transfer/generate'
     | '/api/sketch-final/generate'
     | '/api/style-transfer/generate'
-    | '/api/swap/generate'
     | '/manga'
     | '/catalog/$id'
     | '/catalog/$id/chapter/$chapterId'
@@ -672,7 +650,6 @@ export interface FileRouteTypes {
     | '/ai/sketch-final'
     | '/ai/style-transfer'
     | '/ai/subscribe'
-    | '/ai/swap'
     | '/api/generation-jobs'
     | '/catalog/$id'
     | '/ai/'
@@ -686,7 +663,6 @@ export interface FileRouteTypes {
     | '/api/planche-transfer/generate'
     | '/api/sketch-final/generate'
     | '/api/style-transfer/generate'
-    | '/api/swap/generate'
     | '/_collab/manga/'
     | '/catalog/$id/'
     | '/catalog/$id/chapter/$chapterId'
@@ -711,7 +687,6 @@ export interface RootRouteChildren {
   ApiPlancheTransferGenerateRoute: typeof ApiPlancheTransferGenerateRoute
   ApiSketchFinalGenerateRoute: typeof ApiSketchFinalGenerateRoute
   ApiStyleTransferGenerateRoute: typeof ApiStyleTransferGenerateRoute
-  ApiSwapGenerateRoute: typeof ApiSwapGenerateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -778,13 +753,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/generation-jobs'
       preLoaderRoute: typeof ApiGenerationJobsRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/ai/swap': {
-      id: '/ai/swap'
-      path: '/swap'
-      fullPath: '/ai/swap'
-      preLoaderRoute: typeof AiSwapRouteImport
-      parentRoute: typeof AiRoute
     }
     '/ai/subscribe': {
       id: '/ai/subscribe'
@@ -1010,13 +978,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CollabMangaIndexRouteImport
       parentRoute: typeof CollabRoute
     }
-    '/api/swap/generate': {
-      id: '/api/swap/generate'
-      path: '/api/swap/generate'
-      fullPath: '/api/swap/generate'
-      preLoaderRoute: typeof ApiSwapGenerateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/style-transfer/generate': {
       id: '/api/style-transfer/generate'
       path: '/api/style-transfer/generate'
@@ -1175,7 +1136,6 @@ interface AiRouteChildren {
   AiSketchFinalRoute: typeof AiSketchFinalRoute
   AiStyleTransferRoute: typeof AiStyleTransferRoute
   AiSubscribeRoute: typeof AiSubscribeRoute
-  AiSwapRoute: typeof AiSwapRoute
   AiIndexRoute: typeof AiIndexRoute
 }
 
@@ -1196,7 +1156,6 @@ const AiRouteChildren: AiRouteChildren = {
   AiSketchFinalRoute: AiSketchFinalRoute,
   AiStyleTransferRoute: AiStyleTransferRoute,
   AiSubscribeRoute: AiSubscribeRoute,
-  AiSwapRoute: AiSwapRoute,
   AiIndexRoute: AiIndexRoute,
 }
 
@@ -1233,7 +1192,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPlancheTransferGenerateRoute: ApiPlancheTransferGenerateRoute,
   ApiSketchFinalGenerateRoute: ApiSketchFinalGenerateRoute,
   ApiStyleTransferGenerateRoute: ApiStyleTransferGenerateRoute,
-  ApiSwapGenerateRoute: ApiSwapGenerateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

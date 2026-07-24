@@ -20,7 +20,6 @@ import {
   parsePlancheTransferInput,
   requestPulseNotePlancheTransfer,
 } from "@/server-functions/planche-transfer-image";
-import { parseSwapImageInput, requestPulseNoteSwap } from "@/server-functions/swap-image";
 import { parseDecorImageInput, requestPulseNoteDecorImage } from "@/server-functions/decor-image";
 import { parseFreeImageInput, requestPulseNoteFreeImage } from "@/server-functions/free-image";
 
@@ -88,12 +87,6 @@ async function executeEndpoint(
       const input = parsePlancheTransferInput(payload);
       meta = { workspace: "planche-transfer", operationType: "generate", durableJobId: jobId };
       run = () => requestPulseNotePlancheTransfer(input);
-      break;
-    }
-    case "/api/swap/generate": {
-      const input = parseSwapImageInput(payload);
-      meta = { workspace: "swap", operationType: "edit", durableJobId: jobId };
-      run = () => requestPulseNoteSwap(input);
       break;
     }
     case "/api/decor/generate": {
