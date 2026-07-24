@@ -24,7 +24,7 @@ import { PlancheCanvas } from "@/components/canvas/PlancheCanvas";
 import { bearerHeader } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { loadSession, saveSession } from "@/lib/manga-session";
-import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
+import { clearPendingGeneration, runDirectGeneration } from "@/lib/durable-generation";
 import {
   openImageEditor,
   type ImageEditDraft,
@@ -582,26 +582,8 @@ function CollabMangaAIPage() {
   }, []);
 
   useEffect(() => {
-    if (!hasPendingGeneration("manga-page")) return;
-    setIsGenerating(true);
-    void resumeDurableGeneration<MangaImageGenerationResult>("manga-page")
-      .then(async (generated) => {
-        if (!generated) return;
-        const normalizedImageUrl = await normalizeGeneratedImageAspectRatio(
-          generated.imageUrl,
-          aspectRatio,
-        );
-        setGenerationResult({
-          ...generated,
-          imageUrl: normalizedImageUrl,
-          size: generatedImageDimensions[aspectRatio].size,
-        });
-        setShowCanvas(false);
-      })
-      .catch((error) => setGenerationError(error instanceof Error ? error.message : t("ai.imageGenerationFailed")))
-      .finally(() => setIsGenerating(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aspectRatio]);
+    clearPendingGeneration("manga-page");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -867,8 +849,7 @@ function CollabMangaAIPage() {
         aspectRatio,
         existingImageDataUrl: generationResult?.imageUrl,
       };
-      const result = await runDurableGeneration<MangaImageGenerationResult>(
-        "manga-page",
+      const result = await runDirectGeneration<MangaImageGenerationResult>(
         "/api/manga/generate-page",
         generationPayload,
       );
@@ -1783,6 +1764,12 @@ function GeneratingIndicator() {
       <div>
         <p className="text-[15px] font-bold">{t("ai.generationInProgress")}</p>
         <p className="mt-1 text-[12px] text-[#5e6a90]">{t("ai.aiComposingPage")}</p>
+        <p className="mt-3 text-[12px] font-semibold text-[#37517d]">
+          {t("ai.generationMayTake")}
+        </p>
+        <p className="mt-1 text-[12px] font-semibold text-[#37517d]">
+          {t("ai.doNotLeaveGeneration")}
+        </p>
       </div>
       <div className="flex items-center gap-1.5">
         {[0, 1, 2].map((index) => (

@@ -57,7 +57,7 @@ async function fetchWithNetworkRetry(input: RequestInfo | URL, init?: RequestIni
 }
 
 async function directGeneration<T>(endpoint: string, payload: unknown): Promise<T> {
-  const response = await fetch(endpoint, {
+  const response = await fetchWithNetworkRetry(endpoint, {
     method: "POST",
     headers: await authJsonHeaders(),
     body: JSON.stringify(payload),
@@ -150,6 +150,20 @@ export async function runDurableGeneration<T>(
   } finally {
     setGenerationActivity(false);
   }
+}
+
+export async function runDirectGeneration<T>(endpoint: string, payload: unknown): Promise<T> {
+  setGenerationActivity(true);
+  try {
+    return await directGeneration<T>(endpoint, payload);
+  } finally {
+    setGenerationActivity(false);
+  }
+}
+
+export function clearPendingGeneration(workspace: string) {
+  if (typeof window === "undefined") return;
+  forgetJob(workspace);
 }
 
 export async function resumeDurableGeneration<T>(workspace: string): Promise<T | null> {
