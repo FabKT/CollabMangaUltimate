@@ -3,6 +3,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { Sidebar } from "./Sidebar";
 import { Menu, X } from "lucide-react";
 import { BrandMark, BrandName } from "@/components/BrandMark";
+import { GenerationWaitNotice } from "./GenerationWaitNotice";
 
 export function CmaLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -50,6 +51,7 @@ export function CmaLayout({ children }: { children: ReactNode }) {
 
         <div className="p-4 md:p-6 lg:p-8">{children}</div>
       </main>
+      <GenerationWaitNotice />
     </div>
   );
 }
