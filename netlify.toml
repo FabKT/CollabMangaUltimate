@@ -1,6 +1,6 @@
 [build]
   command = "npm run build"
-  publish = "dist/client"
+  publish = ".output/public"
 
 [build.environment]
   NODE_VERSION = "22.15.0"
