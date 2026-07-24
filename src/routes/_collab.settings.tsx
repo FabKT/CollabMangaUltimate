@@ -53,7 +53,12 @@ const documentSections: TextSection[] = [
     icon: LockKeyhole,
     titleKey: "settings.privacyTitle",
     introKey: "settings.privacyIntro",
-    itemKeys: ["settings.privacyData1", "settings.privacyData2", "settings.privacyData3"],
+    itemKeys: [
+      "settings.privacyData1",
+      "settings.privacyData2",
+      "settings.privacyData3",
+      "settings.privacyData4",
+    ],
   },
   {
     icon: Sparkles,

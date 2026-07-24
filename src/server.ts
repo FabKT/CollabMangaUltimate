@@ -9,6 +9,17 @@ type ServerEntry = {
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
+const IMAGE_GENERATION_PATHS = new Set([
+  "/api/manga/generate-page",
+  "/api/character/generate",
+  "/api/sketch-final/generate",
+  "/api/style-transfer/generate",
+  "/api/planche-transfer/generate",
+  "/api/swap/generate",
+  "/api/decor/generate",
+  "/api/free-studio/generate",
+]);
+
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
@@ -37,6 +48,22 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   });
 }
 
+function withSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("X-Permitted-Cross-Domain-Policies", "none");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  headers.set("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
@@ -44,19 +71,65 @@ export default {
       // (nécessaire à la vérification de signature).
       const url = new URL(request.url);
       if (url.pathname === "/api/stripe/webhook" && request.method === "POST") {
+        const { enforceRequestRateLimit } = await import("./lib/rate-limit-server");
+        const limited = await enforceRequestRateLimit(request, {
+          scope: "stripe-webhook",
+          identityLimit: 120,
+          ipLimit: 120,
+          windowSeconds: 60,
+        });
+        if (limited) return withSecurityHeaders(limited);
         const { handleStripeWebhook } = await import("./lib/stripe-server");
-        return await handleStripeWebhook(request);
+        return withSecurityHeaders(await handleStripeWebhook(request));
+      }
+
+      if (
+        request.method === "POST" &&
+        (IMAGE_GENERATION_PATHS.has(url.pathname) || url.pathname === "/api/generation-jobs")
+      ) {
+        const { enforceRequestRateLimit } = await import("./lib/rate-limit-server");
+        const limited = await enforceRequestRateLimit(request, {
+          scope: "image-generation",
+          identityLimit: 10,
+          ipLimit: 30,
+          windowSeconds: 60,
+        });
+        if (limited) return withSecurityHeaders(limited);
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/generation-jobs") {
+        const { enforceRequestRateLimit } = await import("./lib/rate-limit-server");
+        const limited = await enforceRequestRateLimit(request, {
+          scope: "generation-status",
+          identityLimit: 180,
+          ipLimit: 300,
+          windowSeconds: 60,
+        });
+        if (limited) return withSecurityHeaders(limited);
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/manga/status") {
+        const { enforceRequestRateLimit } = await import("./lib/rate-limit-server");
+        const limited = await enforceRequestRateLimit(request, {
+          scope: "backend-health",
+          identityLimit: 30,
+          ipLimit: 60,
+          windowSeconds: 60,
+        });
+        if (limited) return withSecurityHeaders(limited);
       }
 
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      return withSecurityHeaders(
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };

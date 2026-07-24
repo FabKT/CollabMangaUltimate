@@ -446,6 +446,14 @@ function itemRole(item: Announcement) {
   return item.kind === "project" ? item.roleNeeded : item.roleOffered;
 }
 
+function itemRoles(item: Announcement): string[] {
+  return item.kind === "project"
+    ? [item.roleNeeded]
+    : [item.roleOffered, item.secondaryRole].filter(
+        (role): role is string => Boolean(role) && role !== "—",
+      );
+}
+
 function remunerationLabel(item: Announcement) {
   return item.remuneration ? "Rémunération active" : "Sans rémunération";
 }
@@ -489,6 +497,7 @@ function itemSearchText(item: Announcement) {
           item.userName,
           item.description,
           item.roleOffered,
+          item.secondaryRole,
           item.mainSkill,
           itemGenre(item),
           ...itemSubGenres(item),
@@ -675,7 +684,7 @@ function AnnouncementsPage() {
       const query = filters.search.trim().toLowerCase();
       if (query && !itemSearchText(a).includes(query)) return false;
       if (!itemLanguageMatches(a, filters.langue)) return false;
-      if (filters.statut && itemRole(a) !== filters.statut) return false;
+      if (filters.statut && !itemRoles(a).includes(filters.statut)) return false;
       if (filters.remunerationOnly && !a.remuneration) return false;
       if (filters.engagement && a.engagement !== filters.engagement) return false;
       if (filters.genres.length > 0 && !filters.genres.includes(itemGenre(a))) return false;

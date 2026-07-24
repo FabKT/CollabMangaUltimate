@@ -88,6 +88,14 @@ export type DbMessage = {
 
 const PROFILE_COLS =
   "id, username, display_name, avatar_url, banner_url, role, secondary_role";
+const MAX_MEDIA_FILE_SIZE = 20 * 1024 * 1024;
+const ALLOWED_MEDIA_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 
 /** Utilisateur connecté (ou null). */
 export async function currentUserId(): Promise<string | null> {
@@ -125,6 +133,12 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
   const sb = getSupabase();
   const uid = (await sb.auth.getSession()).data.session?.user.id;
   if (!uid) throw new Error("Connecte-toi pour importer une image.");
+  if (!ALLOWED_MEDIA_TYPES.has(file.type)) {
+    throw new Error("Format non autorisé. Utilise une image JPG, PNG, WEBP, GIF ou AVIF.");
+  }
+  if (file.size <= 0 || file.size > MAX_MEDIA_FILE_SIZE) {
+    throw new Error("L'image doit peser moins de 20 Mo.");
+  }
   const ext = file.name.split(".").pop()?.toLowerCase() || "png";
   const path = `${uid}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await sb.storage.from("media").upload(path, file, {

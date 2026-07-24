@@ -38,7 +38,7 @@ async function invokeWorker(request: Request, jobId: string, authorization: stri
   const workerUrl = new URL("/.netlify/functions/generation-worker-background", request.url);
   const response = await fetch(workerUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: authorization },
     body: JSON.stringify({ jobId, authorization }),
     signal: AbortSignal.timeout(15_000),
   });

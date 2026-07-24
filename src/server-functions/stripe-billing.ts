@@ -9,6 +9,7 @@ import {
   isStripeConfigured,
 } from "@/lib/stripe-server";
 import { PLANS, TERMS_VERSION, isPlanId, type PlanId } from "@/lib/billing-plans";
+import { assertIdentityRateLimit } from "@/lib/rate-limit-server";
 
 function databaseError(context: string, error: { message: string } | null): void {
   if (error) throw new Error(`${context}: ${error.message}`);
@@ -60,8 +61,21 @@ const checkoutSchema = z.object({
 
 /** Base de redirection : l'origine du client si fournie et valide, sinon APP_URL. */
 function returnBase(origin: string | undefined): string {
-  if (origin && /^https?:\/\//.test(origin)) return origin.replace(/\/+$/, "");
-  return appUrl();
+  const configured = new URL(appUrl()).origin;
+  if (!origin) return configured;
+  try {
+    const candidate = new URL(origin).origin;
+    if (candidate === configured) return candidate;
+    if (
+      process.env.NODE_ENV !== "production" &&
+      ["localhost", "127.0.0.1", "::1"].includes(new URL(candidate).hostname)
+    ) {
+      return candidate;
+    }
+  } catch {
+    // Fall back to the configured application URL.
+  }
+  return configured;
 }
 
 /**
@@ -75,6 +89,7 @@ export const startCheckout = createServerFn({ method: "POST" })
     if (!isPlanId(data.plan)) throw new Error("Plan inconnu.");
     const plan: PlanId = data.plan;
     const user = await requireUser(data.accessToken);
+    await assertIdentityRateLimit("stripe-checkout", user.id, 5, 600);
     const sb = getServiceSupabase();
     const stripe = getStripe();
     const base = returnBase(data.origin);
@@ -224,6 +239,7 @@ export const cancelMySubscription = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!isStripeConfigured()) throw new Error("Stripe n'est pas configuré.");
     const user = await requireUser(data.accessToken);
+    await assertIdentityRateLimit("stripe-cancel", user.id, 5, 600);
     const sb = getServiceSupabase();
     const stripe = getStripe();
     const { data: sub, error: readError } = await sb
@@ -251,6 +267,7 @@ export const openBillingPortal = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!isStripeConfigured()) throw new Error("Stripe n'est pas configuré.");
     const user = await requireUser(data.accessToken);
+    await assertIdentityRateLimit("stripe-portal", user.id, 10, 600);
     const sb = getServiceSupabase();
     const { data: sub, error } = await sb
       .from("subscriptions")

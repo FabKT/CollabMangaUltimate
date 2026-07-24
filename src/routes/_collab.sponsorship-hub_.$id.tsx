@@ -573,9 +573,18 @@ function PaymentBadge({ type }: { type: keyof typeof PAYMENT_LABEL }) {
 
 function DeliveryCell({ link }: { link?: string }) {
   const { t } = useI18n();
-  if (!link) return <span className="inline-flex items-center gap-1.5 text-xs text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-text-muted" />{t("sponsorDetail.noLink")}</span>;
+  let safeLink: string | null = null;
+  if (link) {
+    try {
+      const parsed = new URL(link);
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") safeLink = parsed.href;
+    } catch {
+      safeLink = null;
+    }
+  }
+  if (!safeLink) return <span className="inline-flex items-center gap-1.5 text-xs text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-text-muted" />{t("sponsorDetail.noLink")}</span>;
   return (
-    <a href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-neon hover:text-neon-hover focus-visible:outline-2 focus-visible:outline-neon">
+    <a href={safeLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-neon hover:text-neon-hover focus-visible:outline-2 focus-visible:outline-neon">
       <span className="h-1.5 w-1.5 rounded-full bg-neon" />
       {t("sponsorDetail.openLink")}
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
