@@ -1,4 +1,4 @@
-import serverEntrypoint from "../../.output/server/index.mjs";
+import serverEntrypoint from "../../.output/server/_ssr/ssr.mjs";
 
 if (typeof serverEntrypoint?.fetch !== "function") {
   throw new Error("The production server entry point does not expose a fetch handler.");
