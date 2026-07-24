@@ -1,10 +1,9 @@
 import { Outlet, createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CmaLayout } from "@/components/cma/Layout";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { isLocalAiClientMode } from "@/lib/local-ai-mode";
-import { supabase } from "@/lib/supabase";
-import { getMyBilling } from "@/server-functions/stripe-billing";
+import { loadMyBilling } from "@/lib/billing-client";
 
 export const Route = createFileRoute("/ai")({
   component: AiRoute,
@@ -13,7 +12,11 @@ export const Route = createFileRoute("/ai")({
 function AiRoute() {
   const content = <AiSubscriptionGate />;
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  return isLocalAiClientMode || pathname === "/ai/subscribe" ? content : <RequireAuth>{content}</RequireAuth>;
+  return isLocalAiClientMode || pathname === "/ai/subscribe" ? (
+    content
+  ) : (
+    <RequireAuth>{content}</RequireAuth>
+  );
 }
 
 function AiSubscriptionGate() {
@@ -22,36 +25,34 @@ function AiSubscriptionGate() {
   const isBillingRoute = pathname === "/ai/plan" || pathname === "/ai/subscribe";
   const [checking, setChecking] = useState(!isLocalAiClientMode && !isBillingRoute);
   const [allowed, setAllowed] = useState(isLocalAiClientMode || isBillingRoute);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const verifiedRef = useRef(isLocalAiClientMode);
 
-  useEffect(() => {
+  const checkAccess = useCallback(() => {
     let cancelled = false;
 
     if (isLocalAiClientMode || isBillingRoute) {
       setAllowed(true);
       setChecking(false);
-      return;
+      setCheckError(null);
+      return () => {
+        cancelled = true;
+      };
     }
     if (verifiedRef.current) {
       setAllowed(true);
       setChecking(false);
-      return;
+      setCheckError(null);
+      return () => {
+        cancelled = true;
+      };
     }
 
     setChecking(true);
+    setCheckError(null);
     void (async () => {
-      const session = await supabase?.auth.getSession();
-      const accessToken = session?.data.session?.access_token;
-      if (!accessToken) {
-        if (!cancelled) {
-          setAllowed(false);
-          setChecking(false);
-        }
-        return;
-      }
-
       try {
-        const billing = await getMyBilling({ data: { accessToken } });
+        const billing = await loadMyBilling();
         const hasActivePlan =
           billing.configured &&
           billing.subscription?.status === "active" &&
@@ -62,10 +63,14 @@ function AiSubscriptionGate() {
         if (!hasActivePlan) {
           await navigate({ to: "/ai/subscribe", replace: true });
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setAllowed(false);
-          await navigate({ to: "/ai/subscribe", replace: true });
+          setCheckError(
+            error instanceof Error
+              ? error.message
+              : "Impossible de vérifier l'abonnement pour le moment.",
+          );
         }
       } finally {
         if (!cancelled) setChecking(false);
@@ -75,15 +80,32 @@ function AiSubscriptionGate() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, pathname]);
+  }, [isBillingRoute, navigate]);
 
-  if (checking || !allowed) {
+  useEffect(() => checkAccess(), [checkAccess, pathname]);
+
+  if (checking) {
     return (
       <div className="grid min-h-screen place-items-center bg-[var(--bg-app)] text-[13px] font-semibold text-[var(--text-secondary)]">
         Vérification de l'abonnement...
       </div>
     );
   }
+
+  if (checkError && !allowed) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[var(--bg-app)] px-5 text-center">
+        <div>
+          <p className="text-[14px] font-semibold text-[var(--text-secondary)]">{checkError}</p>
+          <button className="cma-btn-primary mt-4" onClick={() => checkAccess()}>
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!allowed) return null;
 
   if (pathname === "/ai/subscribe") {
     return <Outlet />;

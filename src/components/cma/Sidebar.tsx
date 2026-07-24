@@ -19,7 +19,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { amIAdmin } from "@/server-functions/admin-billing";
-import { getMyBilling } from "@/server-functions/stripe-billing";
+import { loadMyBilling } from "@/lib/billing-client";
 import { onCreditsChanged } from "@/lib/credits-events";
 import { PLANS } from "@/lib/billing-plans";
 import { LanguageSelect, useI18n, type TranslationKey } from "@/lib/i18n";
@@ -122,17 +122,17 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const [quota, setQuota] = useState<{ plan: string; remaining: number; total: number } | null>(
     null,
   );
+  const [quotaLoading, setQuotaLoading] = useState(!isLocalAiClientMode);
+  const [quotaUnavailable, setQuotaUnavailable] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+    const load = async (force = false) => {
       if (isLocalAiClientMode) return;
-      if (!supabase) return;
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return;
+      if (!cancelled) setQuotaLoading(true);
       try {
-        const res = await getMyBilling({ data: { accessToken: token } });
+        const res = await loadMyBilling({ force });
         if (cancelled) return;
+        setQuotaUnavailable(false);
         if (res.configured && res.subscription?.plan && res.period) {
           setQuota({
             plan: res.subscription.plan,
@@ -143,13 +143,15 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
           setQuota(null);
         }
       } catch {
-        /* ignore */
+        if (!cancelled) setQuotaUnavailable(true);
+      } finally {
+        if (!cancelled) setQuotaLoading(false);
       }
     };
     void load();
-    const onFocus = () => void load();
+    const onFocus = () => void load(true);
     window.addEventListener("focus", onFocus);
-    const off = onCreditsChanged(() => void load());
+    const off = onCreditsChanged(() => void load(true));
     return () => {
       cancelled = true;
       window.removeEventListener("focus", onFocus);
@@ -295,7 +297,11 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
             <span style={{ font: "700 12px/16px var(--font-sans)" }}>
               {quota
                 ? (PLANS[quota.plan as keyof typeof PLANS]?.label ?? quota.plan)
-                : "Aucun plan"}
+                : quotaLoading
+                  ? "Vérification..."
+                  : quotaUnavailable
+                    ? "Indisponible"
+                    : "Aucun plan"}
             </span>
             {quota && (
               <span
@@ -315,6 +321,10 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
                 </span>{" "}
                 / {quota.total}
               </>
+            ) : quotaLoading ? (
+              "Chargement de l'abonnement..."
+            ) : quotaUnavailable ? (
+              "État temporairement indisponible"
             ) : (
               "Aucun abonnement actif"
             )}

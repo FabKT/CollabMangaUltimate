@@ -202,6 +202,8 @@ export const getMyBilling = createServerFn({ method: "POST" })
       .select("*")
       .eq("user_id", user.id)
       .eq("tech_status", "active")
+      .order("started_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     databaseError("Lecture du quota impossible", periodError);
 

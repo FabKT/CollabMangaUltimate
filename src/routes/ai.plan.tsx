@@ -11,6 +11,7 @@ import {
   openBillingPortal,
 } from "@/server-functions/stripe-billing";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { loadMyBilling } from "@/lib/billing-client";
 
 export const Route = createFileRoute("/ai/plan")({
   head: () => ({ meta: [{ title: "Plan & Images — CollabManga AI" }] }),
@@ -68,10 +69,14 @@ function PlanImages() {
         return;
       }
       try {
-        const res = await getMyBilling({ data: { accessToken: token } });
+        const res = await loadMyBilling({ force: true });
         setBilling(res);
-      } catch {
-        setBilling(null);
+      } catch (error) {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : "Impossible de charger l'abonnement pour le moment.",
+        );
       }
       setLoading(false);
     })();
@@ -105,7 +110,7 @@ function PlanImages() {
     for (let i = 0; i < 12; i++) {
       await new Promise((r) => setTimeout(r, 1200));
       try {
-        const res = await getMyBilling({ data: { accessToken: token } });
+        const res = await loadMyBilling({ force: true });
         setBilling(res);
         if (res.configured && res.subscription?.plan === target && res.period?.plan === target) {
           return true;

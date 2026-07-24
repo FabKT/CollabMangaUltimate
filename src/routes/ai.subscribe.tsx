@@ -6,7 +6,8 @@ import { Card } from "@/components/cma/Layout";
 import { PLANS, PLAN_ORDER, type PlanId } from "@/lib/billing-plans";
 import { supabase } from "@/lib/supabase";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import { getMyBilling, startCheckout } from "@/server-functions/stripe-billing";
+import { startCheckout } from "@/server-functions/stripe-billing";
+import { loadMyBilling } from "@/lib/billing-client";
 
 export const Route = createFileRoute("/ai/subscribe")({
   head: () => ({ meta: [{ title: "CollabManga AI - Plans" }] }),
@@ -57,7 +58,7 @@ function AiSubscribe() {
       }
 
       try {
-        const billing = await getMyBilling({ data: { accessToken: token } });
+        const billing = await loadMyBilling({ force: true });
         const hasActivePlan =
           billing.configured &&
           billing.subscription?.status === "active" &&
