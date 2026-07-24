@@ -28,7 +28,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     label: "Starter",
     priceEuros: 23.99,
     amountCents: 2399,
-    quota: 80,
+    quota: 60,
     priceEnv: "STRIPE_PRICE_STARTER",
   },
   creator: {
@@ -36,7 +36,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     label: "Creator",
     priceEuros: 79.99,
     amountCents: 7999,
-    quota: 300,
+    quota: 220,
     priceEnv: "STRIPE_PRICE_CREATOR",
   },
   studio: {
@@ -44,7 +44,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     label: "Studio",
     priceEuros: 299.99,
     amountCents: 29999,
-    quota: 1200,
+    quota: 850,
     priceEnv: "STRIPE_PRICE_STUDIO",
   },
 };

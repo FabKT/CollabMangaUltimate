@@ -82,7 +82,7 @@ function AiSubscriptionGate() {
     };
   }, [isBillingRoute, navigate]);
 
-  useEffect(() => checkAccess(), [checkAccess, pathname]);
+  useEffect(() => checkAccess(), [checkAccess]);
 
   if (checking) {
     return (

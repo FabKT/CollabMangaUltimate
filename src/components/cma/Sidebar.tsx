@@ -14,11 +14,8 @@ import {
   CreditCard,
   Users,
   ArrowLeft,
-  ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { amIAdmin } from "@/server-functions/admin-billing";
 import { loadMyBilling } from "@/lib/billing-client";
 import { onCreditsChanged } from "@/lib/credits-events";
 import { PLANS } from "@/lib/billing-plans";
@@ -72,53 +69,19 @@ const aiItemKeys: Record<string, TranslationKey> = {
   "/ai/plan": "nav.plan",
   "/ai/sketch-final": "nav.rawFinal",
   "/ai/swap": "nav.swap",
-  "/ai/admin": "nav.admin",
 };
 
 export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
   const { t } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) => (to === "/ai" ? pathname === "/ai" : pathname.startsWith(to));
-  // Lien admin affiché uniquement pour les administrateurs (vérifié côté serveur).
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    if (isLocalAiClientMode) {
-      setIsAdmin(true);
-      return;
-    }
-    void (async () => {
-      if (!supabase) return;
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return;
-      try {
-        const res = await amIAdmin({ data: { accessToken: token } });
-        setIsAdmin(res.admin);
-      } catch {
-        /* pas admin */
-      }
-    })();
-  }, []);
-
   const visibleGroups = isLocalAiClientMode
     ? groups.filter((group) => group.title !== "Compte")
     : groups;
-  const renderedGroups: Group[] = isAdmin
-    ? visibleGroups.map((g) =>
-        g.title === (isLocalAiClientMode ? "Bibliothèque" : "Compte")
-          ? {
-              ...g,
-              items: [
-                ...g.items,
-                { label: "Admin — Facturation", to: "/ai/admin", icon: ShieldCheck },
-              ],
-            }
-          : g,
-      )
-    : groups;
+  const renderedGroups = visibleGroups;
 
-  // Quota réel de l'abonnement, rafraîchi au montage, au retour de focus
-  // et après chaque génération.
+  // Quota réel de l'abonnement, chargé une fois puis rafraîchi uniquement
+  // lorsqu'une action de facturation ou une génération modifie les crédits.
   const [quota, setQuota] = useState<{ plan: string; remaining: number; total: number } | null>(
     null,
   );
@@ -149,12 +112,9 @@ export function Sidebar({ forceVisible = false }: { forceVisible?: boolean }) {
       }
     };
     void load();
-    const onFocus = () => void load(true);
-    window.addEventListener("focus", onFocus);
     const off = onCreditsChanged(() => void load(true));
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", onFocus);
       off();
     };
   }, []);

@@ -3,12 +3,10 @@ import { getMyBilling } from "@/server-functions/stripe-billing";
 
 export type BillingSnapshot = Awaited<ReturnType<typeof getMyBilling>>;
 
-const CACHE_TTL_MS = 30_000;
 const RETRY_DELAYS_MS = [0, 350, 900, 1_800];
 
 type CachedBilling = {
   value: BillingSnapshot;
-  fetchedAt: number;
 };
 
 const cache = new Map<string, CachedBilling>();
@@ -55,7 +53,7 @@ export async function loadMyBilling(options?: {
 
   const userId = session.user.id;
   const cached = cache.get(userId);
-  if (!options?.force && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+  if (!options?.force && cached) {
     return cached.value;
   }
 
@@ -64,7 +62,7 @@ export async function loadMyBilling(options?: {
 
   const request = requestBilling(session.access_token)
     .then((value) => {
-      cache.set(userId, { value, fetchedAt: Date.now() });
+      cache.set(userId, { value });
       return value;
     })
     .catch((error) => {
