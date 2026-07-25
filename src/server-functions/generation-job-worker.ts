@@ -30,6 +30,8 @@ import {
 type GenerationResult = {
   imageUrl?: string;
   imageDataUrl?: string;
+  finalPrompt?: string;
+  taskType?: string;
   model?: string;
   quality?: string;
   size?: string;
@@ -39,16 +41,110 @@ type GenerationResult = {
 type StoredJob = {
   id: string;
   user_id: string;
+  workspace: string;
   endpoint: string;
   request_payload: unknown;
   status: "queued" | "running" | "completed" | "failed";
 };
+
+function extensionForMime(mimeType: string) {
+  if (mimeType.includes("jpeg")) return "jpg";
+  if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("gif")) return "gif";
+  if (mimeType.includes("avif")) return "avif";
+  return "png";
+}
+
+function sourceName(endpoint: string) {
+  const names: Record<string, string> = {
+    "/api/manga/generate-page": "Manga Page Creator",
+    "/api/character/generate": "Creation de personnage",
+    "/api/sketch-final/generate": "Raw vers Final",
+    "/api/style-transfer/generate": "Transfert de style",
+    "/api/planche-transfer/generate": "Transfert de planche",
+    "/api/decor/generate": "Creation de decor",
+    "/api/free-studio/generate": "Studio libre",
+  };
+  return names[endpoint] ?? "CollabManga AI";
+}
+
+function promptFromPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") return "";
+  const record = payload as Record<string, unknown>;
+  const prompt = record.prompt ?? record.editPrompt ?? record.description;
+  return typeof prompt === "string" ? prompt : "";
+}
+
+async function persistGeneratedResult({
+  userId,
+  jobId,
+  workspace,
+  endpoint,
+  payload,
+  result,
+}: {
+  userId: string;
+  jobId: string;
+  workspace: string;
+  endpoint: string;
+  payload: unknown;
+  result: GenerationResult;
+}): Promise<GenerationResult> {
+  const supabase = getServiceSupabase();
+  const originalImage = result.imageDataUrl || result.imageUrl;
+  if (!originalImage) throw new Error("The generation returned no image to persist.");
+
+  let imageUrl = originalImage;
+  if (!originalImage.includes("/storage/v1/object/public/media/")) {
+    const response = await fetch(originalImage);
+    if (!response.ok) throw new Error(`Unable to persist generated image (${response.status}).`);
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) {
+      throw new Error("The generation returned an invalid image.");
+    }
+    const path = `${userId}/ai/generated/${jobId}.${extensionForMime(blob.type)}`;
+    const uploaded = await supabase.storage.from("media").upload(path, blob, {
+      contentType: blob.type || "image/png",
+      cacheControl: "31536000",
+      upsert: true,
+    });
+    if (uploaded.error)
+      throw new Error(`Unable to persist generated image: ${uploaded.error.message}`);
+    imageUrl = supabase.storage.from("media").getPublicUrl(path).data.publicUrl;
+  }
+
+  const prompt = promptFromPayload(payload);
+  const inserted = await supabase.from("ai_generated_images").upsert(
+    {
+      id: jobId,
+      user_id: userId,
+      job_id: jobId,
+      image_url: imageUrl,
+      prompt,
+      final_prompt: result.finalPrompt ?? prompt,
+      task_type: result.taskType ?? workspace,
+      model: result.model ?? "gpt-image-2",
+      size: result.size ?? "unknown",
+      quality: result.quality ?? "high",
+      source: sourceName(endpoint),
+      title: sourceName(endpoint),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+  if (inserted.error)
+    throw new Error(`Unable to save generation history: ${inserted.error.message}`);
+
+  return { ...result, imageUrl, imageDataUrl: undefined };
+}
 
 async function executeEndpoint(
   endpoint: string,
   payload: unknown,
   request: Request,
   jobId: string,
+  userId: string,
+  workspace: string,
 ): Promise<GenerationResult> {
   let meta: GenerationMeta;
   let run: () => Promise<GenerationResult>;
@@ -109,6 +205,12 @@ async function executeEndpoint(
       throw new Error("Unsupported generation endpoint.");
   }
 
+  const requestImage = run;
+  run = async () => {
+    const result = await requestImage();
+    return persistGeneratedResult({ userId, jobId, workspace, endpoint, payload, result });
+  };
+
   const outcome = await withCredits(request, meta, run);
   if (!outcome.ok) throw new Error(outcome.error);
   return outcome.result;
@@ -124,7 +226,7 @@ export async function processGenerationJob(jobId: string, authorization: string)
 
     const queried = await supabase
       .from("ai_generation_jobs")
-      .select("id,user_id,endpoint,request_payload,status")
+      .select("id,user_id,workspace,endpoint,request_payload,status")
       .eq("id", jobId)
       .maybeSingle();
     if (queried.error || !queried.data) throw new Error("Generation job not found.");
@@ -150,7 +252,14 @@ export async function processGenerationJob(jobId: string, authorization: string)
         headers: { Authorization: authorization, "Content-Type": "application/json" },
       });
       const hydratedPayload = await hydrateGenerationPayload(job.request_payload);
-      const result = await executeEndpoint(job.endpoint, hydratedPayload, request, job.id);
+      const result = await executeEndpoint(
+        job.endpoint,
+        hydratedPayload,
+        request,
+        job.id,
+        userId,
+        job.workspace,
+      );
       const completedAt = new Date().toISOString();
       const updated = await supabase
         .from("ai_generation_jobs")

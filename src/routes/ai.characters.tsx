@@ -135,9 +135,12 @@ function CharacterStudio() {
 
   useEffect(() => {
     if (!loaded) return;
-    void saveCharacterProfiles(characters).then((saved) => {
-      if (!saved) setSaveState("error");
-    });
+    const timeout = window.setTimeout(() => {
+      void saveCharacterProfiles(characters).then((saved) => {
+        if (!saved) setSaveState("error");
+      });
+    }, 600);
+    return () => window.clearTimeout(timeout);
   }, [characters, loaded]);
 
   useEffect(() => {

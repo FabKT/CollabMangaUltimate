@@ -1,3 +1,6 @@
+import { uploadAiImage } from "./ai-cloud-media";
+import { supabase } from "./supabase";
+
 export type MangaCharacterImage = {
   id: string;
   name: string;
@@ -35,6 +38,8 @@ const CHARACTER_DB_NAME = "collabmanga-characters";
 const CHARACTER_DB_VERSION = 1;
 const CHARACTER_STORE = "characterProfiles";
 const CHARACTER_RECORD_ID = "profiles";
+const CHARACTER_MIGRATION_KEY = "collabmanga.characterProfiles.supabaseMigration.v1";
+let characterCloudSaveQueue: Promise<MangaCharacterProfile[]> = Promise.resolve([]);
 
 export function createId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -155,7 +160,7 @@ function txDone(tx: IDBTransaction): Promise<void> {
   });
 }
 
-export async function loadCharacterProfiles(): Promise<MangaCharacterProfile[]> {
+async function loadLocalCharacterProfiles(): Promise<MangaCharacterProfile[]> {
   if (typeof window === "undefined") return [];
 
   if (!hasIndexedDb()) {
@@ -185,7 +190,7 @@ export async function loadCharacterProfiles(): Promise<MangaCharacterProfile[]> 
   }
 }
 
-export async function saveCharacterProfiles(characters: MangaCharacterProfile[]): Promise<boolean> {
+async function saveLocalCharacterProfiles(characters: MangaCharacterProfile[]): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
   if (!hasIndexedDb()) {
@@ -210,6 +215,140 @@ export async function saveCharacterProfiles(characters: MangaCharacterProfile[])
     return true;
   } catch {
     saveLegacyCharacterProfiles(characters);
+    return false;
+  }
+}
+
+async function currentCloudUserId() {
+  if (!supabase) return null;
+  const session = await supabase.auth.getSession();
+  return session.data.session?.user.id ?? null;
+}
+
+async function uploadCharacterImages(
+  userId: string,
+  character: MangaCharacterProfile,
+): Promise<MangaCharacterProfile> {
+  if (!supabase) return character;
+  const images = await Promise.all(
+    (character.images ?? []).map(async (image) => ({
+      ...image,
+      imageDataUrl: await uploadAiImage(
+        supabase,
+        userId,
+        image.imageDataUrl,
+        `characters/${character.id}/references`,
+        image.id,
+      ),
+    })),
+  );
+  const cardImageDataUrl = character.cardImageDataUrl
+    ? await uploadAiImage(
+        supabase,
+        userId,
+        character.cardImageDataUrl,
+        `characters/${character.id}/card`,
+        "character-card",
+      )
+    : undefined;
+  return { ...character, images, cardImageDataUrl };
+}
+
+async function saveCloudCharacterProfiles(
+  userId: string,
+  characters: MangaCharacterProfile[],
+): Promise<MangaCharacterProfile[]> {
+  if (!supabase) return characters;
+  const uploadedCharacters = await Promise.all(
+    characters.map((character) => uploadCharacterImages(userId, character)),
+  );
+  const now = new Date().toISOString();
+
+  if (uploadedCharacters.length > 0) {
+    const upserted = await supabase.from("ai_character_profiles").upsert(
+      uploadedCharacters.map((character) => ({
+        user_id: userId,
+        id: character.id,
+        profile: character,
+        updated_at: now,
+      })),
+      { onConflict: "user_id,id" },
+    );
+    if (upserted.error) throw new Error(upserted.error.message);
+  }
+
+  const existing = await supabase.from("ai_character_profiles").select("id").eq("user_id", userId);
+  if (existing.error) throw new Error(existing.error.message);
+  const retainedIds = new Set(uploadedCharacters.map((character) => character.id));
+  const removedIds = (existing.data ?? [])
+    .map((row) => String(row.id))
+    .filter((id) => !retainedIds.has(id));
+  if (removedIds.length > 0) {
+    const removed = await supabase
+      .from("ai_character_profiles")
+      .delete()
+      .eq("user_id", userId)
+      .in("id", removedIds);
+    if (removed.error) throw new Error(removed.error.message);
+  }
+  return uploadedCharacters;
+}
+
+export async function loadCharacterProfiles(): Promise<MangaCharacterProfile[]> {
+  if (typeof window === "undefined") return [];
+  const localCharacters = await loadLocalCharacterProfiles();
+  const userId = await currentCloudUserId();
+  if (!supabase || !userId) return localCharacters;
+
+  try {
+    const queried = await supabase
+      .from("ai_character_profiles")
+      .select("id,profile,updated_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+    if (queried.error) throw new Error(queried.error.message);
+
+    const cloudCharacters = normalizeCharacterProfiles(
+      (queried.data ?? []).map((row) => row.profile),
+    );
+    const migrationKey = `${CHARACTER_MIGRATION_KEY}.${userId}`;
+    const migrationDone = window.localStorage.getItem(migrationKey) === "done";
+    const missingLocalCharacters = migrationDone
+      ? []
+      : localCharacters.filter((local) => !cloudCharacters.some((cloud) => cloud.id === local.id));
+
+    if (missingLocalCharacters.length > 0 || (!cloudCharacters.length && localCharacters.length)) {
+      const merged = [...cloudCharacters, ...missingLocalCharacters];
+      const uploaded = await saveCloudCharacterProfiles(userId, merged);
+      await saveLocalCharacterProfiles(uploaded);
+      window.localStorage.setItem(migrationKey, "done");
+      return uploaded;
+    }
+
+    window.localStorage.setItem(migrationKey, "done");
+    await saveLocalCharacterProfiles(cloudCharacters);
+    return cloudCharacters;
+  } catch {
+    return localCharacters;
+  }
+}
+
+export async function saveCharacterProfiles(characters: MangaCharacterProfile[]): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  const localSaved = await saveLocalCharacterProfiles(characters);
+  const userId = await currentCloudUserId();
+  if (!supabase || !userId) return localSaved;
+
+  try {
+    const queuedSave = characterCloudSaveQueue.then(() =>
+      saveCloudCharacterProfiles(userId, characters),
+    );
+    characterCloudSaveQueue = queuedSave.catch(() => characters);
+    const uploaded = await queuedSave;
+    await saveLocalCharacterProfiles(uploaded);
+    window.localStorage.setItem(`${CHARACTER_MIGRATION_KEY}.${userId}`, "done");
+    return true;
+  } catch {
     return false;
   }
 }

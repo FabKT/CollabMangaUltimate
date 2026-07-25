@@ -663,7 +663,10 @@ function CollabMangaAIPage() {
   useEffect(() => {
     if (charactersLoaded) {
       setItems((current) => mergeCharacterImagesIntoItems(current, characters));
-      void saveCharacterProfiles(characters);
+      const timeout = window.setTimeout(() => {
+        void saveCharacterProfiles(characters);
+      }, 600);
+      return () => window.clearTimeout(timeout);
     }
   }, [characters, charactersLoaded]);
 
