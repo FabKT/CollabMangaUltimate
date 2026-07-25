@@ -22,6 +22,10 @@ import {
 } from "@/server-functions/planche-transfer-image";
 import { parseDecorImageInput, requestPulseNoteDecorImage } from "@/server-functions/decor-image";
 import { parseFreeImageInput, requestPulseNoteFreeImage } from "@/server-functions/free-image";
+import {
+  hydrateGenerationPayload,
+  removeStagedGenerationImages,
+} from "@/server-functions/generation-payload-transport";
 
 type GenerationResult = {
   imageUrl?: string;
@@ -145,7 +149,8 @@ export async function processGenerationJob(jobId: string, authorization: string)
         method: "POST",
         headers: { Authorization: authorization, "Content-Type": "application/json" },
       });
-      const result = await executeEndpoint(job.endpoint, job.request_payload, request, job.id);
+      const hydratedPayload = await hydrateGenerationPayload(job.request_payload);
+      const result = await executeEndpoint(job.endpoint, hydratedPayload, request, job.id);
       const completedAt = new Date().toISOString();
       const updated = await supabase
         .from("ai_generation_jobs")
@@ -169,6 +174,8 @@ export async function processGenerationJob(jobId: string, authorization: string)
           updated_at: completedAt,
         })
         .eq("id", job.id);
+    } finally {
+      await removeStagedGenerationImages(job.request_payload);
     }
   } catch (error) {
     const completedAt = new Date().toISOString();

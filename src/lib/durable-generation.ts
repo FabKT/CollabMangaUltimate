@@ -1,4 +1,5 @@
 import { authJsonHeaders, refreshBearerHeader } from "@/lib/auth-header";
+import { stageLargeGenerationPayload } from "@/lib/generation-payload-transport";
 
 type JobState<T> = {
   id: string;
@@ -128,10 +129,11 @@ export async function runDurableGeneration<T>(
     rememberJob(workspace, id);
     let response: Response;
     try {
+      const transportPayload = await stageLargeGenerationPayload(payload, id);
       response = await fetchWithNetworkRetry("/api/generation-jobs", {
         method: "POST",
         headers: await authJsonHeaders(),
-        body: JSON.stringify({ id, workspace, endpoint, payload }),
+        body: JSON.stringify({ id, workspace, endpoint, payload: transportPayload }),
       });
     } catch (error) {
       if (!isLocalBrowser()) return await pollJob<T>(workspace, id);
