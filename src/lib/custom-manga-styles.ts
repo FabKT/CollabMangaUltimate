@@ -6,9 +6,18 @@ export type CustomMangaStyle = {
 };
 
 const DB_NAME = "collabmanga-custom-styles";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = "styles";
 export const CUSTOM_STYLES_CHANGED_EVENT = "collabmanga:custom-styles-changed";
+
+function deleteBrokenDb(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => resolve();
+  });
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -18,7 +27,21 @@ function openDb(): Promise<IDBDatabase> {
         request.result.createObjectStore(STORE, { keyPath: "id" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = async () => {
+      const db = request.result;
+      if (db.objectStoreNames.contains(STORE)) {
+        resolve(db);
+        return;
+      }
+
+      db.close();
+      try {
+        await deleteBrokenDb();
+        resolve(await openDb());
+      } catch (error) {
+        reject(error);
+      }
+    };
     request.onerror = () => reject(request.error);
   });
 }
@@ -29,7 +52,12 @@ export async function loadCustomMangaStyles(): Promise<CustomMangaStyle[]> {
     const db = await openDb();
     const styles = await new Promise<CustomMangaStyle[]>((resolve, reject) => {
       const request = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
-      request.onsuccess = () => resolve((request.result as CustomMangaStyle[]).filter((style) => style.name && style.images?.length));
+      request.onsuccess = () =>
+        resolve(
+          (request.result as CustomMangaStyle[]).filter(
+            (style) => style.name && style.images?.length,
+          ),
+        );
       request.onerror = () => reject(request.error);
     });
     db.close();
@@ -39,7 +67,10 @@ export async function loadCustomMangaStyles(): Promise<CustomMangaStyle[]> {
   }
 }
 
-export async function addCustomMangaStyle(input: { name: string; images: string[] }): Promise<CustomMangaStyle> {
+export async function addCustomMangaStyle(input: {
+  name: string;
+  images: string[];
+}): Promise<CustomMangaStyle> {
   const style: CustomMangaStyle = {
     id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: input.name.trim(),

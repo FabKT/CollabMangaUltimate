@@ -8,7 +8,7 @@
 
 const LEGACY_PREFIX = "collabmanga.session.";
 const DB_NAME = "collabmanga-ai-workspaces";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = "workspaces";
 
 type WorkspaceRecord<T = unknown> = {
@@ -23,6 +23,15 @@ function canUseIndexedDb() {
   return typeof indexedDB !== "undefined";
 }
 
+function deleteBrokenDb(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => resolve();
+  });
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -32,7 +41,21 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(STORE, { keyPath: "id" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = async () => {
+      const db = request.result;
+      if (db.objectStoreNames.contains(STORE)) {
+        resolve(db);
+        return;
+      }
+
+      db.close();
+      try {
+        await deleteBrokenDb();
+        resolve(await openDb());
+      } catch (error) {
+        reject(error);
+      }
+    };
     request.onerror = () => reject(request.error);
   });
 }
@@ -50,8 +73,7 @@ function loadLegacy<T>(key: string): T | null {
   try {
     const storageKey = LEGACY_PREFIX + key;
     const raw =
-      window.localStorage?.getItem(storageKey) ??
-      window.sessionStorage?.getItem(storageKey);
+      window.localStorage?.getItem(storageKey) ?? window.sessionStorage?.getItem(storageKey);
     return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
@@ -114,6 +136,12 @@ export async function saveSession<T>(key: string, value: T): Promise<void> {
   writeQueues.set(key, next);
   try {
     await next;
+  } catch {
+    try {
+      window.localStorage.setItem(LEGACY_PREFIX + key, JSON.stringify(value));
+    } catch {
+      // No durable browser storage is available.
+    }
   } finally {
     if (writeQueues.get(key) === next) writeQueues.delete(key);
   }
