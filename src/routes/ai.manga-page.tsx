@@ -24,7 +24,11 @@ import { PlancheCanvas } from "@/components/canvas/PlancheCanvas";
 import { bearerHeader } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
 import { loadSession, saveSession } from "@/lib/manga-session";
-import { clearPendingGeneration, runDirectGeneration } from "@/lib/durable-generation";
+import {
+  hasPendingGeneration,
+  resumeDurableGeneration,
+  runDurableGeneration,
+} from "@/lib/durable-generation";
 import {
   openImageEditor,
   type ImageEditDraft,
@@ -582,7 +586,40 @@ function CollabMangaAIPage() {
   }, []);
 
   useEffect(() => {
-    clearPendingGeneration("manga-page");
+    if (!hasPendingGeneration("manga-page")) return;
+    setIsGenerating(true);
+    setShowCanvas(false);
+    void resumeDurableGeneration<MangaImageGenerationResult>("manga-page")
+      .then(async (result) => {
+        if (!result) return;
+        const normalizedImageUrl = await normalizeGeneratedImageAspectRatio(
+          result.imageUrl,
+          normalizeAspectRatio(result.size === "1536x1024" ? "3:2" : aspectRatio),
+        );
+        const normalizedResult = {
+          ...result,
+          imageUrl: normalizedImageUrl,
+        };
+        setGenerationResult(normalizedResult);
+        notifyCreditsChanged();
+        void addHistoryEntry({
+          imageUrl: normalizedResult.imageUrl,
+          prompt,
+          finalPrompt: normalizedResult.finalPrompt,
+          taskType: normalizedResult.taskType,
+          model: normalizedResult.model,
+          size: normalizedResult.size,
+          quality: normalizedResult.quality,
+          source: "Manga Page Creator",
+          title: "Planche manga",
+          editContext: createImageEditDraft(normalizedResult.imageUrl),
+        }).then((entry) => setHistory((current) => [entry, ...current]));
+      })
+      .catch((error) => {
+        setGenerationError(error instanceof Error ? error.message : t("ai.imageGenerationFailed"));
+      })
+      .finally(() => setIsGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -849,7 +886,8 @@ function CollabMangaAIPage() {
         aspectRatio,
         existingImageDataUrl: generationResult?.imageUrl,
       };
-      const result = await runDirectGeneration<MangaImageGenerationResult>(
+      const result = await runDurableGeneration<MangaImageGenerationResult>(
+        "manga-page",
         "/api/manga/generate-page",
         generationPayload,
       );
