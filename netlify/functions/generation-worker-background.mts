@@ -1,6 +1,8 @@
 import { processGenerationJob } from "../../src/server-functions/generation-job-worker";
 import { enforceRequestRateLimit } from "../../src/lib/rate-limit-server";
 
+const GENERATION_WORKER_VERSION = "2026-07-26-persistent-media-v2";
+
 export default async function generationWorker(request: Request) {
   try {
     const body = (await request.json()) as { jobId?: string; authorization?: string };
@@ -9,7 +11,7 @@ export default async function generationWorker(request: Request) {
       return new Response("Missing job credentials.", { status: 400 });
     }
 
-    console.info("[generation-worker] Starting job", body.jobId);
+    console.info("[generation-worker] Starting job", body.jobId, GENERATION_WORKER_VERSION);
     const limited = await enforceRequestRateLimit(request, {
       scope: "generation-worker",
       identityLimit: 15,

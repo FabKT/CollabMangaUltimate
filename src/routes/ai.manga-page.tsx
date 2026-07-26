@@ -859,6 +859,9 @@ function CollabMangaAIPage() {
       );
       const budget = enforceImageBudget(preparedSelectedItems, characters, t);
       setBudgetNotice(budget.notice);
+      const selectedCharacters = characters.filter(
+        (character) => selectedCharacterIds[character.id],
+      );
       const generationPayload: MangaImageGenerationInput = {
         operation,
         prompt,
@@ -880,7 +883,7 @@ function CollabMangaAIPage() {
               : undefined,
           };
         }),
-        characters,
+        characters: selectedCharacters,
         styleMode,
         backgroundLevel,
         readingDirection,

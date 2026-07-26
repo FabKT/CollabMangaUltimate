@@ -327,6 +327,14 @@ export async function checkPulseNoteMangaBackend() {
 
 export async function requestPulseNoteMangaImage(rawData: MangaImageGenerationInput) {
   const data = generationInputSchema.parse(await hydrateGenerationPayload(rawData));
+  const unresolvedCharacterImages = data.selectedAssets.filter(
+    (asset) => asset.role === "Character" && /^https?:\/\//i.test(asset.imageDataUrl ?? ""),
+  );
+  if (unresolvedCharacterImages.length > 0) {
+    throw new Error(
+      `Unable to load ${unresolvedCharacterImages.length} selected character reference image(s).`,
+    );
+  }
   const backendUrl = getPulseNoteBackendUrl();
   const appToken = getPulseNoteAppToken();
 
