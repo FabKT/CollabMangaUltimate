@@ -108,9 +108,12 @@ async function uploadDataUrl(dataUrl: string, userId: string, projectId: string)
   const sb = getSupabase();
   const { error } = await sb.storage.from("media").upload(path, blob, {
     contentType: blob.type || "image/png",
-    upsert: true,
+    // The path includes the image hash, so a cover never needs overwriting.
+    upsert: false,
   });
-  if (error) throw new Error(`L'image du projet n'a pas pu être sauvegardée : ${error.message}`);
+  if (error && !/already exists|duplicate/i.test(error.message)) {
+    throw new Error(`L'image du projet n'a pas pu être sauvegardée : ${error.message}`);
+  }
   const publicUrl = sb.storage.from("media").getPublicUrl(path).data.publicUrl;
   uploadedDataUrls.set(dataUrl, publicUrl);
   return publicUrl;
