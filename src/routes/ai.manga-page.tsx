@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type MangaBackendStatusResult,
-  type MangaImageDiagnostics,
   type MangaImageGenerationInput,
   type MangaImageGenerationResult,
 } from "@/server-functions/manga-image";
@@ -42,7 +41,6 @@ import {
   FileImage,
   History,
   ImageIcon,
-  Info,
   Layers,
   Lightbulb,
   Mountain,
@@ -1502,59 +1500,6 @@ function AssetThumb({ item, sizeClass }: { item: StoredItem; sizeClass: string }
   );
 }
 
-function GenerationDiagnostics({ diagnostics }: { diagnostics: MangaImageDiagnostics }) {
-  const { t } = useI18n();
-  const perCharacter = Object.entries(diagnostics.perCharacterImageCount ?? {});
-  const missing = diagnostics.charactersWithoutImage ?? [];
-  const overPromptLimit =
-    (diagnostics.promptLength ?? 0) > (diagnostics.promptLimit ?? Number.POSITIVE_INFINITY);
-  return (
-    <div className="rounded-[14px] border border-border bg-surface-3 p-3 text-[12px] text-text-secondary">
-      <div className="mb-2 flex items-center gap-2 text-[12px] font-bold text-text-primary">
-        <Info className="h-4 w-4 text-accent" />
-        {t("ai.diagnosticsTitle")}
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
-        <span>
-          {t("ai.promptColon")} {diagnostics.promptLength ?? "?"}
-          {diagnostics.promptLimit ? `/${diagnostics.promptLimit}` : ""} {t("ai.charsAbbrev")}
-        </span>
-        <span className={diagnostics.promptCompacted ? "text-warning" : ""}>
-          {t("ai.compactionLabel")} {diagnostics.promptCompacted ? t("ai.yesWord") : t("ai.noWord")}
-        </span>
-        <span className={diagnostics.droppedImageCount ? "text-warning" : ""}>
-          {t("ai.imagesColon")} {diagnostics.imagesSentToOpenAI ?? "?"}/{diagnostics.maxImages ?? 16}
-          {diagnostics.droppedImageCount
-            ? ` (${diagnostics.droppedImageCount} ${t(diagnostics.droppedImageCount > 1 ? "ai.ignoredPlural" : "ai.ignoredSingular")})`
-            : ""}
-        </span>
-        <span>{t("ai.structureColon")} {diagnostics.structureImages ?? 0}</span>
-        <span>{t("ai.referencesColon")} {diagnostics.referenceImages ?? 0}</span>
-        <span>{t("ai.charactersColon")} {diagnostics.charactersUsed ?? 0}</span>
-      </div>
-      {perCharacter.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {perCharacter.map(([name, count]) => (
-            <span
-              key={name}
-              className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold text-text-primary"
-            >
-              {name} · {count} {t("ai.imgAbbrev")}
-            </span>
-          ))}
-        </div>
-      )}
-      {(missing.length > 0 || overPromptLimit) && (
-        <div className="mt-2 text-[11px] font-semibold text-warning">
-          {missing.length > 0 &&
-            `${t("ai.noImageUsedPrefix")} ${missing.join(", ")}. ${t("ai.generateCardForThese")} `}
-          {overPromptLimit && t("ai.promptOverLimit")}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function GenerationPanel({
   result,
   error,
@@ -1688,8 +1633,6 @@ function GenerationPanel({
             </div>
           </div>
         </div>
-
-        {result?.diagnostics && <GenerationDiagnostics diagnostics={result.diagnostics} />}
 
         {history.length > 0 && (
           <div className="rounded-[14px] border border-border bg-surface-3 p-3">
