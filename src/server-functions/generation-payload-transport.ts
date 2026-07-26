@@ -1,19 +1,23 @@
 import { getServiceSupabase } from "@/lib/stripe-server";
 
-const TEMPORARY_PATH_MARKER = "/storage/v1/object/public/media/";
+const PUBLIC_MEDIA_PATH_MARKER = "/storage/v1/object/public/media/";
 const TEMPORARY_FOLDER_MARKER = "/ai-generation-jobs/";
 
-function temporaryMediaPath(value: string) {
-  if (!value.startsWith("http") || !value.includes(TEMPORARY_PATH_MARKER)) return null;
+function publicMediaPath(value: string) {
+  if (!value.startsWith("http") || !value.includes(PUBLIC_MEDIA_PATH_MARKER)) return null;
   try {
     const pathname = decodeURIComponent(new URL(value).pathname);
-    const markerIndex = pathname.indexOf(TEMPORARY_PATH_MARKER);
+    const markerIndex = pathname.indexOf(PUBLIC_MEDIA_PATH_MARKER);
     if (markerIndex < 0) return null;
-    const path = pathname.slice(markerIndex + TEMPORARY_PATH_MARKER.length);
-    return path.includes(TEMPORARY_FOLDER_MARKER) ? path : null;
+    return pathname.slice(markerIndex + PUBLIC_MEDIA_PATH_MARKER.length);
   } catch {
     return null;
   }
+}
+
+function temporaryMediaPath(value: string) {
+  const path = publicMediaPath(value);
+  return path?.includes(TEMPORARY_FOLDER_MARKER) ? path : null;
 }
 
 function collectTemporaryPaths(value: unknown, paths: Set<string>) {
@@ -35,10 +39,13 @@ function collectTemporaryPaths(value: unknown, paths: Set<string>) {
 
 async function hydrateValue(value: unknown): Promise<unknown> {
   if (typeof value === "string") {
-    if (!temporaryMediaPath(value)) return value;
+    // Persistent AI-library images are stored as public Supabase URLs. PulseNote
+    // accepts image data URLs only, so restore every owned media URL to bytes
+    // before validating and forwarding the generation payload.
+    if (!publicMediaPath(value)) return value;
     const response = await fetch(value);
     if (!response.ok) {
-      throw new Error(`Unable to load a staged generation reference (${response.status}).`);
+      throw new Error(`Unable to load a generation reference (${response.status}).`);
     }
     const mimeType = response.headers.get("content-type") || "image/png";
     const bytes = Buffer.from(await response.arrayBuffer());

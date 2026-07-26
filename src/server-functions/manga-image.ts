@@ -6,6 +6,7 @@ import { LOCAL_MANGA_PAGE_PLAN } from "@/lib/ai-style-plans";
 import { isLocalAiServerMode } from "@/lib/local-ai-mode";
 import { buildStrictImageEditPrompt } from "@/lib/strict-image-edit-plan";
 import { fitPromptToApiLimit } from "@/lib/prompt-limit";
+import { hydrateGenerationPayload } from "@/server-functions/generation-payload-transport";
 
 const DEFAULT_PULSENOTE_BACKEND_URL = "https://pulsenote.onrender.com";
 const PULSENOTE_STATUS_TIMEOUT_MS = 45_000;
@@ -324,7 +325,8 @@ export async function checkPulseNoteMangaBackend() {
   }
 }
 
-export async function requestPulseNoteMangaImage(data: MangaImageGenerationInput) {
+export async function requestPulseNoteMangaImage(rawData: MangaImageGenerationInput) {
+  const data = generationInputSchema.parse(await hydrateGenerationPayload(rawData));
   const backendUrl = getPulseNoteBackendUrl();
   const appToken = getPulseNoteAppToken();
 
