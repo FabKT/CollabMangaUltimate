@@ -601,6 +601,7 @@ function CollabMangaAIPage() {
         setGenerationResult(normalizedResult);
         notifyCreditsChanged();
         void addHistoryEntry({
+          id: normalizedResult.historyId,
           imageUrl: normalizedResult.imageUrl,
           prompt,
           finalPrompt: normalizedResult.finalPrompt,
@@ -908,6 +909,7 @@ function CollabMangaAIPage() {
       setGenerationResult(normalizedResult);
       notifyCreditsChanged();
       void addHistoryEntry({
+        id: normalizedResult.historyId,
         imageUrl: normalizedResult.imageUrl,
         prompt,
         finalPrompt: normalizedResult.finalPrompt,

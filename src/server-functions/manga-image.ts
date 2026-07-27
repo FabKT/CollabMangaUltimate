@@ -100,6 +100,7 @@ export type MangaImageDiagnostics = {
 
 export type MangaImageGenerationResult = {
   imageUrl: string;
+  historyId?: string;
   finalPrompt: string;
   taskType: MangaImageTaskType;
   model: string;

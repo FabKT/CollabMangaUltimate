@@ -38,6 +38,11 @@ type CloudHistoryRow = {
   edit_context: ImageEditDraft | null;
 };
 
+type DeduplicatedHistory = {
+  entries: MangaHistoryEntry[];
+  duplicateIds: string[];
+};
+
 const DB_NAME = "collabmanga";
 const DB_VERSION = 1;
 const STORE = "generationHistory";
@@ -131,6 +136,51 @@ function fromCloudRow(row: CloudHistoryRow): MangaHistoryEntry {
   };
 }
 
+function isLegacyMangaDuplicate(first: MangaHistoryEntry, second: MangaHistoryEntry) {
+  if (first.source !== "Manga Page Creator" || second.source !== "Manga Page Creator") return false;
+  const titles = new Set([first.title, second.title]);
+  if (!titles.has("Manga Page Creator") || !titles.has("Planche manga")) return false;
+  if (first.prompt.trim() !== second.prompt.trim()) return false;
+  if (first.finalPrompt.trim() !== second.finalPrompt.trim()) return false;
+  if (first.size !== second.size) return false;
+  const firstTime = new Date(first.createdAt).getTime();
+  const secondTime = new Date(second.createdAt).getTime();
+  return (
+    Number.isFinite(firstTime) &&
+    Number.isFinite(secondTime) &&
+    Math.abs(firstTime - secondTime) <= 60_000
+  );
+}
+
+function historyEntryScore(entry: MangaHistoryEntry) {
+  return (entry.editContext ? 2 : 0) + (entry.title === "Planche manga" ? 1 : 0);
+}
+
+function deduplicateHistory(entries: MangaHistoryEntry[]): DeduplicatedHistory {
+  const unique: MangaHistoryEntry[] = [];
+  const duplicateIds: string[] = [];
+
+  for (const entry of entries) {
+    const duplicateIndex = unique.findIndex((candidate) =>
+      isLegacyMangaDuplicate(entry, candidate),
+    );
+    if (duplicateIndex < 0) {
+      unique.push(entry);
+      continue;
+    }
+
+    const candidate = unique[duplicateIndex];
+    if (historyEntryScore(entry) > historyEntryScore(candidate)) {
+      unique[duplicateIndex] = entry;
+      duplicateIds.push(candidate.id);
+    } else {
+      duplicateIds.push(entry.id);
+    }
+  }
+
+  return { entries: unique, duplicateIds };
+}
+
 async function currentCloudUserId() {
   if (!supabase) return null;
   const session = await supabase.auth.getSession();
@@ -182,7 +232,9 @@ async function saveCloudHistoryEntry(
 }
 
 export async function loadHistory(): Promise<MangaHistoryEntry[]> {
-  const localEntries = await loadLocalHistory();
+  const localHistory = deduplicateHistory(await loadLocalHistory());
+  const localEntries = localHistory.entries;
+  await Promise.all(localHistory.duplicateIds.map(removeLocalHistoryEntry));
   const userId = await currentCloudUserId();
   if (!supabase || !userId) return localEntries;
 
@@ -195,7 +247,18 @@ export async function loadHistory(): Promise<MangaHistoryEntry[]> {
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (queried.error) throw new Error(queried.error.message);
-    let cloudEntries = ((queried.data ?? []) as CloudHistoryRow[]).map(fromCloudRow);
+    const cloudHistory = deduplicateHistory(
+      ((queried.data ?? []) as CloudHistoryRow[]).map(fromCloudRow),
+    );
+    let cloudEntries = cloudHistory.entries;
+    if (cloudHistory.duplicateIds.length > 0) {
+      await supabase
+        .from("ai_generated_images")
+        .delete()
+        .eq("user_id", userId)
+        .in("id", cloudHistory.duplicateIds);
+      await Promise.all(cloudHistory.duplicateIds.map(removeLocalHistoryEntry));
+    }
 
     const migrationKey = `${HISTORY_MIGRATION_KEY}.${userId}`;
     if (window.localStorage.getItem(migrationKey) !== "done") {
@@ -258,6 +321,7 @@ export async function recordGeneratedImage({
   result: {
     imageUrl?: string;
     imageDataUrl?: string;
+    historyId?: string;
     finalPrompt?: string;
     taskType?: string;
     model?: string;
@@ -272,7 +336,7 @@ export async function recordGeneratedImage({
 
   const existing = (await loadHistory()).find((entry) => entry.imageUrl === imageUrl);
   return addHistoryEntry({
-    id: existing?.id,
+    id: result.historyId ?? existing?.id,
     imageUrl,
     prompt: prompt?.trim() || existing?.prompt || title,
     finalPrompt: result.finalPrompt || prompt?.trim() || existing?.finalPrompt || title,

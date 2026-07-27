@@ -30,6 +30,7 @@ import {
 type GenerationResult = {
   imageUrl?: string;
   imageDataUrl?: string;
+  historyId?: string;
   finalPrompt?: string;
   taskType?: string;
   model?: string;
@@ -135,7 +136,7 @@ async function persistGeneratedResult({
   if (inserted.error)
     throw new Error(`Unable to save generation history: ${inserted.error.message}`);
 
-  return { ...result, imageUrl, imageDataUrl: undefined };
+  return { ...result, imageUrl, imageDataUrl: undefined, historyId: jobId };
 }
 
 async function executeEndpoint(

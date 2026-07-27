@@ -144,7 +144,7 @@ function HistoryPage() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {filtered.map((entry) => (
-            <Panel key={entry.id} padding={0} className="overflow-hidden">
+            <Panel key={entry.id} padding={0} className="flex h-full flex-col overflow-hidden">
               <button
                 onClick={() => setPreview(entry)}
                 className="block w-full"
@@ -159,7 +159,7 @@ function HistoryPage() {
                   className="h-full w-full object-contain"
                 />
               </button>
-              <div className="p-3">
+              <div className="flex flex-1 flex-col p-3">
                 <p
                   className="line-clamp-2 text-[12px] font-semibold"
                   style={{ color: "var(--text-primary)" }}
@@ -174,7 +174,7 @@ function HistoryPage() {
                 <p className="mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
                   {formatDate(entry.createdAt)}
                 </p>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-auto flex items-center gap-2 pt-2">
                   <button
                     className="cma-icon-btn"
                     aria-label={t("ai.modify")}
