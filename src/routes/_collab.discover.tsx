@@ -184,7 +184,7 @@ function profileFromDb(db: {
     languages: db.preferences?.languages?.length ? db.preferences.languages : ["Français"],
     rating: 0,
     availability: db.preferences?.available === false ? "Indisponible" : "Disponible",
-    bio: db.preferences?.bio || "Profil CollabManga — bio à compléter.",
+    bio: db.preferences?.bio || "",
     genres: [
       ...(db.preferences?.favoriteGenres ?? []),
       ...(db.preferences?.favoriteSubgenres ?? []),
@@ -424,7 +424,7 @@ function PlatformIcon({ name }: { name: string }) {
 /* ---------------- page ---------------- */
 
 function UsersPage() {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const navigate = useNavigate();
   const [languages, setLanguages] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<string[]>([]);
@@ -457,7 +457,7 @@ function UsersPage() {
               ...profile,
               platforms: [...new Set(ownOptions.flatMap((option) => option.platforms))],
               audience: ownOptions.length
-                ? `${Math.max(...ownOptions.map((option) => option.subscribersMax ?? option.subscribersMin ?? 0))} abonnés`
+                ? `${Math.max(...ownOptions.map((option) => option.subscribersMax ?? option.subscribersMin ?? 0))} ${t("discover.followersSuffix")}`
                 : undefined,
               sponsorshipOptions: ownOptions.map((option) => ({
                 id: option.id,
@@ -479,7 +479,7 @@ function UsersPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [creatorFilterOpen, setCreatorFilterOpen] = useState(false);
   const [creatorFilters, setCreatorFilters] =
@@ -498,7 +498,7 @@ function UsersPage() {
       await navigate({ to: "/messages", search: { conversation } });
     } catch (error) {
       setContactError(
-        error instanceof Error ? error.message : "Impossible d'ouvrir la conversation.",
+        error instanceof Error ? error.message : t("discover.cannotOpenConversation"),
       );
     } finally {
       setContactingId(null);
@@ -520,9 +520,17 @@ function UsersPage() {
     push("genre", genres, setGenres);
     push("sub", subgenres, setSubgenres);
     if (minRating > 0)
-      list.push({ key: "min", label: `Min ${minRating}★`, onRemove: () => setMinRating(0) });
+      list.push({
+        key: "min",
+        label: `${t("discover.min")} ${minRating}★`,
+        onRemove: () => setMinRating(0),
+      });
     if (maxRating < 5)
-      list.push({ key: "max", label: `Max ${maxRating}★`, onRemove: () => setMaxRating(5) });
+      list.push({
+        key: "max",
+        label: `${t("discover.max")} ${maxRating}★`,
+        onRemove: () => setMaxRating(5),
+      });
     creatorFilters.platforms.forEach((v) =>
       list.push({
         key: `creator-platform:${v}`,
@@ -558,26 +566,26 @@ function UsersPage() {
     if (creatorFilters.minSubs.trim()) {
       list.push({
         key: "creator-min-subs",
-        label: `Min ${creatorFilters.minSubs} abonnés`,
+        label: `${t("discover.min")} ${creatorFilters.minSubs} ${t("discover.followersSuffix")}`,
         onRemove: () => setCreatorFilters((f) => ({ ...f, minSubs: "" })),
       });
     }
     if (creatorFilters.maxSubs.trim()) {
       list.push({
         key: "creator-max-subs",
-        label: `Max ${creatorFilters.maxSubs} abonnés`,
+        label: `${t("discover.max")} ${creatorFilters.maxSubs} ${t("discover.followersSuffix")}`,
         onRemove: () => setCreatorFilters((f) => ({ ...f, maxSubs: "" })),
       });
     }
     if (creatorFilters.sponsorshipOnly) {
       list.push({
         key: "creator-sponsorship-only",
-        label: "Options de parrainage",
+        label: t("discover.sponsorshipOptionsFilter"),
         onRemove: () => setCreatorFilters((f) => ({ ...f, sponsorshipOnly: false })),
       });
     }
     return list;
-  }, [languages, statuses, genres, subgenres, minRating, maxRating, creatorFilters]);
+  }, [languages, statuses, genres, subgenres, minRating, maxRating, creatorFilters, t]);
 
   const resetAll = () => {
     setLanguages([]);
@@ -622,18 +630,18 @@ function UsersPage() {
       <div className="flex items-center justify-between border-b border-[color:var(--cm-border)] px-5 py-4">
         <div className="flex items-center gap-2">
           <SlidersHorizontal size={16} className="text-[color:var(--cm-accent)]" />
-          <h2 className="font-display text-base font-semibold">Filters</h2>
+          <h2 className="font-display text-base font-semibold">{t("discover.filters")}</h2>
         </div>
         <button
           onClick={resetAll}
           className="text-xs font-semibold text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-accent)]"
         >
-          Reset
+          {t("discover.reset")}
         </button>
       </div>
 
       <div className="cm-scroll flex-1 overflow-y-auto px-5 pb-4">
-        <FilterGroup title="Language" count={languages.length || undefined}>
+        <FilterGroup title={t("discover.groupLanguage")} count={languages.length || undefined}>
           <div className="flex flex-wrap items-center gap-1.5">
             <select
               value=""
@@ -641,7 +649,7 @@ function UsersPage() {
                 const label = e.target.value;
                 if (label && !languages.includes(label)) setLanguages([...languages, label]);
               }}
-              aria-label="Ajouter une langue au filtre"
+              aria-label={t("discover.addLanguageAria")}
               className="h-9 w-full rounded-[10px] border px-3 text-[13px] font-semibold"
               style={{
                 background: "var(--cm-input)",
@@ -649,7 +657,7 @@ function UsersPage() {
                 color: "var(--cm-text)",
               }}
             >
-              <option value="">Ajouter une langue…</option>
+              <option value="">{t("discover.addLanguage")}</option>
               {SITE_LANGUAGES.map((l) => (
                 <option key={l.code} value={l.label}>
                   {l.label}
@@ -664,7 +672,7 @@ function UsersPage() {
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Status" count={statuses.length || undefined}>
+        <FilterGroup title={t("discover.groupStatus")} count={statuses.length || undefined}>
           <div className="flex flex-wrap gap-1.5">
             {STATUSES.map((s) => (
               <Chip
@@ -678,14 +686,22 @@ function UsersPage() {
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Notes">
+        <FilterGroup title={t("discover.groupRatings")}>
           <div className="grid grid-cols-1 gap-3">
-            <RatingSelect label="Minimum rating" value={minRating} onChange={setMinRating} />
-            <RatingSelect label="Maximum rating" value={maxRating} onChange={setMaxRating} />
+            <RatingSelect
+              label={t("discover.minRating")}
+              value={minRating}
+              onChange={setMinRating}
+            />
+            <RatingSelect
+              label={t("discover.maxRating")}
+              value={maxRating}
+              onChange={setMaxRating}
+            />
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Genre" count={genres.length || undefined}>
+        <FilterGroup title={t("discover.groupGenre")} count={genres.length || undefined}>
           <div className="flex flex-wrap gap-1.5">
             {GENRES.map((g) => (
               <Chip
@@ -699,7 +715,11 @@ function UsersPage() {
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Subgenre" count={subgenres.length || undefined} defaultOpen={false}>
+        <FilterGroup
+          title={t("discover.groupSubgenre")}
+          count={subgenres.length || undefined}
+          defaultOpen={false}
+        >
           <div className="flex flex-wrap gap-1.5">
             {SUBGENRES.map((s) => (
               <Chip
@@ -720,13 +740,13 @@ function UsersPage() {
           onClick={resetAll}
           className="h-11 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-xs font-semibold text-[color:var(--cm-text-2)] transition hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)]"
         >
-          Reset filters
+          {t("discover.resetFilters")}
         </button>
         <button
           onClick={() => setMobileFilterOpen(false)}
           className="h-11 rounded-xl bg-[color:var(--cm-accent)] text-xs font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)]"
         >
-          Apply filters
+          {t("discover.applyFilters")}
         </button>
       </div>
     </aside>
@@ -737,12 +757,9 @@ function UsersPage() {
       <div className="mx-auto max-w-[1500px] px-4 pb-6 pt-7 sm:px-6">
         <header className="mb-7 max-w-3xl">
           <h1 className="font-display text-2xl font-bold text-[color:var(--cm-text)] sm:text-3xl">
-            Find Users
+            {t("discover.pageTitle")}
           </h1>
-          <p className="mt-1 text-sm text-[color:var(--cm-text-2)]">
-            Search artists, writers, content creators, readers, and collaborators for manga
-            projects.
-          </p>
+          <p className="mt-1 text-sm text-[color:var(--cm-text-2)]">{t("discover.pageDesc")}</p>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -763,7 +780,7 @@ function UsersPage() {
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by username, role, skill, genre, or language…"
+                  placeholder={t("discover.searchPlaceholder")}
                   className="h-12 w-full rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] pl-11 pr-4 text-sm text-[color:var(--cm-text)] placeholder:text-[color:var(--cm-text-3)] focus:border-[color:var(--cm-accent)] focus:outline-none focus:ring-2 focus:ring-[color:var(--cm-accent-soft)]"
                 />
               </div>
@@ -773,7 +790,7 @@ function UsersPage() {
                   className="flex h-12 items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-4 text-sm font-semibold text-[color:var(--cm-text)] transition hover:border-[color:var(--cm-border-hover)]"
                 >
                   <SlidersHorizontal size={16} />
-                  Créateurs
+                  {t("discover.creators")}
                   {creatorFilterCount(creatorFilters) ? (
                     <span className="ml-1 rounded-full bg-[color:var(--cm-accent)] px-1.5 text-[10px] font-bold text-[#04180d]">
                       {creatorFilterCount(creatorFilters)}
@@ -784,7 +801,7 @@ function UsersPage() {
                   onClick={() => setMobileFilterOpen(true)}
                   className="flex h-12 items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-4 text-sm font-semibold text-[color:var(--cm-text)] lg:hidden"
                 >
-                  <SlidersHorizontal size={16} /> Filters
+                  <SlidersHorizontal size={16} /> {t("discover.filters")}
                   {activeFilters.length ? (
                     <span className="ml-1 rounded-full bg-[color:var(--cm-accent)] px-1.5 text-[10px] font-bold text-[#04180d]">
                       {activeFilters.length}
@@ -794,7 +811,7 @@ function UsersPage() {
                 <div className="flex h-12 items-center rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] p-1">
                   <button
                     onClick={() => setView("grid")}
-                    aria-label="Grid view"
+                    aria-label={t("discover.gridView")}
                     aria-pressed={view === "grid"}
                     className={classNames(
                       "grid h-10 w-10 place-items-center rounded-lg transition",
@@ -807,7 +824,7 @@ function UsersPage() {
                   </button>
                   <button
                     onClick={() => setView("list")}
-                    aria-label="List view"
+                    aria-label={t("discover.listView")}
                     aria-pressed={view === "list"}
                     className={classNames(
                       "grid h-10 w-10 place-items-center rounded-lg transition",
@@ -825,14 +842,16 @@ function UsersPage() {
             {/* Active filters */}
             {activeFilters.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-[color:var(--cm-text-3)]">Active:</span>
+                <span className="text-xs text-[color:var(--cm-text-3)]">
+                  {t("discover.active")}
+                </span>
                 {activeFilters.map((f) => (
                   <button
                     key={f.key}
                     onClick={f.onRemove}
                     className="group inline-flex items-center gap-1.5 rounded-full border border-[color:var(--cm-accent)] bg-[color:var(--cm-accent-soft)] px-3 py-1 text-[11px] font-semibold text-[color:var(--cm-accent)]"
                   >
-                    {f.label}
+                    {localizeLabel(f.label, locale)}
                     <X size={12} className="opacity-70 group-hover:opacity-100" />
                   </button>
                 ))}
@@ -840,7 +859,7 @@ function UsersPage() {
                   onClick={resetAll}
                   className="ml-1 text-[11px] font-semibold text-[color:var(--cm-text-3)] hover:text-[color:var(--cm-text)]"
                 >
-                  Clear all
+                  {t("discover.clearAll")}
                 </button>
               </div>
             )}
@@ -849,7 +868,7 @@ function UsersPage() {
             <div className="mt-5 flex items-center justify-between text-xs text-[color:var(--cm-text-3)]">
               <span>
                 <span className="font-semibold text-[color:var(--cm-text)]">{results.length}</span>{" "}
-                profiles matching your search
+                {t("discover.resultsMatching")}
               </span>
             </div>
 
@@ -896,11 +915,11 @@ function UsersPage() {
           />
           <div className="absolute inset-y-0 left-0 flex w-full max-w-[360px] flex-col border-r border-[color:var(--cm-border)] bg-[color:var(--cm-section)]">
             <div className="flex items-center justify-between border-b border-[color:var(--cm-border)] px-4 py-3">
-              <span className="font-display font-semibold">Filters</span>
+              <span className="font-display font-semibold">{t("discover.filters")}</span>
               <button
                 onClick={() => setMobileFilterOpen(false)}
                 className="grid h-9 w-9 place-items-center rounded-lg bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)]"
-                aria-label="Close filters"
+                aria-label={t("discover.closeFilters")}
               >
                 <X size={16} />
               </button>
@@ -958,7 +977,13 @@ function Avatar({
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {avatarUrl ? (
-        <img src={avatarUrl} alt="" loading="lazy" decoding="async" className="h-full w-full rounded-[inherit] object-cover" />
+        <img
+          src={avatarUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full rounded-[inherit] object-cover"
+        />
       ) : (
         initials
       )}
@@ -967,8 +992,9 @@ function Avatar({
 }
 
 function AvailabilityBadge({ value }: { value: string }) {
+  const { t } = useI18n();
   // Disponibilité binaire : Available / Unavailable, rien d'autre.
-  const positive = !/busy|not available|unavailable/i.test(value);
+  const positive = !/busy|not available|unavailable|indispo/i.test(value);
   return (
     <span
       className={classNames(
@@ -984,7 +1010,7 @@ function AvailabilityBadge({ value }: { value: string }) {
           positive ? "bg-[color:var(--cm-accent)]" : "bg-[color:var(--cm-text-3)]",
         )}
       />
-      {positive ? "Available" : "Unavailable"}
+      {positive ? t("discover.available") : t("discover.unavailable")}
     </span>
   );
 }
@@ -1073,7 +1099,7 @@ function UserCard({
   onContact: (profile: Profile) => void;
   contacting: boolean;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const isCreator = profile.role === "Content creator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
   const mainGenres = profile.genres.filter((g) => GENRES.includes(g));
@@ -1096,7 +1122,7 @@ function UserCard({
                 {profile.rating.toFixed(1)}
               </span>
             </div>
-            <div className="flex items-center gap-1" aria-label="Languages">
+            <div className="flex items-center gap-1" aria-label={t("discover.languagesAria")}>
               {profile.languages.map((l) => (
                 <LangFlag key={l} lang={l} />
               ))}
@@ -1107,7 +1133,7 @@ function UserCard({
       </header>
 
       <p className="mt-4 line-clamp-3 text-[13px] leading-relaxed text-[color:var(--cm-text-2)]">
-        {profile.bio}
+        {profile.bio || t("discover.defaultBio")}
       </p>
 
       {/* genres favoris (accent) + sous-genres favoris (neutres) */}
@@ -1143,12 +1169,12 @@ function UserCard({
               </span>
               <div>
                 <div className="text-[13px] font-bold text-[color:var(--cm-text)]">
-                  Options de parrainage
+                  {t("discover.sponsorshipOptions")}
                 </div>
                 <div className="mt-0.5 text-[11px] text-[color:var(--cm-text-3)]">
                   {optionCount
                     ? `${optionCount} option${optionCount > 1 ? "s" : ""}${profile.audience ? ` · ${profile.audience}` : ""}`
-                    : "Aucune option publiée"}
+                    : t("discover.noOptionPublished")}
                 </div>
               </div>
             </div>
@@ -1172,7 +1198,7 @@ function UserCard({
 
       <div className="mt-auto flex items-center border-t border-[color:var(--cm-border)] pt-3 text-[11px] text-[color:var(--cm-text-3)]">
         <span className="inline-flex items-center gap-1">
-          <FolderKanban size={11} /> {profile.projects} projets créés
+          <FolderKanban size={11} /> {profile.projects} {t("discover.projectsCreated")}
         </span>
       </div>
 
@@ -1182,21 +1208,21 @@ function UserCard({
           params={{ profileId: profile.id }}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[color:var(--cm-accent)] px-3 text-xs font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)]"
         >
-          View profile <ChevronRight size={14} />
+          {t("discover.viewProfile")} <ChevronRight size={14} />
         </Link>
         <button
           type="button"
           onClick={() => onContact(profile)}
           disabled={contacting}
-          aria-label="Contacter"
-          title="Contacter"
+          aria-label={t("discover.contact")}
+          title={t("discover.contact")}
           className="grid h-10 w-10 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] transition hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] disabled:cursor-wait disabled:opacity-50"
         >
           <MessageSquare size={14} />
         </button>
         <button
-          aria-label="Ajouter en ami"
-          title="Ajouter en ami"
+          aria-label={t("discover.addFriend")}
+          title={t("discover.addFriend")}
           onClick={() => onAddFriend(profile)}
           className="grid h-10 w-10 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] transition hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)]"
         >
@@ -1220,7 +1246,7 @@ function UserRow({
   onContact: (profile: Profile) => void;
   contacting: boolean;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const isCreator = profile.role === "Content creator";
   const optionCount = profile.sponsorshipOptions?.length ?? 0;
   return (
@@ -1246,7 +1272,9 @@ function UserRow({
           </span>
           <AvailabilityBadge value={profile.availability} />
         </div>
-        <p className="mt-1 truncate text-[12px] text-[color:var(--cm-text-2)]">{profile.bio}</p>
+        <p className="mt-1 truncate text-[12px] text-[color:var(--cm-text-2)]">
+          {profile.bio || t("discover.defaultBio")}
+        </p>
         {isCreator ? (
           <button
             type="button"
@@ -1254,7 +1282,7 @@ function UserRow({
             className="mt-2 inline-flex items-center gap-2 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-panel)] px-3 py-2 text-[11px] font-bold text-[color:var(--cm-text)] transition hover:border-[color:var(--cm-accent)] hover:text-[color:var(--cm-accent)]"
           >
             <Handshake size={13} />
-            Options de parrainage
+            {t("discover.sponsorshipOptions")}
             <span className="rounded-full bg-[color:var(--cm-accent-soft)] px-2 py-0.5 text-[10px] text-[color:var(--cm-accent)]">
               {optionCount}
             </span>
@@ -1266,15 +1294,15 @@ function UserRow({
           type="button"
           onClick={() => onContact(profile)}
           disabled={contacting}
-          aria-label="Contacter"
-          title="Contacter"
+          aria-label={t("discover.contact")}
+          title={t("discover.contact")}
           className="hidden h-9 w-9 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] disabled:cursor-wait disabled:opacity-50 md:grid"
         >
           <MessageSquare size={14} />
         </button>
         <button
-          aria-label="Ajouter en ami"
-          title="Ajouter en ami"
+          aria-label={t("discover.addFriend")}
+          title={t("discover.addFriend")}
           onClick={() => onAddFriend(profile)}
           className="hidden h-9 w-9 place-items-center rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:border-[color:var(--cm-border-hover)] hover:text-[color:var(--cm-text)] md:grid"
         >
@@ -1285,7 +1313,7 @@ function UserRow({
           params={{ profileId: profile.id }}
           className="inline-flex h-9 items-center gap-1 rounded-lg bg-[color:var(--cm-accent)] px-3 text-xs font-bold text-[#04180d] hover:bg-[color:var(--cm-accent-hover)]"
         >
-          View <ChevronRight size={14} />
+          {t("discover.view")} <ChevronRight size={14} />
         </Link>
       </div>
     </article>
@@ -1305,6 +1333,7 @@ function CreatorAdvancedFiltersModal({
   onClose: () => void;
   onReset: () => void;
 }) {
+  const { t } = useI18n();
   if (!open) return null;
 
   const toggleFilter = (
@@ -1328,25 +1357,24 @@ function CreatorAdvancedFiltersModal({
       <button
         type="button"
         className="absolute inset-0 cursor-default"
-        aria-label="Fermer"
+        aria-label={t("discover.close")}
         onClick={onClose}
       />
       <div className="relative max-h-[86vh] w-full max-w-[860px] overflow-hidden rounded-[24px] border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-[color:var(--cm-border)] px-6 py-5">
           <div>
             <h2 className="font-display text-[24px] font-bold text-[color:var(--cm-text)]">
-              Filtres créateurs avancés
+              {t("discover.creatorFiltersTitle")}
             </h2>
             <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">
-              Affine la recherche de créateurs de contenu selon leurs plateformes, formats et
-              options de parrainage.
+              {t("discover.creatorFiltersDesc")}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:text-[color:var(--cm-text)]"
-            aria-label="Fermer"
+            aria-label={t("discover.close")}
           >
             <X size={16} />
           </button>
@@ -1354,14 +1382,14 @@ function CreatorAdvancedFiltersModal({
 
         <div className="max-h-[calc(86vh-150px)] overflow-y-auto px-6 py-6">
           <div className="space-y-7">
-            <CreatorFilterSection title="Créateur de contenu">
+            <CreatorFilterSection title={t("discover.sectionContentCreator")}>
               <label className="flex items-center justify-between gap-4 rounded-[16px] border border-[color:var(--cm-border)] bg-[color:var(--cm-panel)] px-4 py-3">
                 <span>
                   <span className="block text-[13px] font-bold text-[color:var(--cm-text)]">
-                    Afficher seulement les profils avec options
+                    {t("discover.onlyProfilesWithOptions")}
                   </span>
                   <span className="mt-0.5 block text-[12px] text-[color:var(--cm-text-3)]">
-                    Utile pour trouver directement un créateur sponsorisable.
+                    {t("discover.onlyProfilesWithOptionsHint")}
                   </span>
                 </span>
                 <button
@@ -1392,43 +1420,43 @@ function CreatorAdvancedFiltersModal({
                 </button>
               </label>
               <CreatorChipRow
-                label="Plateforme"
+                label={t("discover.platform")}
                 options={PLATFORMS}
                 selected={filters.platforms}
                 onToggle={(value) => toggleFilter("platforms", value)}
               />
             </CreatorFilterSection>
 
-            <CreatorFilterSection title="Parrainage">
+            <CreatorFilterSection title={t("discover.sectionSponsorship")}>
               <CreatorChipRow
-                label="Type de vidéo"
+                label={t("discover.videoType")}
                 options={CREATOR_VIDEO_TYPES}
                 selected={filters.videoTypes}
                 onToggle={(value) => toggleFilter("videoTypes", value)}
               />
               <CreatorChipRow
-                label="Durée de vidéo"
+                label={t("discover.videoDuration")}
                 options={CREATOR_DURATIONS}
                 selected={filters.durations}
                 onToggle={(value) => toggleFilter("durations", value)}
               />
               <CreatorChipRow
-                label="Mode de paiement"
+                label={t("discover.paymentMode")}
                 options={CREATOR_PAYMENT_MODES}
                 selected={filters.paymentModes}
                 onToggle={(value) => toggleFilter("paymentModes", value)}
               />
             </CreatorFilterSection>
 
-            <CreatorFilterSection title="Audience">
+            <CreatorFilterSection title={t("discover.sectionAudience")}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <CreatorNumberField
-                  label="Nombre d'abonnés minimum"
+                  label={t("discover.minFollowersLabel")}
                   value={filters.minSubs}
                   onChange={(value) => setValue("minSubs", value)}
                 />
                 <CreatorNumberField
-                  label="Nombre d'abonnés maximal"
+                  label={t("discover.maxFollowersLabel")}
                   value={filters.maxSubs}
                   onChange={(value) => setValue("maxSubs", value)}
                 />
@@ -1443,14 +1471,14 @@ function CreatorAdvancedFiltersModal({
             onClick={onReset}
             className="h-11 rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] px-4 text-[13px] font-bold text-[color:var(--cm-text-2)] hover:text-[color:var(--cm-text)]"
           >
-            Réinitialiser
+            {t("discover.reset")}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="h-11 rounded-xl bg-[color:var(--cm-accent)] px-5 text-[13px] font-bold text-[#04180d] hover:bg-[color:var(--cm-accent-hover)]"
           >
-            Appliquer
+            {t("discover.apply")}
           </button>
         </footer>
       </div>
@@ -1526,6 +1554,7 @@ function CreatorNumberField({
 }
 
 function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: () => void }) {
+  const { t, locale } = useI18n();
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1537,7 +1566,7 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
       await sendFriendRequestDb(profile.id);
       setSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Envoi impossible.");
+      setError(err instanceof Error ? err.message : t("discover.sendFailed"));
     } finally {
       setSending(false);
     }
@@ -1548,7 +1577,7 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Demande d'ami"
+      aria-label={t("discover.friendRequestAria")}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -1560,17 +1589,17 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
               <UserPlus size={20} />
             </div>
             <h3 className="mt-4 text-center font-display text-[17px] font-bold text-[color:var(--cm-text)]">
-              Demande envoyée !
+              {t("discover.requestSent")}
             </h3>
             <p className="mt-1.5 text-center text-[13px] text-[color:var(--cm-text-2)]">
-              {profile.username} recevra une notification et pourra accepter ta demande.
+              {profile.username} {t("discover.requestSentText")}
             </p>
             <button
               type="button"
               onClick={onClose}
               className="mt-5 h-11 w-full rounded-lg bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)]"
             >
-              Fermer
+              {t("discover.close")}
             </button>
           </>
         ) : (
@@ -1579,17 +1608,17 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
               <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} size={44} />
               <div className="min-w-0">
                 <h3 className="truncate font-display text-[16px] font-bold text-[color:var(--cm-text)]">
-                  Ajouter en ami ?
+                  {t("discover.addFriendQuestion")}
                 </h3>
                 <p className="truncate text-[12px] text-[color:var(--cm-text-3)]">
-                  {profile.username} · {profile.role}
+                  {profile.username} · {localizeLabel(profile.role, locale)}
                 </p>
               </div>
             </div>
             <p className="mt-4 text-[13px] leading-relaxed text-[color:var(--cm-text-2)]">
-              Envoyer une demande d'ami à{" "}
-              <span className="font-bold text-[color:var(--cm-text)]">{profile.username}</span> ? Il
-              pourra l'accepter ou la refuser depuis ses notifications.
+              {t("discover.sendFriendRequestText")}{" "}
+              <span className="font-bold text-[color:var(--cm-text)]">{profile.username}</span>{" "}
+              {t("discover.sendFriendRequestText2")}
             </p>
             {error ? (
               <p role="alert" className="mt-3 text-[12px] font-semibold text-red-300">
@@ -1602,7 +1631,7 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
                 onClick={onClose}
                 className="h-11 rounded-lg border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[13px] font-bold text-[color:var(--cm-text-2)] transition hover:text-[color:var(--cm-text)]"
               >
-                Annuler
+                {t("discover.cancel")}
               </button>
               <button
                 type="button"
@@ -1610,7 +1639,7 @@ function FriendRequestModal({ profile, onClose }: { profile: Profile; onClose: (
                 disabled={sending}
                 className="h-11 rounded-lg bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)] disabled:cursor-wait disabled:opacity-60"
               >
-                {sending ? "Envoi…" : "Envoyer la demande"}
+                {sending ? t("discover.sending") : t("discover.sendRequest")}
               </button>
             </div>
           </>
@@ -1631,6 +1660,7 @@ function CreatorSponsorshipOptionsModal({
   onContact: (profile: Profile) => void;
   contacting: boolean;
 }) {
+  const { t } = useI18n();
   const options = profile.sponsorshipOptions ?? [];
 
   return (
@@ -1642,7 +1672,7 @@ function CreatorSponsorshipOptionsModal({
       <button
         type="button"
         className="absolute inset-0 cursor-default"
-        aria-label="Fermer"
+        aria-label={t("discover.close")}
         onClick={onClose}
       />
       <div className="relative max-h-[86vh] w-full max-w-[900px] overflow-hidden rounded-[24px] border border-[color:var(--cm-border)] bg-[color:var(--cm-section)] shadow-2xl">
@@ -1651,7 +1681,7 @@ function CreatorSponsorshipOptionsModal({
             <Avatar initials={profile.initials} avatarUrl={profile.avatarUrl} size={48} />
             <div>
               <h2 className="font-display text-[24px] font-bold text-[color:var(--cm-text)]">
-                Options de parrainage
+                {t("discover.sponsorshipOptions")}
               </h2>
               <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">
                 {[profile.username, profile.audience, profile.platforms?.join(", ")]
@@ -1664,7 +1694,7 @@ function CreatorSponsorshipOptionsModal({
             type="button"
             onClick={onClose}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color:var(--cm-border)] bg-[color:var(--cm-input)] text-[color:var(--cm-text-2)] hover:text-[color:var(--cm-text)]"
-            aria-label="Fermer"
+            aria-label={t("discover.close")}
           >
             <X size={16} />
           </button>
@@ -1696,15 +1726,15 @@ function CreatorSponsorshipOptionsModal({
                   </p>
                   <div className="mt-4 grid gap-2 text-[12px] text-[color:var(--cm-text-2)]">
                     <div className="flex justify-between gap-3">
-                      <span>Format</span>
+                      <span>{t("discover.formatLabel")}</span>
                       <strong className="text-[color:var(--cm-text)]">{option.videoType}</strong>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span>Durée</span>
+                      <span>{t("discover.durationLabel")}</span>
                       <strong className="text-[color:var(--cm-text)]">{option.duration}</strong>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span>Paiement</span>
+                      <span>{t("discover.paymentLabel")}</span>
                       <strong className="text-[color:var(--cm-text)]">{option.paymentMode}</strong>
                     </div>
                   </div>
@@ -1714,7 +1744,7 @@ function CreatorSponsorshipOptionsModal({
                     disabled={contacting}
                     className="mt-5 h-10 w-full rounded-xl bg-[color:var(--cm-accent)] text-[13px] font-bold text-[#04180d] hover:bg-[color:var(--cm-accent-hover)] disabled:cursor-wait disabled:opacity-60"
                   >
-                    {contacting ? "Ouverture…" : "Sélectionner cette option"}
+                    {contacting ? t("discover.opening") : t("discover.selectThisOption")}
                   </button>
                 </article>
               ))}
@@ -1723,10 +1753,10 @@ function CreatorSponsorshipOptionsModal({
             <div className="rounded-[18px] border border-dashed border-[color:var(--cm-border)] bg-[color:var(--cm-panel)] p-8 text-center">
               <Handshake className="mx-auto h-8 w-8 text-[color:var(--cm-accent)]" />
               <h3 className="mt-3 font-display text-[18px] font-bold text-[color:var(--cm-text)]">
-                Aucune option publiée
+                {t("discover.noOptionPublished")}
               </h3>
               <p className="mt-1 text-[13px] text-[color:var(--cm-text-2)]">
-                Ce créateur n'a pas encore configuré ses offres de parrainage.
+                {t("discover.noOptionConfigured")}
               </p>
             </div>
           )}
@@ -1737,20 +1767,21 @@ function CreatorSponsorshipOptionsModal({
 }
 
 function EmptyState({ onReset }: { onReset: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="mt-8 rounded-2xl border border-dashed border-[color:var(--cm-border)] bg-[color:var(--cm-section)] p-12 text-center">
       <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[color:var(--cm-accent-soft)] text-[color:var(--cm-accent)]">
         <Search size={22} />
       </div>
-      <h3 className="mt-4 font-display text-xl font-semibold">No users found</h3>
+      <h3 className="mt-4 font-display text-xl font-semibold">{t("discover.noUsersFound")}</h3>
       <p className="mx-auto mt-1 max-w-sm text-sm text-[color:var(--cm-text-2)]">
-        Try removing some filters or searching with different keywords.
+        {t("discover.noUsersText")}
       </p>
       <button
         onClick={onReset}
         className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-[color:var(--cm-accent)] px-5 text-sm font-bold text-[#04180d] transition hover:bg-[color:var(--cm-accent-hover)]"
       >
-        Reset filters
+        {t("discover.resetFilters")}
       </button>
     </div>
   );
