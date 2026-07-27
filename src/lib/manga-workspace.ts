@@ -229,12 +229,13 @@ async function uploadCharacterImages(
   userId: string,
   character: MangaCharacterProfile,
 ): Promise<MangaCharacterProfile> {
-  if (!supabase) return character;
+  const cloud = supabase;
+  if (!cloud) return character;
   const images = await Promise.all(
     (character.images ?? []).map(async (image) => ({
       ...image,
       imageDataUrl: await uploadAiImage(
-        supabase,
+        cloud,
         userId,
         image.imageDataUrl,
         `characters/${character.id}/references`,
@@ -244,7 +245,7 @@ async function uploadCharacterImages(
   );
   const cardImageDataUrl = character.cardImageDataUrl
     ? await uploadAiImage(
-        supabase,
+        cloud,
         userId,
         character.cardImageDataUrl,
         `characters/${character.id}/card`,

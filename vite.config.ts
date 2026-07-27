@@ -2,12 +2,15 @@ import { fileURLToPath, URL } from "node:url";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import tailwindcss from "@tailwindcss/vite";
 import viteReact from "@vitejs/plugin-react";
-import netlify from "@netlify/vite-plugin-tanstack-start";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
-export default defineConfig(() => {
+export default defineConfig(async () => {
   const isNetlify = process.env.NETLIFY === "true";
+  const netlifyPluginPackage = "@netlify/vite-plugin-tanstack-start";
+  const deploymentPlugin = isNetlify
+    ? (await import(netlifyPluginPackage)).default()
+    : nitro({ preset: "node_server" });
 
   return {
     css: {
@@ -20,7 +23,7 @@ export default defineConfig(() => {
         server: { entry: "server" },
       }),
       viteReact(),
-      isNetlify ? netlify() : nitro({ preset: "node_server" }),
+      deploymentPlugin,
       tailwindcss(),
     ],
     resolve: {
