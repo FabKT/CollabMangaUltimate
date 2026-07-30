@@ -10,6 +10,7 @@ import {
 import { Search, Image as ImageIcon, Download, Trash2, Wand2, X } from "lucide-react";
 import { openImageEditor } from "@/lib/image-edit-workspace";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/ai/history")({
   head: () => ({ meta: [{ title: "History — CollabManga AI" }] }),
@@ -22,11 +23,48 @@ function formatDate(iso: string) {
   return date.toLocaleString();
 }
 
-function downloadEntry(entry: MangaHistoryEntry) {
+function imageExtension(blob: Blob) {
+  if (blob.type === "image/jpeg") return "jpg";
+  if (blob.type === "image/webp") return "webp";
+  if (blob.type === "image/gif") return "gif";
+  return "png";
+}
+
+function safeFileName(entry: MangaHistoryEntry) {
+  const name = (entry.title || entry.source || "collabmanga-image")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return name || "collabmanga-image";
+}
+
+async function downloadEntry(entry: MangaHistoryEntry) {
+  const response = await fetch(entry.imageUrl, {
+    credentials: "omit",
+    mode: "cors",
+  });
+  if (!response.ok) throw new Error(`Image download failed (${response.status})`);
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = entry.imageUrl;
-  link.download = `collabmanga-page-${new Date(entry.createdAt).getTime()}.png`;
+  link.href = objectUrl;
+  link.download = `${safeFileName(entry)}-${new Date(entry.createdAt).getTime()}.${imageExtension(blob)}`;
+  document.body.appendChild(link);
   link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+function startDownload(entry: MangaHistoryEntry) {
+  void downloadEntry(entry).catch(() => {
+    toast.error(
+      document.documentElement.lang.startsWith("fr")
+        ? "L'image n'a pas pu être téléchargée."
+        : "The image could not be downloaded.",
+    );
+  });
 }
 
 function entryAspectRatio(size: string) {
@@ -185,7 +223,7 @@ function HistoryPage() {
                   <button
                     className="cma-icon-btn"
                     aria-label={t("ai.download")}
-                    onClick={() => downloadEntry(entry)}
+                    onClick={() => startDownload(entry)}
                   >
                     <Download size={14} />
                   </button>
@@ -240,7 +278,7 @@ function HistoryPage() {
               >
                 {preview.prompt}
               </p>
-              <button className="cma-btn-secondary" onClick={() => downloadEntry(preview)}>
+              <button className="cma-btn-secondary" onClick={() => startDownload(preview)}>
                 <Download size={16} /> {t("ai.download")}
               </button>
               <button className="cma-btn-primary" onClick={() => editEntry(preview)}>
