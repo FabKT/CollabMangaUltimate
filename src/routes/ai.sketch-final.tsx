@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/sketch-final")({
   head: () => ({ meta: [{ title: "Raw to Final - CollabManga AI" }] }),
@@ -184,10 +185,7 @@ function SketchFinalPage() {
 
   const download = () => {
     if (!result?.imageUrl) return;
-    const link = document.createElement("a");
-    link.href = result.imageUrl;
-    link.download = `collabmanga-final-${Date.now()}.png`;
-    link.click();
+    void downloadImageAsset(result.imageUrl, `collabmanga-final-${Date.now()}.png`);
   };
 
   return (

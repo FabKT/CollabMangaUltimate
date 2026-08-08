@@ -33,7 +33,7 @@ const referenceSchema = z.object({
 
 const characterInputSchema = z.object({
   prompt: z.string().default(""),
-  identityImageDataUrl: z.string().min(1),
+  identityImageDataUrl: z.string().min(1).optional(),
   identityReferenceName: z.string().optional(),
   styleId: z.string().default("current"),
   styleName: z.string().default("Moderne"),
@@ -93,13 +93,16 @@ export function parseCharacterImageInput(data: unknown) {
 }
 
 function supportingIdentityReferences(input: CharacterImageInput) {
+  const hasIdentityImage = Boolean(input.identityImageDataUrl);
   return input.references
     .filter((reference) => Boolean(reference.imageDataUrl))
     .map((reference, index) => {
       const userFocus = reference.description?.trim();
       return {
         ...reference,
-        description: `Supporting identity reference ${index + 1} of the SAME target character as Image A. Inspect and use every visible identity fact that this view reveals: facial proportions, eye shape, hairstyle construction, body build, outfit, accessories, colors or monochrome values, asymmetrical details and silhouette. Reconcile it with Image A; do not copy its pose, framing, background, text or source rendering style.${userFocus ? ` User-provided focus: ${userFocus}` : ""}`,
+        description: hasIdentityImage
+          ? `Supporting identity reference ${index + 1} of the SAME target character as the primary identity image. Inspect and use every visible identity fact that this view reveals: facial proportions, eye shape, hairstyle construction, body build, outfit, accessories, colors or monochrome values, asymmetrical details and silhouette. Reconcile it with the primary identity image; do not copy its pose, framing, background, text or source rendering style.${userFocus ? ` User-provided focus: ${userFocus}` : ""}`
+          : `Optional visual reference ${index + 1}. Use only character-design facts compatible with the user instructions, without copying its pose, framing, background, text or source rendering style. The user instructions remain authoritative.${userFocus ? ` User-provided focus: ${userFocus}` : ""}`,
       };
     });
 }
@@ -108,6 +111,7 @@ function supportingIdentityReferences(input: CharacterImageInput) {
  * THE PLAN — builds the character-card prompt (disposition-focused for now).
  */
 export function buildCharacterCardPrompt(input: CharacterImageInput): string {
+  const hasIdentityImage = Boolean(input.identityImageDataUrl);
   const normalizedStyleId = input.styleId.toLowerCase();
   const styleReferenceIsImageB =
     normalizedStyleId === "current" ||
@@ -138,19 +142,28 @@ export function buildCharacterCardPrompt(input: CharacterImageInput): string {
     "Generate ONE professional character sheet as a single horizontal 3:2 image on a clean white or near-white background.",
     "",
     "IMAGE ROLES AND SOURCE ISOLATION:",
-    "Image A is the mandatory character identity reference. It alone defines who the character is: face, recognizable eye shape, hairstyle, age impression, build, outfit, accessories, silhouette and distinguishing features.",
+    hasIdentityImage
+      ? "The primary identity image defines who the character is: face, recognizable eye shape, hairstyle, age impression, build, outfit, accessories, silhouette and distinguishing features."
+      : "No primary identity image is supplied. Create one original, coherent character identity from the user instructions. When instructions are sparse, make conservative professional manga character-design choices and keep them identical across every view.",
     styleReferenceIsImageB
       ? "Image B and any additional style-library images define target rendering mechanisms only. They must not transfer their depicted person, pose, clothing, scene, text or composition."
       : "Image B, when attached, defines character-card structure only. It must not transfer its depicted character or style.",
     styleReferenceIsImageB
       ? "Image C, when attached, defines character-card structure only. It must not transfer its depicted character or style."
       : "Image C and any additional style-library images define target rendering mechanisms only. They must not transfer their depicted person, pose, clothing, scene, text or composition.",
-    "Every attached extra identity reference is mandatory supporting evidence of the SAME target character. Inspect each one and actively preserve the additional face, hair, body, outfit, accessory, color/value, silhouette and asymmetrical facts it reveals. Never silently ignore an attached identity reference.",
-    "Reconcile supporting references with Image A: Image A remains authoritative when facts conflict. Supporting references must never transfer their pose, framing, background, text, composition or source rendering style.",
+    hasIdentityImage
+      ? "Every attached extra identity reference is mandatory supporting evidence of the SAME target character. Inspect each one and actively preserve the additional face, hair, body, outfit, accessory, color/value, silhouette and asymmetrical facts it reveals. Never silently ignore an attached identity reference."
+      : "Optional character references are supporting visual evidence only. Use their compatible design facts when useful, but do not require one and do not let them override explicit user instructions.",
+    hasIdentityImage
+      ? "Reconcile supporting references with the primary identity image, which remains authoritative when facts conflict. Supporting references must never transfer their pose, framing, background, text, composition or source rendering style."
+      : "Without a primary identity image, lock the newly designed identity before composing the sheet. References must never force their pose, framing, background, text, composition or source rendering style.",
     "User instructions override defaults only where explicit. Preserve all unrelated identity facts.",
     "",
     "USER INSTRUCTIONS:",
-    input.prompt || "Use Image A as the authoritative character identity reference.",
+    input.prompt ||
+      (hasIdentityImage
+        ? "Use the primary identity image as the authoritative character identity reference."
+        : "Create an original professional manga character with one clear, consistent identity."),
     "",
     stylePlan,
     "",
@@ -177,7 +190,9 @@ export function buildCharacterCardPrompt(input: CharacterImageInput): string {
     "",
     "IDENTITY AND ORTHOGRAPHIC LOCK:",
     "Every view is the same person. Keep facial ratios, hairstyle construction, age, gender presentation, body build, outfit, colors/values, accessories and asymmetrical details stable. Expressions may deform expression muscles only, never identity.",
-    "Infer hidden back/profile details conservatively from Image A and supporting references. Do not invent decorative features. Keep hands readable and anatomy coherent.",
+    hasIdentityImage
+      ? "Infer hidden back/profile details conservatively from the primary identity image and supporting references. Do not invent decorative features. Keep hands readable and anatomy coherent."
+      : "Design hidden back/profile details conservatively and keep them perfectly consistent across the sheet. Do not add arbitrary decorative features. Keep hands readable and anatomy coherent.",
     "",
     "TEXT AND CLEANLINESS LOCK:",
     "Do not add title, labels, captions, measurements, notes, logos, decorative typography, extra views, props or scenery unless explicitly requested. Nothing may overlap or be cropped by the canvas.",

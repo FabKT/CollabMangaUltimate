@@ -11,6 +11,7 @@ import { Search, Image as ImageIcon, Download, Trash2, Wand2, X } from "lucide-r
 import { openImageEditor } from "@/lib/image-edit-workspace";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/history")({
   head: () => ({ meta: [{ title: "History — CollabManga AI" }] }),
@@ -21,13 +22,6 @@ function formatDate(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleString();
-}
-
-function imageExtension(blob: Blob) {
-  if (blob.type === "image/jpeg") return "jpg";
-  if (blob.type === "image/webp") return "webp";
-  if (blob.type === "image/gif") return "gif";
-  return "png";
 }
 
 function safeFileName(entry: MangaHistoryEntry) {
@@ -41,20 +35,10 @@ function safeFileName(entry: MangaHistoryEntry) {
 }
 
 async function downloadEntry(entry: MangaHistoryEntry) {
-  const response = await fetch(entry.imageUrl, {
-    credentials: "omit",
-    mode: "cors",
-  });
-  if (!response.ok) throw new Error(`Image download failed (${response.status})`);
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = `${safeFileName(entry)}-${new Date(entry.createdAt).getTime()}.${imageExtension(blob)}`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  await downloadImageAsset(
+    entry.imageUrl,
+    `${safeFileName(entry)}-${new Date(entry.createdAt).getTime()}.png`,
+  );
 }
 
 function startDownload(entry: MangaHistoryEntry) {

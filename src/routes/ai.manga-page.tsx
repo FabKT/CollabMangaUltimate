@@ -22,6 +22,7 @@ import {
 import { PlancheCanvas } from "@/components/canvas/PlancheCanvas";
 import { bearerHeader } from "@/lib/auth-header";
 import { notifyCreditsChanged } from "@/lib/credits-events";
+import { downloadImageAsset } from "@/lib/image-download";
 import { loadSession, saveSession } from "@/lib/manga-session";
 import {
   hasPendingGeneration,
@@ -932,10 +933,7 @@ function CollabMangaAIPage() {
 
   const downloadGeneratedImage = () => {
     if (!generationResult?.imageUrl) return;
-    const link = document.createElement("a");
-    link.href = generationResult.imageUrl;
-    link.download = `collabmanga-page-${Date.now()}.png`;
-    link.click();
+    void downloadImageAsset(generationResult.imageUrl, `collabmanga-page-${Date.now()}.png`);
   };
 
   const createImageEditDraft = (imageUrl: string): ImageEditDraft => ({
@@ -1546,10 +1544,7 @@ function GenerationPanel({
   const portrait = aspectRatio !== "3:2";
 
   const downloadUrl = (url: string) => {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `collabmanga-page-${Date.now()}.png`;
-    link.click();
+    void downloadImageAsset(url, `collabmanga-page-${Date.now()}.png`);
   };
 
   return (

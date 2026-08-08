@@ -27,6 +27,7 @@ import {
   User,
 } from "lucide-react";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/style-transfer")({
   head: () => ({ meta: [{ title: "Transfert de style — CollabManga AI" }] }),
@@ -286,10 +287,7 @@ function StyleTransferPage() {
 
   const download = () => {
     if (!result?.imageUrl) return;
-    const link = document.createElement("a");
-    link.href = result.imageUrl;
-    link.download = `collabmanga-restyle-${Date.now()}.png`;
-    link.click();
+    void downloadImageAsset(result.imageUrl, `collabmanga-restyle-${Date.now()}.png`);
   };
 
   const switchMode = (next: TransferMode) => {

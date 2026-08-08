@@ -29,6 +29,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/character-create")({
   head: () => ({ meta: [{ title: "Création de personnage — CollabManga AI" }] }),
@@ -163,12 +164,9 @@ function CharacterCreatePage() {
     setReferences((current) => [...imported, ...current]);
   };
 
+  const identitySource = identityReference?.imageDataUrl ? identityReference : null;
+
   const generate = async () => {
-    if (!identityReference?.imageDataUrl) {
-      setTab("references");
-      setError(t("ai.importIdentityFirst"));
-      return;
-    }
     setError(null);
     setIsGenerating(true);
     try {
@@ -179,13 +177,14 @@ function CharacterCreatePage() {
           : imageSourceToDataUrl(selectedStyle.face),
         imageSourceToDataUrl(selectedStyle.card),
       ]);
+      const supportingReferences = references.filter((reference) => reference.imageDataUrl);
       const generated = await runDurableGeneration<CharacterImageResult>(
         "character-create",
         "/api/character/generate",
         {
           prompt: prompt.trim(),
-          identityImageDataUrl: identityReference.imageDataUrl,
-          identityReferenceName: identityReference.name,
+          identityImageDataUrl: identitySource?.imageDataUrl,
+          identityReferenceName: identitySource?.name,
           styleId,
           styleName: activeCustomStyle?.name ?? selectedStyle.name,
           styleDescription: activeCustomStyle
@@ -194,13 +193,13 @@ function CharacterCreatePage() {
           styleImageDataUrl: defaultStyleImageDataUrl,
           styleReferenceImages: activeCustomStyle?.images ?? [],
           structureImageDataUrl,
-          references,
+          references: supportingReferences,
         },
       );
       setResult(generated);
       void recordGeneratedImage({
         source: "Creation de personnage",
-        title: identityReference.name || "Carte de personnage",
+        title: identitySource?.name || "Carte de personnage",
         prompt,
         result: generated,
         editContext: {
@@ -209,12 +208,16 @@ function CharacterCreatePage() {
           prompt: "",
           selectedCharacterIds: [],
           references: [
-            {
-              ...identityReference,
-              imageDataUrl: identityReference.imageDataUrl,
-              role: "Inspiration" as const,
-            },
-            ...references
+            ...(identitySource
+              ? [
+                  {
+                    ...identitySource,
+                    imageDataUrl: identitySource.imageDataUrl!,
+                    role: "Inspiration" as const,
+                  },
+                ]
+              : []),
+            ...supportingReferences
               .filter((reference) => reference.imageDataUrl)
               .map((reference) => ({
                 ...reference,
@@ -256,10 +259,7 @@ function CharacterCreatePage() {
 
   const download = () => {
     if (!result?.imageUrl) return;
-    const link = document.createElement("a");
-    link.href = result.imageUrl;
-    link.download = `collabmanga-character-${Date.now()}.png`;
-    link.click();
+    void downloadImageAsset(result.imageUrl, `collabmanga-character-${Date.now()}.png`);
   };
 
   return (
@@ -412,7 +412,7 @@ function CharacterCreatePage() {
                 />
                 <button
                   onClick={generate}
-                  disabled={isGenerating || !identityReference?.imageDataUrl}
+                  disabled={isGenerating}
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-accent px-4 text-[14px] font-bold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Wand2 className="h-4 w-4" />
@@ -613,7 +613,7 @@ function ReferencesTab({
           <div>
             <p className="text-[13px] font-bold text-text-primary">{t("ai.identityImageLabel")}</p>
             <p className="mt-0.5 text-[11px] text-text-muted">
-              {t("ai.mandatoryToGenerateCard")}
+              {t("ai.identityOptionalHint")}
             </p>
           </div>
           {identityReference && (

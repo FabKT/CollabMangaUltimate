@@ -32,6 +32,7 @@ import type {
   MangaImageGenerationResult,
 } from "@/server-functions/manga-image";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/image-edit")({
   head: () => ({ meta: [{ title: "Modification d'image - CollabManga AI" }] }),
@@ -79,10 +80,7 @@ function referenceRoles(
 }
 
 function downloadImage(url: string) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `collabmanga-edit-${Date.now()}.png`;
-  link.click();
+  void downloadImageAsset(url, `collabmanga-edit-${Date.now()}.png`);
 }
 
 function characterThumbnail(character: MangaCharacterProfile) {

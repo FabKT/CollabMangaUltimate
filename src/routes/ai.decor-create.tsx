@@ -24,6 +24,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/decor-create")({
   head: () => ({ meta: [{ title: "Création de décor — CollabManga AI" }] }),
@@ -192,10 +193,7 @@ function DecorCreatePage() {
 
   const download = () => {
     if (!result?.imageUrl) return;
-    const link = document.createElement("a");
-    link.href = result.imageUrl;
-    link.download = `collabmanga-decor-${Date.now()}.png`;
-    link.click();
+    void downloadImageAsset(result.imageUrl, `collabmanga-decor-${Date.now()}.png`);
   };
 
   return (

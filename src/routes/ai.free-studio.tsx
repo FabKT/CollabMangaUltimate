@@ -19,6 +19,7 @@ import { loadSession, saveSession } from "@/lib/manga-session";
 import { createId } from "@/lib/manga-workspace";
 import type { FreeImageResult } from "@/server-functions/free-image";
 import { useI18n } from "@/lib/i18n";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/free-studio")({
   head: () => ({ meta: [{ title: "Studio libre - CollabManga AI" }] }),
@@ -188,10 +189,7 @@ function FreeStudioPage() {
 
   const download = () => {
     if (!result?.imageUrl) return;
-    const link = document.createElement("a");
-    link.href = result.imageUrl;
-    link.download = `collabmanga-studio-${Date.now()}.png`;
-    link.click();
+    void downloadImageAsset(result.imageUrl, `collabmanga-studio-${Date.now()}.png`);
   };
 
   return (

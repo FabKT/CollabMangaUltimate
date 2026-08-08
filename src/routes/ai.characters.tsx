@@ -14,6 +14,7 @@ import { recordGeneratedImage } from "@/lib/manga-history";
 import { hasPendingGeneration, resumeDurableGeneration, runDurableGeneration } from "@/lib/durable-generation";
 import type { CharacterImageResult } from "@/server-functions/character-image";
 import { useI18n } from "@/lib/i18n";
+import { downloadImageAsset } from "@/lib/image-download";
 
 export const Route = createFileRoute("/ai/characters")({
   head: () => ({ meta: [{ title: "Character Studio - CollabManga AI" }] }),
@@ -242,20 +243,7 @@ function CharacterStudio() {
     const safeName =
       activeCharacter.name.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") ||
       "personnage";
-    const link = document.createElement("a");
-    try {
-      const response = await fetch(activeCharacter.cardImageDataUrl);
-      if (!response.ok) throw new Error("Download failed");
-      const objectUrl = URL.createObjectURL(await response.blob());
-      link.href = objectUrl;
-      link.download = `${safeName}-carte.png`;
-      link.click();
-      URL.revokeObjectURL(objectUrl);
-    } catch {
-      link.href = activeCharacter.cardImageDataUrl;
-      link.download = `${safeName}-carte.png`;
-      link.click();
-    }
+    await downloadImageAsset(activeCharacter.cardImageDataUrl, `${safeName}-carte.png`);
   };
 
   const generateCard = async () => {

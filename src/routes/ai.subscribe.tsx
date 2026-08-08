@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { BrandMark, BrandName } from "@/components/BrandMark";
@@ -46,6 +46,12 @@ function AiSubscribe() {
   const [busyPlan, setBusyPlan] = useState<PlanId | null>(null);
   const [checking, setChecking] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const leaveAi = (path: "/" | "/hub") => {
+    // A full navigation prevents the parent AI subscription gate from
+    // intercepting the exit and redirecting straight back to this page.
+    window.location.assign(new URL(path, window.location.origin).toString());
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -116,11 +122,22 @@ function AiSubscribe() {
       }}
     >
       <div className="mx-auto flex min-h-[calc(100vh-64px)] max-w-[1180px] flex-col justify-center">
-        <div className="mb-6">
-          <Link to="/hub" className="cma-btn-secondary inline-flex">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            className="cma-btn-secondary inline-flex"
+            onClick={() => leaveAi("/")}
+          >
             <ArrowLeft size={16} />
-            {t("ai.backToCollabManga")}
-          </Link>
+            {t("ai.back")}
+          </button>
+          <button
+            type="button"
+            className="cma-btn-secondary inline-flex"
+            onClick={() => leaveAi("/hub")}
+          >
+            {t("intro.collabCta")}
+          </button>
         </div>
         <header className="mb-8 text-center">
           <div className="mb-4 flex justify-center">
